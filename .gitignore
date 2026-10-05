@@ -1,0 +1,14 @@
+node_modules
+dist
+dev-dist
+coverage
+tests/screenshots/
+.DS_Store
+*.log
+*.local
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/

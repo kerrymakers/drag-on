@@ -1,0 +1,23 @@
+{
+  "name": "drag-on",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "icons": "pwa-assets-generator"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@vite-pwa/assets-generator": "^2.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^7.3.6",
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^3.2.7"
+  }
+}

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#fff6ec" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#2b211c" media="(prefers-color-scheme: dark)" />
+    <meta name="description" content="Raise a little dragon by doing the hard things." />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png" />
+    <title>Drag-on</title>
+  </head>
+  <body>
+    <main class="app" id="app">
+      <section class="card" aria-labelledby="egg-title">
+        <svg class="egg" viewBox="0 0 512 512" role="img" aria-label="A speckled egg">
+          <defs>
+            <radialGradient id="egg-shell" cx="40%" cy="35%" r="70%">
+              <stop offset="0" stop-color="var(--egg-light)" />
+              <stop offset="1" stop-color="var(--egg-dark)" />
+            </radialGradient>
+          </defs>
+          <path
+            d="M256 36c-92 0-170 150-170 262 0 100 76 178 170 178s170-78 170-178C426 186 348 36 256 36z"
+            fill="url(#egg-shell)"
+            stroke="var(--egg-outline)"
+            stroke-width="14"
+          />
+          <ellipse cx="196" cy="214" rx="34" ry="26" fill="var(--egg-spot)" />
+          <ellipse cx="320" cy="300" rx="44" ry="32" fill="var(--egg-spot)" />
+          <ellipse cx="214" cy="374" rx="26" ry="20" fill="var(--egg-spot)" />
+          <ellipse cx="190" cy="130" rx="18" ry="34" transform="rotate(30 190 130)" fill="#fff" opacity="0.6" />
+        </svg>
+        <h1 id="egg-title" class="card-title">An egg is waiting…</h1>
+        <p class="card-text">Something warm and wriggly is nearly ready to meet you.</p>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
