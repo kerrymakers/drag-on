@@ -1,15 +1,17 @@
 // The home screen: wires game logic, storage and art to the DOM.
 // This is the only layer that reads the clock (Date.now) and generates ids.
 
-import { react, renderDragon } from '../art'
+import { react, renderDragon, speechAnchor } from '../art'
+import { MOODS } from '../config/mood'
 import { STAGES } from '../config/stages'
 import { TASKS } from '../config/tasks'
-import { dayMinutesToClock } from '../game/day'
+import { dayKey, dayMinutesToClock } from '../game/day'
 import { createLogEvent, createUndoEvent, undoableLog } from '../game/log'
 import {
   nextRefreshAt,
   dragonProgress,
   dragonStage,
+  moodFor,
   stageUp,
   taskAvailability,
   totalXp,
@@ -18,10 +20,14 @@ import {
 import type { GameEvent, Settings, Task, TaskAvailability } from '../game/types'
 import { STORAGE_KEY, load, requestPersistence, save } from '../storage'
 import { celebrate } from './celebrate'
-import { LOGGED, NOTICES, UNDONE, noticeFor, progressLabel } from './copy'
+import { LOGGED, MOOD_LABELS, NOTICES, UNDONE, noticeFor, progressLabel, welcomeLine } from './copy'
 import { newId } from './ids'
+import { placeSpeech } from './speech'
 import { createToast } from './toast'
 import { createUpdateGate } from './updates'
+import { createWelcome } from './welcome'
+
+const SPEECH_MS = 4000
 
 const TICK_MS = 60_000
 /** setTimeout's ceiling; anything longer fires immediately. */
@@ -124,6 +130,8 @@ export function startApp(doc: Document): App {
     noticeClose: byId<HTMLButtonElement>(doc, 'notice-close'),
     name: byId(doc, 'dragon-name'),
     stage: byId(doc, 'stage-name'),
+    mood: byId(doc, 'mood-chip'),
+    speech: byId(doc, 'speech'),
     art: byId(doc, 'dragon-art'),
     label: byId(doc, 'growth-label'),
     xp: byId(doc, 'xp-total'),
@@ -138,6 +146,52 @@ export function startApp(doc: Document): App {
     byId<HTMLButtonElement>(doc, 'toast-undo'),
   )
   const updates = createUpdateGate(doc)
+  // While read-only, nothing at all is written to this device, UI state included.
+  // The store is chosen at each write, so a session that turns read-only later is covered.
+  const welcome = createWelcome(() => (readOnly ? undefined : globalThis.localStorage))
+
+  // The speech bubble by the dragon: non-blocking, no tap needed, fades on its own.
+  let speechTimer: number | undefined
+  function say(text: string) {
+    const bubble = el.speech
+    bubble.textContent = text
+    // Beside the dragon's head, clear of its face, headgear and zzz.
+    const area = bubble.parentElement?.getBoundingClientRect()
+    const avoid = speechAnchor(el.art)
+    if (area && avoid) {
+      const p = placeSpeech(area, avoid, (maxWidth) => {
+        bubble.style.maxWidth = `${maxWidth}px`
+        return { width: bubble.offsetWidth, height: bubble.offsetHeight }
+      })
+      bubble.style.maxWidth = `${p.maxWidth}px`
+      bubble.style.left = `${Math.round(p.left)}px`
+      bubble.style.top = `${Math.round(p.top)}px`
+      bubble.dataset.tail = p.tail
+    }
+    bubble.classList.add('is-showing')
+    window.clearTimeout(speechTimer)
+    speechTimer = window.setTimeout(hush, SPEECH_MS)
+  }
+  function hush() {
+    window.clearTimeout(speechTimer)
+    el.speech.classList.remove('is-showing')
+  }
+
+  /**
+   * On opening (or coming back to) the app after a gap: a pleased hello, at most once
+   * per gap per mood level (sleepy, then curled up). Only while the page is visible,
+   * so a PWA restored in the background doesn't use it up.
+   */
+  function maybeWelcome(now = Date.now()) {
+    if (doc.visibilityState !== 'visible') return
+    const { mood, lastLogDay } = moodFor(data.events, now, MOODS)
+    if (!welcome.shouldWelcome(mood, lastLogDay)) return
+    const line = welcomeLine(mood, dayKey(now))
+    if (!line) return
+    welcome.markWelcomed(mood, lastLogDay)
+    say(line) // place it first, before the perk-up moves the art
+    react(el.art, 'perk')
+  }
 
   // Gentle notices: shown once per session at most, and dismissible.
   let noticeDismissed = false
@@ -167,7 +221,10 @@ export function startApp(doc: Document): App {
     const progress = dragonProgress(data.events, STAGES)
     el.name.textContent = data.settings.dragonName ?? 'your dragon'
     el.stage.textContent = progress.stage.name
-    renderDragon(el.art, { stage: progress.stage.id, progress: progress.fraction })
+    const { mood } = moodFor(data.events, now, MOODS)
+    el.mood.textContent = MOOD_LABELS[mood]
+    el.mood.dataset.mood = mood
+    renderDragon(el.art, { stage: progress.stage.id, progress: progress.fraction, mood })
 
     const label = progressLabel(progress.stage.id, progress.xpToNext, progress.next?.name ?? null)
     el.label.textContent = label
@@ -243,6 +300,7 @@ export function startApp(doc: Document): App {
     // Save first: everything after this is feedback.
     const rect = button.getBoundingClientRect()
     commit(event)
+    hush()
     haptic()
     render(now)
 
@@ -277,7 +335,10 @@ export function startApp(doc: Document): App {
   el.art.addEventListener('click', () => react(el.art, 'tap'))
 
   doc.addEventListener('visibilitychange', () => {
-    if (doc.visibilityState === 'visible') render()
+    if (doc.visibilityState === 'visible') {
+      render()
+      maybeWelcome()
+    }
   })
   window.setInterval(() => render(), TICK_MS)
 
@@ -291,5 +352,6 @@ export function startApp(doc: Document): App {
   })
 
   render()
+  maybeWelcome()
   return { requestReload: () => updates.requestReload() }
 }

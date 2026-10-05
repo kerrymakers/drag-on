@@ -94,8 +94,9 @@ export function celebrate(
   overlay.append(card)
   if (reducedMotion) overlay.classList.add('is-calm')
 
-  renderDragon(fromLayer, { stage: from.id, progress: 1 })
-  renderDragon(toLayer, { stage: to.id, progress: 0 })
+  // Growing up is a happy moment, whatever the mood was before.
+  renderDragon(fromLayer, { stage: from.id, progress: 1, mood: 'happy' })
+  renderDragon(toLayer, { stage: to.id, progress: 0, mood: 'happy' })
   doc.body.append(overlay)
   if (background) background.inert = true
   overlay.focus({ preventScroll: true })

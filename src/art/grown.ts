@@ -2,13 +2,13 @@
 // as the Hatchling; each is bigger and more confident than the last.
 // Juvenile and later use the neutral look until stat evolution arrives (M3).
 
-import { dragonSvg, eyes, pair } from './parts'
+import { dragonSvg, eyes, pair, type Anchors } from './parts'
+
+const WHELP: Anchors = { eyes: { y: 204, dx: 46, rx: 22, ry: 28 }, headTop: 110, body: { cy: 362, rx: 118, ry: 110 }, headBox: [100, 36, 412, 306] }
 
 export function whelpSvg(): string {
   return dragonSvg(
-    'whelp',
-    'A young dragon with growing wings',
-    0.9,
+    { stage: 'whelp', label: 'A young dragon with growing wings', scale: 0.9, anchors: WHELP },
     `
     ${pair('hd-wing', 'M182 296 C136 206 54 214 42 292 C72 282 92 294 100 318 C114 302 134 302 148 314 C154 298 168 292 182 302 Z')}
     <path class="hd-skin" d="M344 420 C404 440 452 418 462 368 C440 390 404 398 360 392 Z" />
@@ -26,7 +26,7 @@ export function whelpSvg(): string {
     <ellipse class="hd-skin" cx="256" cy="208" rx="114" ry="98" />
     <ellipse class="hd-cheek" cx="178" cy="246" rx="20" ry="12" />
     <ellipse class="hd-cheek" cx="334" cy="246" rx="20" ry="12" />
-    ${eyes({ y: 204, dx: 46, rx: 22, ry: 28 })}
+    ${eyes(WHELP.eyes)}
     <circle class="hd-nostril" cx="246" cy="240" r="3.5" />
     <circle class="hd-nostril" cx="266" cy="240" r="3.5" />
     <path class="hd-mouth" d="M236 256 Q256 272 276 256" />
@@ -35,11 +35,11 @@ export function whelpSvg(): string {
   )
 }
 
+const JUVENILE: Anchors = { eyes: { y: 166, dx: 42, rx: 18, ry: 23 }, headTop: 86, body: { cy: 372, rx: 112, ry: 104 }, headBox: [120, 10, 392, 252] }
+
 export function juvenileSvg(): string {
   return dragonSvg(
-    'juvenile',
-    'A confident young dragon with strong wings',
-    0.95,
+    { stage: 'juvenile', label: 'A confident young dragon with strong wings', scale: 0.95, anchors: JUVENILE },
     `
     ${pair('hd-wing', 'M192 286 C152 172 62 150 22 212 C52 216 68 232 72 256 C90 242 112 246 122 264 C136 252 158 256 168 274 Z')}
     ${pair('hd-wing-line', 'M190 284 C154 196 92 170 30 206')}
@@ -62,7 +62,7 @@ export function juvenileSvg(): string {
     <ellipse class="hd-skin" cx="256" cy="214" rx="56" ry="38" />
     <ellipse class="hd-cheek" cx="186" cy="206" rx="18" ry="10" />
     <ellipse class="hd-cheek" cx="326" cy="206" rx="18" ry="10" />
-    ${eyes({ y: 166, dx: 42, rx: 18, ry: 23 })}
+    ${eyes(JUVENILE.eyes)}
     ${pair('hd-brow', 'M194 136 Q212 128 230 136')}
     <circle class="hd-nostril" cx="244" cy="206" r="4" />
     <circle class="hd-nostril" cx="268" cy="206" r="4" />
@@ -71,11 +71,11 @@ export function juvenileSvg(): string {
   )
 }
 
+const ADULT: Anchors = { eyes: { y: 134, dx: 38, rx: 16, ry: 20 }, headTop: 66, body: { cy: 374, rx: 124, ry: 108 }, headBox: [136, -6, 376, 212] }
+
 export function adultSvg(): string {
   return dragonSvg(
-    'adult',
-    'A strong, proud dragon with wide wings',
-    1,
+    { stage: 'adult', label: 'A strong, proud dragon with wide wings', scale: 1, anchors: ADULT },
     `
     ${pair('hd-wing', 'M198 270 C152 118 44 76 8 148 C32 154 46 170 48 196 C68 180 94 186 104 206 C120 194 144 198 152 218 C166 210 186 216 192 238 Z')}
     ${pair('hd-wing-line', 'M196 268 C160 150 90 110 14 150 M190 250 C150 186 104 176 54 194 M186 236 C160 206 130 200 104 206')}
@@ -101,7 +101,7 @@ export function adultSvg(): string {
     <ellipse class="hd-skin" cx="256" cy="178" rx="52" ry="34" />
     <ellipse class="hd-cheek" cx="194" cy="170" rx="16" ry="9" />
     <ellipse class="hd-cheek" cx="318" cy="170" rx="16" ry="9" />
-    ${eyes({ y: 134, dx: 38, rx: 16, ry: 20 })}
+    ${eyes(ADULT.eyes)}
     ${pair('hd-brow', 'M200 108 Q218 98 236 106')}
     <circle class="hd-nostril" cx="244" cy="172" r="4" />
     <circle class="hd-nostril" cx="268" cy="172" r="4" />
@@ -110,11 +110,11 @@ export function adultSvg(): string {
   )
 }
 
+const ELDER: Anchors = { eyes: { y: 132, dx: 38, rx: 15, ry: 17 }, headTop: 62, body: { cy: 374, rx: 128, ry: 110 }, headBox: [126, -8, 386, 260] }
+
 export function elderSvg(): string {
   return dragonSvg(
-    'elder',
-    'A wise, gentle old dragon',
-    1,
+    { stage: 'elder', label: 'A wise, gentle old dragon', scale: 1, anchors: ELDER },
     `
     ${pair('hd-wing', 'M200 264 C150 104 40 54 2 128 C28 134 42 152 44 178 C64 162 92 166 102 188 C118 174 144 178 152 200 C168 192 188 200 194 224 Z')}
     ${pair('hd-wing-line', 'M198 262 C160 136 86 90 8 128 M192 246 C150 176 102 162 50 176 M188 232 C160 196 128 188 102 190')}
@@ -141,7 +141,7 @@ export function elderSvg(): string {
     ${pair('hd-whisker-edge', 'M222 182 C186 192 158 214 146 246')}
     ${pair('hd-whisker', 'M222 182 C186 192 158 214 146 246')}
     <path class="hd-mane" d="M234 202 C238 238 256 258 256 258 C256 258 274 238 278 202 Z" />
-    ${eyes({ y: 132, dx: 38, rx: 15, ry: 17 })}
+    ${eyes(ELDER.eyes)}
     ${pair('hd-lid', 'M206 122 Q218 110 232 120')}
     <circle class="hd-nostril" cx="244" cy="170" r="4" />
     <circle class="hd-nostril" cx="268" cy="170" r="4" />

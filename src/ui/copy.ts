@@ -1,6 +1,38 @@
 // Words the app says. Warm, never guilt-tripping. Not game logic, not balancing.
 
+import type { MoodId } from '../game/types'
 import type { LoadNotice } from '../storage'
+
+/** The mood chip. "Grumpy" is the internal id only; it's never shown. */
+export const MOOD_LABELS: Record<MoodId, string> = {
+  happy: 'Happy',
+  content: 'Content',
+  sleepy: 'Sleepy',
+  grumpy: 'Curled up',
+}
+
+/** What the dragon says when you come back after a gap. Pleased, never guilty. */
+export const WELCOME_BACK: Partial<Record<MoodId, readonly string[]>> = {
+  sleepy: [
+    "Oh! You're here! *yawn*",
+    'Mmm… hello! I was just having a little nap.',
+    "*stretch* Oh, hi! I'm so glad you came.",
+  ],
+  grumpy: [
+    "You're back! I missed you.",
+    "*peeks out* Oh, it's you! Hello!",
+    "There you are! Come and snuggle, I'm so happy to see you.",
+  ],
+}
+
+/** The same line all day for a given mood, so it never flickers between renders. */
+export function welcomeLine(mood: MoodId, dayKey: string): string | null {
+  const lines = WELCOME_BACK[mood]
+  if (!lines || lines.length === 0) return null
+  let hash = 0
+  for (const ch of dayKey) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0
+  return lines[hash % lines.length] ?? null
+}
 
 export interface StageUpCopy {
   message: string

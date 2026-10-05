@@ -3,6 +3,7 @@ import { STAGES } from '../config/stages'
 import { adultSvg, elderSvg, juvenileSvg, whelpSvg } from './grown'
 import { hatchlingSvg } from './hatchling'
 import { CRACK_BIG_AT, CRACK_SMALL_AT, crackLevel } from './index'
+import { eggSvg } from './egg'
 import { mirror } from './parts'
 
 describe('crackLevel', () => {
@@ -57,5 +58,42 @@ describe('stage art', () => {
       expect(svg).toMatch(/aria-label="[^"]+"/)
       expect(svg).not.toContain('NaN')
     }
+  })
+})
+
+describe('mood parts', () => {
+  const drawings: Record<string, string> = {
+    egg: eggSvg(0, 'test'),
+    hatchling: hatchlingSvg(),
+    whelp: whelpSvg(),
+    juvenile: juvenileSvg(),
+    adult: adultSvg(),
+    elder: elderSvg(),
+  }
+
+  it('every stage, egg included, carries every mood overlay and starts content', () => {
+    for (const [id, svg] of Object.entries(drawings)) {
+      expect(svg, id).toContain('data-mood="content"')
+      for (const cls of ['mood-happy', 'mood-sleepy', 'mood-grumpy', 'mood-zzz', 'mood-blanket']) {
+        expect(svg, `${id} ${cls}`).toContain(cls)
+      }
+    }
+  })
+
+  it('dragon stages have sleepy and peeking lids, a wagging tail and a posture group', () => {
+    for (const [id, svg] of Object.entries(drawings)) {
+      if (id === 'egg') continue
+      expect(svg, id).toMatch(/mood-sleepy mood-lid/)
+      expect(svg, id).toContain('mood-lid-line')
+      expect(svg, id).toContain('mood-heart')
+      expect(svg, id).toContain('mood-tail')
+      expect(svg, id).toContain('class="dragon-pose"')
+      expect(svg, id).not.toContain('NaN')
+    }
+  })
+
+  it('the egg has its nightcap and glow', () => {
+    expect(drawings.egg).toContain('egg-cap')
+    expect(drawings.egg).toContain('egg-glow')
   })
 })

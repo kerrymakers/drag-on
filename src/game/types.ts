@@ -30,6 +30,14 @@ export interface Stage {
   xpFrom: number
 }
 
+export type MoodId = 'happy' | 'content' | 'sleepy' | 'grumpy'
+
+/** A mood that starts once this many whole game days have passed since the last log. */
+export interface MoodLevel {
+  id: MoodId
+  fromDays: number
+}
+
 export type Weekday = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
 
 /** "HH:MM" wall-clock time in Europe/London, or null for no target that day. */

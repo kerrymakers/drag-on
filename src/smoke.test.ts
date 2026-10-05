@@ -9,7 +9,7 @@ describe('scaffold', () => {
 
   it('ships the home screen shell the UI renders into', () => {
     expect(html).toContain('viewport-fit=cover')
-    for (const id of ['dragon-name', 'stage-name', 'dragon-art', 'growth-label', 'xp-total', 'xp-fill', 'toast', 'task-list', 'undo', 'notice']) {
+    for (const id of ['dragon-name', 'stage-name', 'dragon-art', 'growth-label', 'xp-total', 'xp-fill', 'toast', 'task-list', 'undo', 'notice', 'mood-chip', 'speech']) {
       expect(html).toContain(`id="${id}"`)
     }
   })

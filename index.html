@@ -21,11 +21,15 @@
 
       <header class="top">
         <p class="dragon-name" id="dragon-name">your dragon</p>
-        <h1 class="stage-name" id="stage-name">Egg</h1>
+        <div class="stage-row">
+          <h1 class="stage-name" id="stage-name">Egg</h1>
+          <span class="mood-chip" id="mood-chip" data-mood="happy">Happy</span>
+        </div>
       </header>
 
       <section class="dragon" aria-label="Your dragon">
         <div class="dragon-art" id="dragon-art" tabindex="-1"></div>
+        <p class="speech" id="speech" aria-live="polite"></p>
       </section>
 
       <section class="growth" aria-label="Growth">

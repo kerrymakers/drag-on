@@ -15,9 +15,13 @@ export interface DragonLook {
   stage: string
   /** 0 to 1 toward the next stage. */
   progress: number
+  /** How the dragon feels. Shown with overlays and posture, not separate drawings. */
+  mood?: MoodLook
 }
 
-export type Reaction = 'log' | 'hatch' | 'tap'
+export type MoodLook = 'happy' | 'content' | 'sleepy' | 'grumpy'
+
+export type Reaction = 'log' | 'hatch' | 'tap' | 'perk'
 
 export function crackLevel(progress: number): CrackLevel {
   if (progress >= CRACK_BIG_AT) return 2
@@ -49,17 +53,42 @@ const STAGE_ART: Record<string, () => string> = {
 
 /**
  * Draws the dragon into `container`. Calling it again with a look that draws the
- * same picture does nothing, so idle animations don't restart on every render.
+ * same picture keeps the drawing, so idle animations don't restart on every render.
+ * A mood change only updates data-mood, so CSS can fade between moods smoothly.
  */
 export function renderDragon(container: HTMLElement, look: DragonLook): void {
   const { key, svg } = art(look)
-  const current = container.querySelector<HTMLElement>(':scope > .dragon-react')
-  if (current?.dataset.look === key) return
-  const wrap = container.ownerDocument.createElement('div')
-  wrap.className = 'dragon-react'
-  wrap.dataset.look = key
-  wrap.innerHTML = svg
-  container.replaceChildren(wrap)
+  let wrap = container.querySelector<HTMLElement>(':scope > .dragon-react')
+  if (wrap?.dataset.look !== key) {
+    wrap = container.ownerDocument.createElement('div')
+    wrap.className = 'dragon-react'
+    wrap.dataset.look = key
+    wrap.innerHTML = svg
+    container.replaceChildren(wrap)
+  }
+  const mood = look.mood ?? 'content'
+  const drawing = wrap.querySelector('.dragon-svg')
+  if (drawing && drawing.getAttribute('data-mood') !== mood) drawing.setAttribute('data-mood', mood)
+}
+
+/**
+ * The on-screen area a speech bubble should stay clear of: the head and anything on
+ * it, plus the zzz while it's showing. Null if nothing is drawn yet.
+ */
+export function speechAnchor(container: HTMLElement): DOMRect | null {
+  const head = container.querySelector('.dragon-head-box')
+  if (!head) return null
+  const rects = [head.getBoundingClientRect()]
+  const svg = container.querySelector('.dragon-svg')
+  if (svg?.getAttribute('data-mood') === 'sleepy') {
+    const zzz = container.querySelector('.mood-zzz')
+    if (zzz) rects.push(zzz.getBoundingClientRect())
+  }
+  const left = Math.min(...rects.map((r) => r.left))
+  const top = Math.min(...rects.map((r) => r.top))
+  const right = Math.max(...rects.map((r) => r.right))
+  const bottom = Math.max(...rects.map((r) => r.bottom))
+  return new DOMRect(left, top, right - left, bottom - top)
 }
 
 /** A short one-off animation: a happy wiggle on log, a bounce on tap, a shake before hatching. */
@@ -69,7 +98,7 @@ export function react(container: HTMLElement, kind: Reaction): void {
   // Under reduced motion there's no animation, so animationend would never clear the class.
   const view = container.ownerDocument.defaultView
   if (view?.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
-  wrap.classList.remove('react-log', 'react-hatch', 'react-tap')
+  wrap.classList.remove('react-log', 'react-hatch', 'react-tap', 'react-perk')
   void wrap.offsetWidth // restart the animation if it's already running
   wrap.classList.add(`react-${kind}`)
   wrap.addEventListener(

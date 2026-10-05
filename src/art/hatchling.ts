@@ -1,10 +1,24 @@
 // The Hatchling: a round baby dragon. Placeholder art, charming rather than detailed.
 
+import { dragonSvg, type Anchors } from './parts'
+
+const HATCHLING: Anchors = {
+  eyes: { y: 214, dx: 44, rx: 25, ry: 31 },
+  headTop: 108,
+  body: { cy: 360, rx: 122, ry: 112 },
+  headBox: [130, 58, 382, 322],
+}
+
 export function hatchlingSvg(): string {
-  return `
-<svg class="dragon-svg hatchling" data-stage="hatchling" data-evolution="neutral" viewBox="0 0 512 512" role="img" aria-label="A round baby dragon with big eyes">
-  <g transform="translate(256 492) scale(0.84) translate(-256 -492)">
-  <g class="hatchling-body dragon-body">
+  return dragonSvg(
+    {
+      stage: 'hatchling',
+      label: 'A round baby dragon with big eyes',
+      scale: 0.84,
+      anchors: HATCHLING,
+      bodyClass: 'hatchling-body',
+    },
+    `
     <path class="hd-wing" d="M178 300 C120 240 60 262 66 330 C92 314 112 326 120 352 C138 330 160 334 176 344 Z" />
     <path class="hd-wing" d="M334 300 C392 240 452 262 446 330 C420 314 400 326 392 352 C374 330 352 334 336 344 Z" />
     <path class="hd-skin" d="M352 418 C410 432 446 410 452 360 C430 384 400 392 362 386 Z" />
@@ -26,7 +40,6 @@ export function hatchlingSvg(): string {
       <circle cx="292" cy="228" r="4" fill="#fff" opacity="0.8" />
     </g>
     <path class="hd-mouth" d="M240 262 Q256 276 272 262" />
-  </g>
-  </g>
-</svg>`
+`,
+  ).replace('class="dragon-svg dragon-hatchling"', 'class="dragon-svg dragon-hatchling hatchling"')
 }

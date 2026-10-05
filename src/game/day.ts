@@ -125,6 +125,20 @@ export function instantInDay(key: string, dayMinutes: number): number {
   return instantOfWallClock(y ?? 1970, m ?? 1, d ?? 1, DAY_START_HOUR * 60 + dayMinutes)
 }
 
+function keyToUtc(key: string): number {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key)
+  if (!m) throw new Error(`Bad day key: ${key}`)
+  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+}
+
+/**
+ * Whole calendar days from one day key to another (negative if `to` is earlier).
+ * Pure date arithmetic on the keys, so clock changes can't make a day 23 or 25 hours.
+ */
+export function daysBetween(fromKey: string, toKey: string): number {
+  return Math.round((keyToUtc(toKey) - keyToUtc(fromKey)) / 86_400_000)
+}
+
 /** The game day after `key`. */
 export function nextDayKey(key: string): string {
   const [y, m, d] = key.split('-').map(Number)

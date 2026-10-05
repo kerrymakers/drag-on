@@ -93,9 +93,11 @@ The dragon's mood depends on how recently I logged something. It never dies, nev
 | Days since last log | Mood |
 |---------------------|------|
 | 0 | Happy |
-| 1 | Content |
-| 2 to 3 | Sleepy |
-| 4+ | Grumpy (curled up, but clearly pleased when I return) |
+| 1 to 2 | Content |
+| 3 to 4 | Sleepy |
+| 5+ | Grumpy (curled up, but clearly pleased when I return) |
+
+Rebalanced 2026-10-05 after simulation: sleepy after one missed day felt like a telling-off; typical user now sees a welcome-back about monthly.
 
 When I come back after a gap, the dragon gives a warm "welcome back" reaction. It doesn't guilt-trip me. There's no big bonus either, so lapsing isn't rewarded.
 

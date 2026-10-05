@@ -355,9 +355,8 @@ test('offline: load, go offline, log, reload, log persists', async ({ page, cont
   await open(page, TUE_0600)
   const scope = await page.evaluate(async () => (await navigator.serviceWorker.ready).scope)
   expect(new URL(scope).pathname).toBe('/drag-on/')
-  await page
-    .waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 3000 })
-    .catch(() => console.log('not controlled on first load'))
+  // Going offline before the service worker controls the page would test nothing.
+  await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 15000 })
   await context.setOffline(true)
   await task(page, 'gym').click()
   await expect(page.locator('#toast-text')).toHaveText(`+${XP('gym')} XP · Gym / workout`)

@@ -1,21 +1,25 @@
 // Balance simulation for Drag-on.
 //
-// Run with:  npx vite-node scripts/simulate.ts [days] [runs]
+// Run with:  npx vite-node scripts/simulate.ts [days] [runs] [--exact]
+//   --exact  passes the full event log to createLogEvent instead of the fast
+//            carry-forward summary (slow; use with few runs to check they agree).
 //
 // MEASURED (uses the real code in src/game/ and src/config/):
 //   - which logs are accepted (createLogEvent + taskAvailability: wake-up window,
 //     no-target weekends, once-per-day, avoided daily limit from config), XP per log, totalXp,
-//     stageFor, dayKey (Europe/London, 04:00 boundary, including clock changes).
+//     dragonStage + stageReached (stage holding), moodFor with config/mood.ts,
+//     dayKey (Europe/London, 04:00 boundary, including clock changes).
 //   - stat totals: summed from each accepted log's task.stat (the stat mapping is
 //     real config; the stat derivation function doesn't exist yet).
 //
 // PROJECTED (the spec describes these but there is no code yet; numbers here
 // are this script's reading of SPEC.md, not the app's behaviour):
-//   - mood (days since last log), treats (20%/log), rare items (3%/log),
+//   - treats (20%/log), rare items (3%/log),
 //     overall streak, streak freezes (1 per 7-day streak, max 2), milestone items (7/30/100).
 
-import { createLogEvent, dayKey, stageFor, totalXp, weekdayOf } from '../src/game'
-import type { GameEvent, LogEvent, StatId, Task } from '../src/game'
+import { createLogEvent, dayKey, dragonStage, moodFor, totalXp, weekdayOf } from '../src/game'
+import type { GameEvent, LogEvent, MoodId, StatId, Task } from '../src/game'
+import { MOODS } from '../src/config/mood'
 import { TASKS } from '../src/config/tasks'
 import { STAGES } from '../src/config/stages'
 import { STATS } from '../src/config/stats'
@@ -29,7 +33,15 @@ const RUNS = Number(process.argv[3] ?? 300)
 //   --variant=evo     avoided = 15xp max 2/day, read = 25xp (now the real config, so a no-op)
 //   --variant=juv     Juvenile threshold = 1300 (now the real config, so a no-op)
 //   --variant=rare6   rare item chance 3% -> 6% (projection)
+//   --variant=mood35  sleepy from 3 days, grumpy from 5 (instead of config/mood.ts)
 const VARIANT = process.argv.find((a) => a.startsWith('--variant='))?.split('=')[1] ?? null
+const EXACT = process.argv.includes('--exact')
+// Chance the app is opened (at 12:00) on a day with no log. Log days always count as an open.
+const PEEK_CHANCE = 0.3
+const MOOD_LIST =
+  VARIANT === 'mood35'
+    ? MOODS.map((m) => (m.id === 'sleepy' ? { ...m, fromDays: 3 } : m.id === 'grumpy' ? { ...m, fromDays: 5 } : m))
+    : MOODS
 const BASE_SEED = 20261005
 const START = { y: 2026, m: 10, d: 5 } // a Monday; crosses the Oct and Mar clock changes
 
@@ -152,7 +164,10 @@ interface RunResult {
   rewards: { treats: number; rares: number; milestoneItems: number; milestoneFirsts: number }
   rareDays: number[]
   streak: { longest: number; freezesEarned: number; freezesUsed: number; breaks: number }
-  mood: { happy: number; content: number; sleepy: number; grumpy: number }
+  mood: Record<MoodId, number> // moodFor at 12:00 each day (after the first log)
+  firstOpenMood: Record<MoodId, number> // moodFor just before the first log of each log day
+  welcomeBack: { onLog: number; onPeek: number; peeksTotal: number }
+  stageRecords: number // logs carrying stageReached
   longestGapWithoutNew: number // days between "new things" (stage, rare item, milestone)
   longestGapStagesOnly: number
   comebacks: Array<{ gapLen: number; xpWeekAfter: number }>
@@ -184,6 +199,8 @@ function topStat(stats: Record<StatId, number>): StatId {
 
 function simulate(profile: Profile, seed: number): RunResult {
   const rng = mulberry32(seed)
+  // Separate stream so app-open sampling can't shift the behaviour stream.
+  const peekRng = mulberry32(seed ^ 0x5eed)
   const ctx: RunCtx = { gaps: [] }
   if (profile === patchy) {
     // One 5-8 day gap in the first two months, and one 10-14 day "holiday" gap later.
@@ -210,11 +227,29 @@ function simulate(profile: Profile, seed: number): RunResult {
   const newThingDays: number[] = [0]
   const stageDays: number[] = [0]
   const milestonesSeen = new Set<number>()
+  const zeroMoods = () => Object.fromEntries(MOODS.map((m) => [m.id, 0])) as Record<MoodId, number>
+  const mood = zeroMoods()
+  const firstOpenMood = zeroMoods()
+  const welcomeBack = { onLog: 0, onPeek: 0, peeksTotal: 0 }
+  let stageRecords = 0
 
   for (let i = 0; i < DAYS; i++) {
     const { y, m, d } = calendarDay(i)
     const plan = profile.plan(i, rng, ctx)
-    const todays: GameEvent[] = [] // the rules only look at today's logs, so this keeps runs fast
+    // Fast path: the rules only look at today's logs, and the stage logic only needs total
+    // XP and the highest recorded stage. So instead of the full log we pass one synthetic
+    // "carry" log from yesterday holding exactly those two values, plus today's logs.
+    // --exact passes the full log instead, to check the two agree.
+    const yKey = calendarDay(i - 1)
+    const carry: LogEvent = {
+      id: 'carry',
+      type: 'log',
+      taskId: '__carry__',
+      timestamp: londonInstant(yKey.y, yKey.m, yKey.d, 12, 0),
+      xpAwarded: totalXp(events),
+      stageReached: dragonStage(events, STAGE_LIST).id,
+    }
+    const todays: GameEvent[] = EXACT ? events : [carry]
     const attempts: Array<{ taskId: string; ts: number }> = []
     if (plan) {
       const target = DEFAULT_SETTINGS.wakeSchedule[weekdayOf(dayKey(londonInstant(y, m, d, 12, 0)))]
@@ -259,7 +294,14 @@ function simulate(profile: Profile, seed: number): RunResult {
       }
       if (dayKey(ev.timestamp) !== dayKey(londonInstant(y, m, d, 12, 0)))
         throw new Error('dayKey put a log on the wrong game day')
-      todays.push(ev)
+      if (!loggedToday) {
+        // The moment of opening the app to log: mood before this log lands.
+        const before = moodFor(events, a.ts, MOOD_LIST).mood
+        firstOpenMood[before]++
+        if (before === 'sleepy' || before === 'grumpy') welcomeBack.onLog++
+      }
+      if (ev.stageReached !== undefined) stageRecords++
+      if (!EXACT) todays.push(ev)
       events.push(ev)
       stats[t.stat] += (ev as LogEvent).xpAwarded
       logs++
@@ -273,11 +315,20 @@ function simulate(profile: Profile, seed: number): RunResult {
       } else if (r < RARE_CHANCE + TREAT_CHANCE) rewards.treats++
     }
     dailyLogDays.push(loggedToday)
+    const noon = londonInstant(y, m, d, 12, 0)
+    if (events.length > 0) {
+      const md = moodFor(events.filter((e) => e.timestamp <= noon || dayKey(e.timestamp) !== dayKey(noon)), noon, MOOD_LIST).mood
+      mood[md]++
+      if (!loggedToday && peekRng() < PEEK_CHANCE) {
+        welcomeBack.peeksTotal++
+        if (md === 'sleepy' || md === 'grumpy') welcomeBack.onPeek++
+      }
+    }
 
     const xp = totalXp(events)
     xpByDay.push(xp)
     for (const s of STAGE_LIST) {
-      if (stageDay[s.id] == null && stageFor(xp, STAGE_LIST).xpFrom >= s.xpFrom) {
+      if (stageDay[s.id] == null && dragonStage(events, STAGE_LIST).xpFrom >= s.xpFrom) {
         stageDay[s.id] = i + 1
         newThingDays.push(i + 1)
         stageDays.push(i + 1)
@@ -320,19 +371,6 @@ function simulate(profile: Profile, seed: number): RunResult {
     }
   })
 
-  // Projected mood per day (measured at end of day: days since the last log day).
-  const mood = { happy: 0, content: 0, sleepy: 0, grumpy: 0 }
-  let last = -1
-  dailyLogDays.forEach((logged, i) => {
-    if (logged) last = i
-    if (last < 0) return
-    const since = i - last
-    if (since === 0) mood.happy++
-    else if (since === 1) mood.content++
-    else if (since <= 3) mood.sleepy++
-    else mood.grumpy++
-  })
-
   // Comebacks: after any run of 4+ empty days, XP earned in the 7 days after returning.
   const comebacks: RunResult['comebacks'] = []
   let empty = 0
@@ -369,6 +407,9 @@ function simulate(profile: Profile, seed: number): RunResult {
     rareDays,
     streak: { longest, freezesEarned, freezesUsed, breaks },
     mood,
+    firstOpenMood,
+    welcomeBack,
+    stageRecords,
     longestGapWithoutNew: maxGap(newThingDays),
     longestGapStagesOnly: stageDays.reduce((g, d, k) => (k ? Math.max(g, d - stageDays[k - 1]!) : g), 0),
     comebacks,
@@ -457,8 +498,17 @@ for (const p of PROFILES) {
       mean(runs.map((r) => r.streak.freezesUsed)),
     )}, streak breaks ${r1(mean(runs.map((r) => r.streak.breaks)))}`,
   )
-  const m = (k: keyof RunResult['mood']) => r1(mean(runs.map((r) => r.mood[k])))
-  console.log(`Mood days: happy ${m('happy')}, content ${m('content')}, sleepy ${m('sleepy')}, grumpy ${m('grumpy')}`)
+  const moodLine = (pick: (r: RunResult) => Record<MoodId, number>) =>
+    MOODS.map((mo) => `${mo.id} ${r1(mean(runs.map((r) => pick(r)[mo.id])))}`).join(', ')
+  console.log(`[measured] Mood at 12:00, days/run: ${moodLine((r) => r.mood)}`)
+  console.log(`[measured] Mood on opening to make the day's first log: ${moodLine((r) => r.firstOpenMood)}`)
+  console.log(
+    `[measured] Welcome-back opens/run (sleepy or grumpy): on a log day ${r1(
+      mean(runs.map((r) => r.welcomeBack.onLog)),
+    )}, on a no-log peek ${r1(mean(runs.map((r) => r.welcomeBack.onPeek)))} of ${r1(
+      mean(runs.map((r) => r.welcomeBack.peeksTotal)),
+    )} peeks (peek chance ${PEEK_CHANCE}) | logs with stageReached ${r1(mean(runs.map((r) => r.stageRecords)))}`,
+  )
   console.log(
     `Longest stretch with nothing new (stage/rare/milestone): median ${med(
       runs.map((r) => r.longestGapWithoutNew),

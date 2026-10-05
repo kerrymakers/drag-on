@@ -134,6 +134,124 @@ body {
   font-size: 0.95rem;
 }
 
+.stage-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.mood-chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--chip-bg, var(--surface-done));
+  color: var(--chip-text, var(--text-soft));
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+  transition:
+    background-color 400ms ease,
+    color 400ms ease;
+}
+.mood-chip[data-mood='happy'] {
+  --chip-bg: #ffe2c2;
+  --chip-text: #9a4c1c;
+}
+.mood-chip[data-mood='sleepy'] {
+  --chip-bg: #e6e2f6;
+  --chip-text: #5c4f8a;
+}
+.mood-chip[data-mood='grumpy'] {
+  --chip-bg: #dcebe2;
+  --chip-text: #3f6a52;
+}
+@media (prefers-color-scheme: dark) {
+  .mood-chip[data-mood='happy'] {
+    --chip-bg: #5a3a24;
+    --chip-text: #ffd2a8;
+  }
+  .mood-chip[data-mood='sleepy'] {
+    --chip-bg: #3d3757;
+    --chip-text: #d9d0f5;
+  }
+  .mood-chip[data-mood='grumpy'] {
+    --chip-bg: #31463a;
+    --chip-text: #cfe6d7;
+  }
+}
+
+/* Welcome-back speech bubble, by the dragon and clear of the task buttons. */
+.speech {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  max-width: 240px;
+  width: max-content;
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 18px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-wrap: balance;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px) scale(0.92);
+  transform-origin: 0% 100%;
+  transition:
+    opacity 220ms ease-out,
+    transform 220ms ease-out;
+}
+/* The little tail points at the dragon's head. */
+.speech::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: inherit;
+  transform: rotate(45deg);
+  border-radius: 3px;
+}
+.speech[data-tail='down']::after {
+  left: calc(50% - 7px);
+  bottom: -6px;
+}
+.speech[data-tail='up']::after {
+  left: calc(50% - 7px);
+  top: -6px;
+}
+.speech[data-tail='right']::after {
+  right: -6px;
+  top: 16px;
+}
+.speech[data-tail='left']::after {
+  left: -6px;
+  top: 16px;
+}
+.speech[data-tail='down'] {
+  transform-origin: 50% 100%;
+}
+.speech[data-tail='up'] {
+  transform-origin: 50% 0%;
+}
+.speech[data-tail='right'] {
+  transform-origin: 100% 20%;
+}
+.speech[data-tail='left'] {
+  transform-origin: 0% 20%;
+}
+
+.speech.is-showing {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 220ms ease-out,
+    transform 380ms var(--bounce);
+}
+
 .stage-name {
   margin: 0;
   font-size: 1.6rem;
@@ -562,6 +680,14 @@ body {
   }
   .task.is-logged {
     animation: none;
+  }
+  .mood-chip {
+    transition: none;
+  }
+  .speech,
+  .speech.is-showing {
+    transform: none;
+    transition: opacity 220ms ease-out;
   }
   .toast,
   .toast.is-showing {

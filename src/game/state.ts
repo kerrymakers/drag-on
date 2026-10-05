@@ -1,8 +1,25 @@
 // Derived state, calculated from the event log every time. Nothing here is stored.
 
 import { WAKE_GRACE_MINUTES } from '../config/time'
-import { clockToDayMinutes, dayKey, instantInDay, minutesSinceDayStart, nextDayStart, weekdayOf } from './day'
-import type { GameEvent, LogEvent, Settings, Stage, Task, TaskAvailability } from './types'
+import {
+  clockToDayMinutes,
+  dayKey,
+  daysBetween,
+  instantInDay,
+  minutesSinceDayStart,
+  nextDayStart,
+  weekdayOf,
+} from './day'
+import type {
+  GameEvent,
+  LogEvent,
+  MoodId,
+  MoodLevel,
+  Settings,
+  Stage,
+  Task,
+  TaskAvailability,
+} from './types'
 
 /** Log events that haven't been undone, in the order they were appended. */
 export function activeLogs(events: readonly GameEvent[]): LogEvent[] {
@@ -172,4 +189,30 @@ export function nextRefreshAt(settings: Settings, now: number): number {
   // The window closes at the start of the minute after the (inclusive) deadline minute.
   const closes = instantInDay(dayKey(now), deadline + 1)
   return closes > now && closes < dayStart ? closes : dayStart
+}
+
+export interface Mood {
+  mood: MoodId
+  /** Whole game days since the newest active log, or null if there are no logs. */
+  daysSinceLog: number | null
+  /** The game day of the newest active log (where the current gap began), or null. */
+  lastLogDay: string | null
+}
+
+/**
+ * How the dragon feels: by whole game days since the newest active (not undone) log.
+ * With no logs at all it's happy. A log dated in the future (clock skew) counts as today.
+ */
+export function moodFor(events: readonly GameEvent[], now: number, moods: readonly MoodLevel[]): Mood {
+  if (moods.length === 0) throw new Error('No moods configured')
+  const sorted = [...moods].sort((a, b) => a.fromDays - b.fromDays)
+  const first = sorted[0] as MoodLevel
+  const logs = activeLogs(events)
+  if (logs.length === 0) return { mood: first.id, daysSinceLog: null, lastLogDay: null }
+  const newest = logs.reduce((a, b) => (b.timestamp > a.timestamp ? b : a))
+  const lastLogDay = dayKey(newest.timestamp)
+  const days = Math.max(0, daysBetween(lastLogDay, dayKey(now)))
+  let mood = first
+  for (const m of sorted) if (days >= m.fromDays) mood = m
+  return { mood: mood.id, daysSinceLog: days, lastLogDay }
 }

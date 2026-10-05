@@ -3,6 +3,7 @@ import {
   clockToDayMinutes,
   dayKey,
   dayMinutesToClock,
+  daysBetween,
   instantInDay,
   nextDayKey,
   minutesSinceDayStart,
@@ -211,5 +212,35 @@ describe('wall times that are missing or doubled by a clock change', () => {
         }
       }
     }
+  })
+})
+
+describe('daysBetween', () => {
+  it('counts whole calendar days between keys', () => {
+    expect(daysBetween('2026-10-05', '2026-10-05')).toBe(0)
+    expect(daysBetween('2026-10-05', '2026-10-06')).toBe(1)
+    expect(daysBetween('2026-10-06', '2026-10-05')).toBe(-1)
+  })
+
+  it('is unaffected by both 2026 clock changes', () => {
+    expect(daysBetween('2026-03-28', '2026-03-29')).toBe(1)
+    expect(daysBetween('2026-03-28', '2026-03-30')).toBe(2)
+    expect(daysBetween('2026-10-24', '2026-10-25')).toBe(1)
+    expect(daysBetween('2026-10-24', '2026-10-26')).toBe(2)
+  })
+
+  it('crosses month ends, year ends and a leap day', () => {
+    expect(daysBetween('2026-01-31', '2026-02-01')).toBe(1)
+    expect(daysBetween('2026-12-31', '2027-01-01')).toBe(1)
+    expect(daysBetween('2028-02-28', '2028-02-29')).toBe(1)
+    expect(daysBetween('2028-02-29', '2028-03-01')).toBe(1)
+    expect(daysBetween('2028-02-28', '2028-03-01')).toBe(2)
+    expect(daysBetween('2027-02-28', '2027-03-01')).toBe(1)
+    expect(daysBetween('2026-01-01', '2027-01-01')).toBe(365)
+    expect(daysBetween('2028-01-01', '2029-01-01')).toBe(366)
+  })
+
+  it('rejects malformed keys', () => {
+    expect(() => daysBetween('2026-1-5', '2026-01-06')).toThrow()
   })
 })
