@@ -5,6 +5,23 @@ import { react, renderDragon } from '../art'
 import type { Stage } from '../game/types'
 import { STAGE_UP, STAGE_UP_FALLBACK } from './copy'
 
+/**
+ * How each stage arrives. Built from shared pieces (the from/to layers, a glow and
+ * a burst of sparkles); the CSS for each lives under .reveal-<kind> in styles.css.
+ * The egg hatch has its own shake, crack and pop.
+ */
+export type RevealKind = 'hatch' | 'spring' | 'flutter' | 'soar' | 'radiant'
+
+const REVEALS: Record<string, RevealKind> = {
+  hatchling: 'hatch',
+  whelp: 'spring',
+  juvenile: 'flutter',
+  adult: 'soar',
+  elder: 'radiant',
+}
+
+const SPARKS = 10
+
 /** Ignore taps this soon after opening, so a quick double-tap on a task doesn't dismiss it unseen. */
 const CLOSE_GUARD_MS = 600
 
@@ -34,10 +51,30 @@ export function celebrate(
   overlay.setAttribute('aria-modal', 'true')
   overlay.setAttribute('aria-labelledby', messageId)
 
+  const kind: RevealKind = from.id === 'egg' ? 'hatch' : (REVEALS[to.id] ?? 'spring')
+  overlay.classList.add(`reveal-${kind}`)
+
   const card = doc.createElement('div')
   card.className = 'overlay-card'
   const stageEl = doc.createElement('div')
   stageEl.className = 'overlay-art'
+  if (kind !== 'hatch') {
+    const glow = doc.createElement('div')
+    glow.className = 'overlay-glow'
+    stageEl.append(glow)
+    const sparks = doc.createElement('div')
+    sparks.className = 'overlay-sparks'
+    sparks.setAttribute('aria-hidden', 'true')
+    for (let i = 0; i < SPARKS; i++) {
+      const spark = doc.createElement('span')
+      const angle = (i / SPARKS) * Math.PI * 2
+      spark.style.setProperty('--dx', `${Math.round(Math.cos(angle) * 130)}px`)
+      spark.style.setProperty('--dy', `${Math.round(Math.sin(angle) * 130)}px`)
+      spark.style.setProperty('--delay', `${(i % 3) * 60}ms`)
+      sparks.append(spark)
+    }
+    stageEl.append(sparks)
+  }
   const fromLayer = doc.createElement('div')
   fromLayer.className = 'overlay-layer is-from'
   const toLayer = doc.createElement('div')
@@ -70,12 +107,14 @@ export function celebrate(
   if (reducedMotion) {
     // A calm crossfade from the old look to the new one.
     later(600, reveal)
-  } else if (from.id === 'egg') {
+  } else if (kind === 'hatch') {
     react(fromLayer, 'hatch') // shake…
     later(720, () => overlay.classList.add('is-popping')) // …crack and pop…
     later(940, reveal) // …hello!
   } else {
-    later(300, reveal)
+    react(fromLayer, 'log') // a happy wiggle…
+    later(520, () => overlay.classList.add('is-popping')) // …the old look fades…
+    later(640, reveal) // …and the new one arrives in its own way
   }
 
   const openedAt = performance.now()

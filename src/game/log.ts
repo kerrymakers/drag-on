@@ -1,19 +1,32 @@
 // Creating events. The caller supplies the time and the id; nothing here reads the clock.
 
 import { dayKey } from './day'
-import { activeLogs, taskAvailability } from './state'
-import type { GameEvent, LogEvent, Settings, Task, UndoEvent } from './types'
+import { activeLogs, dragonStage, heldStage, stageFor, taskAvailability } from './state'
+import type { GameEvent, LogEvent, Settings, Stage, Task, UndoEvent } from './types'
 
-/** A new log for `task`, or null if the task's rules don't allow a log right now. */
+/**
+ * A new log for `task`, or null if the task's rules don't allow a log right now.
+ *
+ * If the dragon's stage after this log is higher than the highest stage recorded so
+ * far, the log records it as `stageReached`, so a later threshold change can't take
+ * it away. That covers crossing a threshold, and also the first log after a stage
+ * that came only from XP (older data, or a lowered threshold).
+ */
 export function createLogEvent(
   task: Task,
   events: readonly GameEvent[],
   settings: Settings,
   now: number,
   id: string,
+  stages: readonly Stage[],
 ): LogEvent | null {
   if (!taskAvailability(task, events, settings, now).canLog) return null
-  return { id, type: 'log', taskId: task.id, timestamp: now, xpAwarded: task.xp }
+  const event: LogEvent = { id, type: 'log', taskId: task.id, timestamp: now, xpAwarded: task.xp }
+  const after = dragonStage([...events, event], stages)
+  // With nothing recorded yet, the first stage needs no record.
+  const recorded = heldStage(events, stages) ?? stageFor(Number.NEGATIVE_INFINITY, stages)
+  if (after.xpFrom > recorded.xpFrom) event.stageReached = after.id
+  return event
 }
 
 /**

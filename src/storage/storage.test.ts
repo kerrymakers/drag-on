@@ -54,6 +54,20 @@ describe('load', () => {
     expect(load(store)).toEqual({ data, readOnly: false, notice: 'ok' })
   })
 
+  it('loads logs with and without a recorded stage (schema stays at 1)', () => {
+    const held: GameEvent = { ...logEvent, id: 'h', stageReached: 'hatchling' }
+    const store = new FakeStore()
+    save({ ...defaultData(), events: [logEvent, held] }, store)
+    expect(load(store)).toMatchObject({ notice: 'ok', data: { schemaVersion: 1, events: [logEvent, held] } })
+  })
+
+  it('treats a non-string stageReached as a malformed event', () => {
+    const raw = JSON.stringify({ schemaVersion: 1, events: [logEvent, { ...logEvent, id: 'x', stageReached: 3 }] })
+    const result = load(withRaw(raw), 4)
+    expect(result.notice).toBe('repaired')
+    expect(result.data.events).toEqual([logEvent])
+  })
+
   it('backs up corrupt JSON, then starts fresh', () => {
     const store = withRaw('{not json')
     const result = load(store, 1234)

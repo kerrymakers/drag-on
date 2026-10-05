@@ -12,6 +12,8 @@
   --dragon-outline: #c9733f;
   --dragon-eye: #3b2a22;
   --dragon-cheek: #f28a8a;
+  --dragon-plate: #f2c79b;
+  --dragon-gem: #ffd36b;
 
   --bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -30,6 +32,8 @@
     --dragon-outline: #b9652f;
     --dragon-eye: #2b1d16;
     --dragon-cheek: #e98282;
+    --dragon-plate: #e9b783;
+    --dragon-gem: #ffcf5c;
   }
 }
 
@@ -124,8 +128,9 @@
   }
 }
 
-/* Hatchling */
-.hatchling-body {
+/* Dragon stages (Hatchling onwards). Each svg has data-stage and data-evolution,
+   so later looks can override these colours per stat. */
+.dragon-body {
   transform-box: fill-box;
   transform-origin: 50% 100%;
   animation: hatchling-breathe 3.4s ease-in-out infinite;
@@ -158,6 +163,72 @@
   fill: var(--dragon-cheek);
   opacity: 0.55;
 }
+.hd-plate,
+.hd-wing-line {
+  fill: none;
+  stroke: var(--dragon-plate);
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+.hd-wing-line {
+  stroke: var(--dragon-outline);
+  stroke-width: 5;
+  opacity: 0.45;
+}
+.hd-claw,
+.hd-brow,
+.hd-lid,
+.hd-whisker {
+  fill: none;
+  stroke: var(--dragon-outline);
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+.hd-brow,
+.hd-lid {
+  stroke: var(--dragon-eye);
+  stroke-width: 6;
+}
+.hd-whisker {
+  stroke: var(--dragon-horn);
+  stroke-width: 7;
+}
+.hd-whisker-edge {
+  fill: none;
+  stroke: var(--dragon-outline);
+  stroke-width: 11;
+  stroke-linecap: round;
+}
+@media (prefers-color-scheme: dark) {
+  /* Pale whiskers already stand out on the dark background. */
+  .hd-whisker-edge {
+    display: none;
+  }
+}
+.hd-nostril {
+  fill: var(--dragon-eye);
+  opacity: 0.45;
+}
+.hd-fang {
+  fill: #fff;
+}
+.hd-spine {
+  fill: var(--dragon-horn);
+  stroke: var(--dragon-outline);
+  stroke-width: 6;
+  stroke-linejoin: round;
+}
+.hd-mane {
+  fill: var(--dragon-horn);
+  stroke: var(--dragon-outline);
+  stroke-width: 6;
+  stroke-linejoin: round;
+}
+.hd-gem {
+  fill: var(--dragon-gem);
+  stroke: var(--dragon-outline);
+  stroke-width: 5;
+}
 .hd-mouth {
   fill: none;
   stroke: var(--dragon-eye);
@@ -165,10 +236,18 @@
   stroke-linecap: round;
 }
 
-.hatchling-eyes {
+.dragon-eyes {
   transform-box: fill-box;
   transform-origin: center;
   animation: hatchling-blink 4.6s infinite;
+}
+
+/* The Elder breathes and blinks more slowly. */
+.dragon-elder .dragon-body {
+  animation-duration: 4.6s;
+}
+.dragon-elder .dragon-eyes {
+  animation-duration: 6.2s;
 }
 
 @keyframes hatchling-breathe {
@@ -257,8 +336,8 @@
   .egg,
   .egg-glint,
   .egg-sparkle,
-  .hatchling-body,
-  .hatchling-eyes,
+  .dragon-body,
+  .dragon-eyes,
   .react-tap,
   .react-log,
   .react-hatch {

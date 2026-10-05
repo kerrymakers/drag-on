@@ -43,7 +43,8 @@ function isEvent(v: unknown): v is GameEvent {
       typeof v.taskId === 'string' &&
       typeof v.xpAwarded === 'number' &&
       Number.isFinite(v.xpAwarded) &&
-      (v.note === undefined || typeof v.note === 'string')
+      (v.note === undefined || typeof v.note === 'string') &&
+      (v.stageReached === undefined || typeof v.stageReached === 'string')
     )
   }
   if (v.type === 'undo') return typeof v.targetEventId === 'string'

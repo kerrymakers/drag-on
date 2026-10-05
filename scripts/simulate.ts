@@ -252,7 +252,7 @@ function simulate(profile: Profile, seed: number): RunResult {
     let loggedToday = false
     for (const a of attempts) {
       const t = task(a.taskId)
-      const ev = createLogEvent(t, todays, DEFAULT_SETTINGS, a.ts, `e${id++}`)
+      const ev = createLogEvent(t, todays, DEFAULT_SETTINGS, a.ts, `e${id++}`, STAGE_LIST)
       if (!ev) {
         refused[a.taskId] = (refused[a.taskId] ?? 0) + 1
         continue

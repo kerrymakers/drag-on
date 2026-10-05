@@ -159,6 +159,13 @@ body {
   user-select: none;
 }
 
+/* On short screens, keep a little air between the heading and the tallest stages. */
+@media (max-height: 720px) {
+  .dragon-art {
+    top: 10px;
+  }
+}
+
 .dragon-art:focus {
   outline: none;
 }
@@ -597,5 +604,190 @@ body {
   70% {
     opacity: 1;
     transform: translate(-100%, -50%);
+  }
+}
+
+/* Stage reveals after hatching: shared glow and sparkles, a different entrance each. */
+.overlay-glow {
+  position: absolute;
+  inset: 4%;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--glow, rgb(255 205 150 / 0.75)) 0%, transparent 68%);
+  opacity: 0;
+  transform: scale(0.6);
+}
+
+.overlay-sparks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.overlay-sparks span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: var(--spark, #ffd59a);
+  opacity: 0;
+}
+
+.overlay.is-revealed .overlay-sparks span {
+  animation: spark-burst 760ms ease-out var(--delay, 0ms) both;
+}
+
+.overlay.is-revealed .overlay-glow {
+  animation: glow-in 900ms ease-out both;
+}
+
+.overlay.is-popping .overlay-layer.is-from {
+  transition:
+    opacity 200ms ease-out,
+    transform 200ms ease-out;
+}
+
+.reveal-spring.is-revealed .overlay-layer.is-to {
+  animation: reveal-spring 560ms var(--bounce) both;
+}
+.reveal-flutter.is-revealed .overlay-layer.is-to {
+  animation: reveal-flutter 680ms ease-out both;
+}
+.reveal-soar.is-revealed .overlay-layer.is-to {
+  animation: reveal-soar 720ms var(--bounce) both;
+}
+.reveal-radiant {
+  --glow: rgb(255 214 120 / 0.85);
+  --spark: #ffe08a;
+}
+.reveal-radiant.is-revealed .overlay-layer.is-to {
+  animation: reveal-radiant 1100ms ease-out both;
+}
+.reveal-radiant.is-revealed .overlay-sparks span {
+  animation-duration: 1300ms;
+}
+.reveal-radiant.is-revealed .overlay-glow {
+  animation: glow-in 1400ms ease-out both, glow-pulse 2.8s ease-in-out 1.4s infinite;
+}
+
+@media (prefers-color-scheme: dark) {
+  .overlay-glow {
+    --glow: rgb(255 180 110 / 0.45);
+  }
+  .reveal-radiant .overlay-glow {
+    --glow: rgb(255 210 120 / 0.5);
+  }
+}
+
+@keyframes spark-burst {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.4);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) scale(1);
+  }
+}
+
+@keyframes glow-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+
+@keyframes reveal-spring {
+  0% {
+    opacity: 0;
+    transform: translateY(30px) scale(0.6);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes reveal-flutter {
+  0% {
+    opacity: 0;
+    transform: scale(0.7) rotate(-8deg);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.05) rotate(6deg);
+  }
+  70% {
+    transform: scale(0.98) rotate(-3deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes reveal-soar {
+  0% {
+    opacity: 0;
+    transform: translateY(70px) scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes reveal-radiant {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+    filter: brightness(1.4);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+/* Calm: no sparkles or entrances, just the crossfade. */
+.overlay.is-calm .overlay-sparks,
+.overlay.is-calm .overlay-glow {
+  display: none;
+}
+.overlay.is-calm.is-revealed .overlay-layer.is-to {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay-sparks,
+  .overlay-glow {
+    display: none;
+  }
+  .overlay.is-revealed .overlay-layer.is-to {
+    animation: none !important;
   }
 }

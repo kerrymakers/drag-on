@@ -7,9 +7,13 @@ export interface StageUpCopy {
   button: string
 }
 
-/** What the dragon says when it reaches each stage. M2 adds the later ones. */
+/** What the dragon says when it reaches each stage. */
 export const STAGE_UP: Record<string, StageUpCopy> = {
   hatchling: { message: "Hello! I'm so happy to meet you.", button: 'Hi there!' },
+  whelp: { message: "Look how big I'm getting! Thank you for looking after me.", button: 'Look at you!' },
+  juvenile: { message: 'My wings feel so strong now. We make a really good team.', button: 'We really do' },
+  adult: { message: "Look at us! I grew this strong because you kept showing up.", button: 'So proud of you' },
+  elder: { message: "We've come such a long way together. I'm so glad it was with you.", button: 'Me too' },
 }
 
 export const STAGE_UP_FALLBACK: StageUpCopy = {
@@ -19,7 +23,7 @@ export const STAGE_UP_FALLBACK: StageUpCopy = {
 
 /** The label above the XP bar. */
 export function progressLabel(stageId: string, xpToNext: number, nextName: string | null): string {
-  if (nextName == null) return 'All grown up'
+  if (nextName == null) return 'Fully grown'
   if (stageId === 'egg') return `${xpToNext} XP to hatch`
   return `${xpToNext} XP to ${nextName}`
 }

@@ -7,7 +7,6 @@ import {
   nextRefreshAt,
   progressToNextStage,
   stageFor,
-  stageUp,
   taskAvailability,
   totalXp,
 } from './state'
@@ -278,32 +277,6 @@ describe('taskAvailability: daily limits', () => {
     const archived = { ...walk, archived: true }
     expect(taskAvailability(archived, [], settings, MON('12:00')).visible).toBe(false)
     expect(taskAvailability({ ...wake, archived: true }, [], settings, MON('05:00')).visible).toBe(false)
-  })
-})
-
-describe('stageUp', () => {
-  it('reports the new stage when XP crosses a threshold', () => {
-    expect(stageUp(90, 120, TEST_STAGES)?.id).toBe('hatchling')
-    expect(stageUp(99, 100, TEST_STAGES)?.id).toBe('hatchling')
-  })
-
-  it('reports nothing within a stage', () => {
-    expect(stageUp(10, 50, TEST_STAGES)).toBeNull()
-    expect(stageUp(100, 140, TEST_STAGES)).toBeNull()
-  })
-
-  it('reports only the final stage when several are crossed at once', () => {
-    expect(stageUp(0, 600, TEST_STAGES)?.id).toBe('whelp')
-  })
-
-  it('never reports going down (undo)', () => {
-    expect(stageUp(120, 90, TEST_STAGES)).toBeNull()
-    expect(stageUp(100, 100, TEST_STAGES)).toBeNull()
-  })
-
-  it('celebrates again when the threshold is re-crossed after an undo', () => {
-    expect(stageUp(110, 85, TEST_STAGES)).toBeNull()
-    expect(stageUp(85, 110, TEST_STAGES)?.id).toBe('hatchling')
   })
 })
 

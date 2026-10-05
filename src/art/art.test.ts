@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { STAGES } from '../config/stages'
+import { adultSvg, elderSvg, juvenileSvg, whelpSvg } from './grown'
+import { hatchlingSvg } from './hatchling'
 import { CRACK_BIG_AT, CRACK_SMALL_AT, crackLevel } from './index'
+import { mirror } from './parts'
 
 describe('crackLevel', () => {
   it('shows no crack below the small threshold', () => {
@@ -13,5 +17,45 @@ describe('crackLevel', () => {
   it('shows a bigger crack from the big threshold', () => {
     expect(crackLevel(CRACK_BIG_AT)).toBe(2)
     expect(crackLevel(1)).toBe(2)
+  })
+})
+
+describe('mirror', () => {
+  it('flips x coordinates across the centre line and leaves y alone', () => {
+    expect(mirror('M182 296 C136 206 54 214 42 292 Z')).toBe('M330 296 C376 206 458 214 470 292 Z')
+    expect(mirror('M200 92 C164 52 166 12 202 -4 Z')).toBe('M312 92 C348 52 346 12 310 -4 Z')
+    expect(mirror('M170 474 L166 486 M190 478 L188 490')).toBe('M342 474 L346 486 M322 478 L324 490')
+    expect(mirror('M240 262 Q256 276 272 262')).toBe('M272 262 Q256 276 240 262')
+  })
+
+  it('refuses paths it would flip wrongly', () => {
+    for (const d of ['m10 10 l5 5', 'M10 10 H40', 'M10 10 V40', 'M10 10 A5 5 0 0 1 20 20', 'M10 10 S20 20 30 30', 'M1e2 10 L5 5', 'M10 10 T20 20']) {
+      expect(() => mirror(d), d).toThrow()
+    }
+  })
+})
+
+describe('stage art', () => {
+  const drawings: Record<string, string> = {
+    hatchling: hatchlingSvg(),
+    whelp: whelpSvg(),
+    juvenile: juvenileSvg(),
+    adult: adultSvg(),
+    elder: elderSvg(),
+  }
+
+  it('has a drawing for every stage after the egg', () => {
+    for (const s of STAGES.slice(1)) expect(drawings[s.id], s.id).toBeTruthy()
+  })
+
+  it('tags each drawing with its stage and a neutral evolution look', () => {
+    for (const [id, svg] of Object.entries(drawings)) {
+      expect(svg).toContain(`data-stage="${id}"`)
+      expect(svg).toContain('data-evolution="neutral"')
+      expect(svg).toMatch(/class="[^"]*dragon-body/)
+      expect(svg).toContain('dragon-eyes')
+      expect(svg).toMatch(/aria-label="[^"]+"/)
+      expect(svg).not.toContain('NaN')
+    }
   })
 })

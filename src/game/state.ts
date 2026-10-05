@@ -29,21 +29,50 @@ export function stageFor(xp: number, stages: readonly Stage[]): Stage {
   return current
 }
 
+/** The highest stage recorded on an active log, ignoring ids no longer in config. */
+export function heldStage(events: readonly GameEvent[], stages: readonly Stage[]): Stage | null {
+  const byId = new Map(stages.map((s) => [s.id, s]))
+  let held: Stage | null = null
+  for (const log of activeLogs(events)) {
+    const s = log.stageReached === undefined ? undefined : byId.get(log.stageReached)
+    if (s && (!held || s.xpFrom > held.xpFrom)) held = s
+  }
+  return held
+}
+
+/**
+ * The dragon's stage: the higher of the stage its XP earns and the highest stage
+ * recorded on an active log. Raising a threshold never takes a stage away;
+ * lowering one raises the stage straight away.
+ */
+export function dragonStage(events: readonly GameEvent[], stages: readonly Stage[]): Stage {
+  const byXp = stageFor(totalXp(events), stages)
+  const held = heldStage(events, stages)
+  return held && held.xpFrom > byXp.xpFrom ? held : byXp
+}
+
 export interface StageProgress {
   stage: Stage
   /** null at the final stage. */
   next: Stage | null
-  /** XP earned since this stage began. */
+  /** XP earned since this stage began (0 if the stage is held above the XP). */
   xpIntoStage: number
-  /** XP still needed to reach the next stage (0 at the final stage). */
+  /** XP still needed to reach the next stage's threshold (0 at the final stage). */
   xpToNext: number
   /** 0 to 1, for the XP bar. 1 at the final stage. */
   fraction: number
 }
 
-export function progressToNextStage(xp: number, stages: readonly Stage[]): StageProgress {
+/**
+ * Progress from `stage` (default: the stage `xp` earns) toward the next one.
+ * Passing a held stage that's ahead of the XP gives fraction 0 and the XP still
+ * needed to reach the next stage's threshold. A `held` stage at or below the stage
+ * the XP earns is ignored: the XP stage wins.
+ */
+export function progressToNextStage(xp: number, stages: readonly Stage[], held?: Stage): StageProgress {
   const sorted = sortedStages(stages)
-  const stage = stageFor(xp, sorted)
+  const byXp = stageFor(xp, sorted)
+  const stage = held && held.xpFrom > byXp.xpFrom ? held : byXp
   const next = sorted.find((s) => s.xpFrom > stage.xpFrom) ?? null
   const xpIntoStage = Math.max(0, xp - stage.xpFrom)
   if (!next) return { stage, next, xpIntoStage, xpToNext: 0, fraction: 1 }
@@ -52,9 +81,14 @@ export function progressToNextStage(xp: number, stages: readonly Stage[]): Stage
     stage,
     next,
     xpIntoStage,
-    xpToNext: next.xpFrom - xp,
+    xpToNext: Math.max(0, next.xpFrom - xp),
     fraction: Math.min(1, xpIntoStage / span),
   }
+}
+
+/** The dragon's progress, taking a held stage into account. */
+export function dragonProgress(events: readonly GameEvent[], stages: readonly Stage[]): StageProgress {
+  return progressToNextStage(totalXp(events), stages, dragonStage(events, stages))
 }
 
 /** Active logs of one task on the same game day as `now`. */
@@ -113,14 +147,18 @@ export function taskAvailability(
 }
 
 /**
- * The stage reached by going from `prevXp` to `nextXp`, if it's higher than before;
- * otherwise null. Undo (XP going down) never counts as a change worth celebrating.
+ * The stage the dragon has grown into between two versions of the event log, if it's
+ * higher than before; otherwise null. If one log crosses several thresholds, this is
+ * the highest. Going down (undo) is never a stage-up.
  */
-export function stageUp(prevXp: number, nextXp: number, stages: readonly Stage[]): Stage | null {
-  if (nextXp <= prevXp) return null
-  const before = stageFor(prevXp, stages)
-  const after = stageFor(nextXp, stages)
-  return after.xpFrom > before.xpFrom ? after : null
+export function stageUp(
+  before: readonly GameEvent[],
+  after: readonly GameEvent[],
+  stages: readonly Stage[],
+): Stage | null {
+  const was = dragonStage(before, stages)
+  const now = dragonStage(after, stages)
+  return now.xpFrom > was.xpFrom ? now : null
 }
 
 /**

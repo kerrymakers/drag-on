@@ -8,8 +8,8 @@ import { dayMinutesToClock } from '../game/day'
 import { createLogEvent, createUndoEvent, undoableLog } from '../game/log'
 import {
   nextRefreshAt,
-  progressToNextStage,
-  stageFor,
+  dragonProgress,
+  dragonStage,
   stageUp,
   taskAvailability,
   totalXp,
@@ -164,7 +164,7 @@ export function startApp(doc: Document): App {
 
   function render(now = Date.now()) {
     const xp = totalXp(data.events)
-    const progress = progressToNextStage(xp, STAGES)
+    const progress = dragonProgress(data.events, STAGES)
     el.name.textContent = data.settings.dragonName ?? 'your dragon'
     el.stage.textContent = progress.stage.name
     renderDragon(el.art, { stage: progress.stage.id, progress: progress.fraction })
@@ -233,8 +233,8 @@ export function startApp(doc: Document): App {
     const task = TASKS.find((t) => t.id === button?.dataset.taskId)
     if (!button || !task) return
     const now = Date.now()
-    const prevXp = totalXp(data.events)
-    const event = createLogEvent(task, data.events, data.settings, now, newId())
+    const before = data.events
+    const event = createLogEvent(task, data.events, data.settings, now, newId(), STAGES)
     if (!event) {
       render(now) // the screen was stale (e.g. the wake window just closed)
       return
@@ -252,11 +252,11 @@ export function startApp(doc: Document): App {
     react(el.art, 'log')
     toast.show(LOGGED(event.xpAwarded, task.name), undoLast)
 
-    const reached = stageUp(prevXp, totalXp(data.events), STAGES)
+    const reached = stageUp(before, data.events, STAGES)
     if (reached) {
       updates.setBusy(true)
       celebrate(doc, {
-        from: stageFor(prevXp, STAGES),
+        from: dragonStage(before, STAGES),
         to: reached,
         reducedMotion: prefersReducedMotion(),
         background: doc.getElementById('app'),

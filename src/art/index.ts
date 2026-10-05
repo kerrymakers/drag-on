@@ -3,6 +3,7 @@
 
 import './art.css'
 import { eggSvg, type CrackLevel } from './egg'
+import { adultSvg, elderSvg, juvenileSvg, whelpSvg } from './grown'
 import { hatchlingSvg } from './hatchling'
 
 /** Visual only, not balancing: how far toward hatching the egg shows each crack. */
@@ -10,7 +11,7 @@ export const CRACK_SMALL_AT = 0.5
 export const CRACK_BIG_AT = 0.8
 
 export interface DragonLook {
-  /** A stage id from config, e.g. 'egg' or 'hatchling'. Unknown ids fall back to the Hatchling. */
+  /** A stage id from config, e.g. 'egg' or 'hatchling'. Unknown ids get the most grown-up look. */
   stage: string
   /** 0 to 1 toward the next stage. */
   progress: number
@@ -32,8 +33,18 @@ function art(look: DragonLook): { key: string; svg: string } {
     const crack = crackLevel(look.progress)
     return { key: `egg-${crack}`, svg: eggSvg(crack, String(++uidCounter)) }
   }
-  // Whelp and later stages get their own art in Milestone 2.
-  return { key: 'hatchling', svg: hatchlingSvg() }
+  const draw = STAGE_ART[look.stage]
+  if (draw) return { key: look.stage, svg: draw() }
+  // An id the art doesn't know (a stage added to config later): the most grown-up look.
+  return { key: 'elder', svg: elderSvg() }
+}
+
+const STAGE_ART: Record<string, () => string> = {
+  hatchling: hatchlingSvg,
+  whelp: whelpSvg,
+  juvenile: juvenileSvg,
+  adult: adultSvg,
+  elder: elderSvg,
 }
 
 /**

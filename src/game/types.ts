@@ -21,8 +21,11 @@ export interface Task {
   archived: boolean
 }
 
+/** A stage id from config, e.g. 'egg' or 'hatchling'. */
+export type StageId = string
+
 export interface Stage {
-  id: string
+  id: StageId
   name: string
   xpFrom: number
 }
@@ -46,6 +49,12 @@ export interface LogEvent {
   /** Milliseconds since the Unix epoch. */
   timestamp: number
   xpAwarded: number
+  /**
+   * The dragon's stage right after this log, recorded when it went higher than any
+   * stage recorded before. It holds the stage even if a threshold is raised later.
+   * Undoing this log removes the hold. Older logs don't have it.
+   */
+  stageReached?: StageId
   /** The variable-reward roll, saved at log time. Its shape arrives in Milestone 4. */
   reward?: unknown
   note?: string

@@ -24,14 +24,14 @@ const TUE = (time: string) => at(`2026-10-06T${time}+01:00`)
 
 /** Logs a task and appends it, failing the test if it was refused. */
 function tap(events: GameEvent[], t: Task, now: number, id: string): GameEvent[] {
-  const e = createLogEvent(t, events, settings, now, id)
+  const e = createLogEvent(t, events, settings, now, id, STAGES)
   if (!e) throw new Error(`${t.id} refused at ${new Date(now).toISOString()}`)
   return [...events, e]
 }
 
 describe('createLogEvent', () => {
   it('records the task, time, id and current XP', () => {
-    expect(createLogEvent(gym, [], settings, MON('08:00'), 'abc')).toEqual({
+    expect(createLogEvent(gym, [], settings, MON('08:00'), 'abc', STAGES)).toEqual({
       id: 'abc',
       type: 'log',
       taskId: 'gym',
@@ -42,30 +42,30 @@ describe('createLogEvent', () => {
 
   it('refuses a second once-per-day log', () => {
     const events = tap([], gym, MON('08:00'), 'a')
-    expect(createLogEvent(gym, events, settings, MON('09:00'), 'b')).toBeNull()
+    expect(createLogEvent(gym, events, settings, MON('09:00'), 'b', STAGES)).toBeNull()
   })
 
   it('refuses the avoided task once it reaches its daily limit', () => {
     let events: GameEvent[] = []
     for (let i = 0; i < avoidedMax; i++) events = tap(events, avoided, MON('09:00') + i * 60_000, `a${i}`)
-    expect(createLogEvent(avoided, events, settings, MON('12:00'), 'next')).toBeNull()
+    expect(createLogEvent(avoided, events, settings, MON('12:00'), 'next', STAGES)).toBeNull()
   })
 
   it('accepts wake-up at 06:45 and refuses it at 06:46', () => {
-    expect(createLogEvent(wake, [], settings, MON('06:45:00'), 'a')).not.toBeNull()
-    expect(createLogEvent(wake, [], settings, MON('06:46:00'), 'b')).toBeNull()
+    expect(createLogEvent(wake, [], settings, MON('06:45:00'), 'a', STAGES)).not.toBeNull()
+    expect(createLogEvent(wake, [], settings, MON('06:46:00'), 'b', STAGES)).toBeNull()
   })
 
   it('refuses wake-up at 02:00 Tuesday, which is Monday night', () => {
-    expect(createLogEvent(wake, [], settings, TUE('02:00'), 'a')).toBeNull()
+    expect(createLogEvent(wake, [], settings, TUE('02:00'), 'a', STAGES)).toBeNull()
   })
 
   it('refuses wake-up at the weekend', () => {
-    expect(createLogEvent(wake, [], settings, at('2026-10-10T06:00:00+01:00'), 'a')).toBeNull()
+    expect(createLogEvent(wake, [], settings, at('2026-10-10T06:00:00+01:00'), 'a', STAGES)).toBeNull()
   })
 
   it('refuses archived tasks', () => {
-    expect(createLogEvent({ ...gym, archived: true }, [], settings, MON('08:00'), 'a')).toBeNull()
+    expect(createLogEvent({ ...gym, archived: true }, [], settings, MON('08:00'), 'a', STAGES)).toBeNull()
   })
 
   it('uses the task XP at log time, so later XP edits leave old logs alone', () => {
@@ -114,7 +114,7 @@ describe('undo', () => {
   it('lets a task be logged again after its log is undone', () => {
     const events = tap([], gym, MON('08:00'), 'a')
     const u = createUndoEvent(events, MON('08:01'), 'u') as GameEvent
-    expect(createLogEvent(gym, [...events, u], settings, MON('08:02'), 'b')).not.toBeNull()
+    expect(createLogEvent(gym, [...events, u], settings, MON('08:02'), 'b', STAGES)).not.toBeNull()
   })
 
   it('still works at 03:59 for a log from earlier that day', () => {
