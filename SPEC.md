@@ -33,7 +33,10 @@ The task list is editable in settings. I can add, rename, archive and set XP for
 | Gym / workout | Strength | 40 | Once per day |
 | Went for a walk | Strength | 15 | Once per day |
 | Read for 20 minutes | Wisdom | 25 | Once per day |
+| Looked after myself | Heart | 25 | Once per day |
 | Something I've been avoiding | Discipline | 15 | Can be logged up to 2 times a day, with an optional short note |
+
+Self-care set to 25 XP on 2026-10-05 after simulation: at 15 a Heart dragon was unreachable even with daily self-care.
 
 XP reflects how hard a task is for me, not how hard it is in general. I should be able to change it.
 
@@ -61,7 +64,7 @@ There are four stats. Each grows from the tasks mapped to it.
 - Strength: exercise and physical tasks
 - Discipline: getting up, avoided tasks, routines
 - Wisdom: reading, learning
-- Heart: self-care, social, rest (no default tasks yet, but the stat exists so tasks can map to it)
+- Heart: self-care, social, rest ("Looked after myself")
 
 ### Growth stages
 
@@ -173,5 +176,5 @@ Each milestone is usable on its own.
 ## Open questions
 
 - Dragon name
-- Whether to add Heart tasks from the start
+- ~~Whether to add Heart tasks from the start~~ Decided in Milestone 3: yes, "Looked after myself"
 - The art direction once the MVP works

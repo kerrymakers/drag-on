@@ -64,36 +64,61 @@
 html,
 body {
   margin: 0;
-  min-height: 100%;
+  height: 100%;
   background: var(--bg);
   color: var(--text);
 }
 
+/* The page itself never scrolls: only the task list (and the Dragon screen) do. */
 body {
-  min-height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 [hidden] {
   display: none !important;
 }
 
-/* Header up top, dragon in the upper half, tasks in the thumb zone. */
+/*
+ * The shell fills exactly the visible area: an optional notice, the current screen,
+ * then the tab bar. Named areas keep each row in place when the notice is hidden.
+ */
 .app {
-  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
   max-width: 480px;
   margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding:
-    calc(env(safe-area-inset-top) + 12px)
-    calc(env(safe-area-inset-right) + var(--space))
-    calc(env(safe-area-inset-bottom) + 8px)
-    calc(env(safe-area-inset-left) + var(--space));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'notice'
+    'screen'
+    'nav';
+  overflow: hidden;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+}
+
+.screen {
+  grid-area: screen;
+  min-height: 0;
+}
+
+/*
+ * Home: header and dragon up top, tasks in the thumb zone. The dragon takes the
+ * spare height and shrinks to a minimum; after that the task area scrolls.
+ */
+.home {
+  --dragon-min: 96px;
+  display: grid;
+  grid-template-rows: auto minmax(var(--dragon-min), 1fr) auto minmax(0, auto);
+  row-gap: 10px;
+  padding: 12px var(--space) 0;
 }
 
 /* Notice */
 .notice {
+  grid-area: notice;
+  margin: 8px var(--space) 0;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -261,8 +286,7 @@ body {
 /* Dragon: takes the spare height, shrinking on short screens. */
 .dragon {
   position: relative;
-  flex: 1 1 0;
-  min-height: 92px;
+  min-height: 0;
 }
 
 .dragon-art {
@@ -296,7 +320,6 @@ body {
 /* Growth bar */
 .growth {
   position: relative;
-  margin-top: auto;
 }
 
 .growth-row {
@@ -332,13 +355,37 @@ body {
   transition: width 480ms var(--bounce);
 }
 
-/* Tasks */
+/* Tasks: the only part of Home that scrolls. It runs edge to edge so the buttons'
+   shadows aren't clipped, with the usual side padding inside. */
 .tasks {
   position: relative;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding-top: 4px;
+  margin: 0 calc(-1 * var(--space));
+  padding: 6px var(--space) 2px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.tasks::-webkit-scrollbar {
+  display: none;
+}
+
+/* A soft fade at whichever edge has more to scroll to (set by scroll-fade.ts). */
+.scroll-fade[data-fade='top'] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 24px);
+  mask-image: linear-gradient(to bottom, transparent, #000 24px);
+}
+.scroll-fade[data-fade='bottom'] {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent);
+}
+.scroll-fade[data-fade='both'] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 32px), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 32px), transparent);
 }
 
 .task-list {
@@ -394,6 +441,7 @@ body {
 }
 
 .task:focus-visible,
+.tab:focus-visible,
 .undo:focus-visible,
 .toast-undo:focus-visible,
 .notice-close:focus-visible,
@@ -915,5 +963,349 @@ body {
   }
   .overlay.is-revealed .overlay-layer.is-to {
     animation: none !important;
+  }
+}
+
+/* Tab bar: thumb height, safe-area aware, room for five tabs at 360px. */
+.tabbar {
+  grid-area: nav;
+  display: flex;
+  justify-content: space-around;
+  gap: 4px;
+  padding: 4px 8px calc(env(safe-area-inset-bottom) + 4px);
+  background: var(--surface);
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -4px 16px rgb(160 100 60 / 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  .tabbar {
+    box-shadow: 0 -4px 16px rgb(0 0 0 / 0.3);
+  }
+}
+
+.tab {
+  flex: 1 1 0;
+  min-width: 48px;
+  max-width: 120px;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 16px;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.tab-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 28px;
+  border-radius: 14px;
+  transition:
+    background-color 200ms ease-out,
+    transform 260ms var(--bounce);
+}
+
+.tab-icon .icon {
+  width: 22px;
+  height: 22px;
+}
+
+.tab.is-active {
+  color: var(--text);
+}
+
+.tab.is-active .tab-icon {
+  background: var(--tab-active, #ffe2c2);
+  color: var(--accent-strong);
+}
+
+.tab:active .tab-icon {
+  transform: scale(0.92);
+}
+
+@media (prefers-color-scheme: dark) {
+  .tab.is-active .tab-icon {
+    --tab-active: #5a3a24;
+  }
+}
+
+/* Dragon screen */
+.dragon-screen {
+  display: flex;
+  flex-direction: column;
+}
+
+.ds-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px var(--space) 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.ds-header {
+  text-align: center;
+}
+
+.ds-art {
+  position: relative;
+  flex-shrink: 0;
+  height: clamp(130px, 22dvh, 210px);
+  margin-top: 6px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.ds-art .dragon-react {
+  margin: 0 auto;
+  max-width: 70%;
+}
+
+.ds-line {
+  margin: 0;
+  text-align: center;
+  color: var(--text-soft);
+  font-weight: 600;
+  text-wrap: balance;
+}
+
+.ds-card {
+  flex-shrink: 0;
+  padding: 16px 18px 18px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.ds-card-title {
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.ds-empty {
+  margin: 12px 0 0;
+  color: var(--text-soft);
+  font-size: 0.95rem;
+}
+
+/* Stats: one colour and icon each. */
+.stat {
+  --stat: #ee8f5a;
+  --stat-soft: #ffe2c2;
+  --stat-text: #9a4c1c;
+}
+.stat[data-stat='strength'] {
+  --stat: #ef8a63;
+  --stat-soft: #fde0d3;
+  --stat-text: #a8452a;
+}
+.stat[data-stat='discipline'] {
+  --stat: #8d80d8;
+  --stat-soft: #e6e2f6;
+  --stat-text: #5547a3;
+}
+.stat[data-stat='wisdom'] {
+  --stat: #45a3a0;
+  --stat-soft: #d7efec;
+  --stat-text: #23706d;
+}
+.stat[data-stat='heart'] {
+  --stat: #ea7898;
+  --stat-soft: #fde0e8;
+  --stat-text: #a83a5c;
+}
+
+@media (prefers-color-scheme: dark) {
+  .stat[data-stat='strength'] {
+    --stat: #f39c78;
+    --stat-soft: #573427;
+    --stat-text: #ffc3a8;
+  }
+  .stat[data-stat='discipline'] {
+    --stat: #a79cf0;
+    --stat-soft: #3d3757;
+    --stat-text: #d9d0f5;
+  }
+  .stat[data-stat='wisdom'] {
+    --stat: #6cc4c0;
+    --stat-soft: #24443f;
+    --stat-text: #b6e6e2;
+  }
+  .stat[data-stat='heart'] {
+    --stat: #f58fac;
+    --stat-soft: #55303d;
+    --stat-text: #ffc6d6;
+  }
+}
+
+.stat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stat {
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  grid-template-areas:
+    'icon name value'
+    'icon bar bar';
+  column-gap: 12px;
+  row-gap: 5px;
+  align-items: center;
+}
+
+.stat-icon {
+  grid-area: icon;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--stat-soft);
+  color: var(--stat-text);
+}
+
+.stat-icon .icon {
+  width: 20px;
+  height: 20px;
+}
+
+.stat-name {
+  grid-area: name;
+  font-weight: 700;
+}
+
+.stat-value {
+  grid-area: value;
+  color: var(--stat-text);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-bar {
+  grid-area: bar;
+  display: block;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.stat-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 5px;
+  background: var(--stat);
+  transition: width 480ms var(--bounce);
+}
+
+/* Stage history: reached stages with dates, then locked surprises. */
+.stage-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 6px 14px 6px 8px;
+  border-radius: 18px;
+  background: var(--surface-done);
+}
+
+.history-mark {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #3b2418;
+}
+
+.history-mark .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.history-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+}
+
+.history-date {
+  flex-shrink: 0;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
+.history-item.is-current {
+  background: #ffe2c2;
+}
+
+.history-item.is-current .history-date {
+  color: #9a4c1c;
+}
+
+.history-item.is-locked {
+  background: transparent;
+  border: 2px dashed var(--track);
+}
+
+.history-item.is-locked .history-mark {
+  background: var(--track);
+  color: var(--text-soft);
+}
+
+.history-item.is-locked .history-name {
+  color: var(--text-soft);
+  letter-spacing: 0.15em;
+}
+
+@media (prefers-color-scheme: dark) {
+  .history-item.is-current {
+    background: #5a3a24;
+  }
+  .history-item.is-current .history-date {
+    color: #ffd2a8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-icon,
+  .stat-fill {
+    transition: none;
+  }
+  .tab:active .tab-icon {
+    transform: none;
   }
 }

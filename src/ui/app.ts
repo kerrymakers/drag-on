@@ -1,9 +1,10 @@
-// The home screen: wires game logic, storage and art to the DOM.
+// The app shell: wires game logic, storage and art to the Home and Dragon screens.
 // This is the only layer that reads the clock (Date.now) and generates ids.
 
 import { react, renderDragon, speechAnchor } from '../art'
 import { MOODS } from '../config/mood'
 import { STAGES } from '../config/stages'
+import { STATS } from '../config/stats'
 import { TASKS } from '../config/tasks'
 import { dayKey, dayMinutesToClock } from '../game/day'
 import { createLogEvent, createUndoEvent, undoableLog } from '../game/log'
@@ -21,7 +22,10 @@ import type { GameEvent, Settings, Task, TaskAvailability } from '../game/types'
 import { STORAGE_KEY, load, requestPersistence, save } from '../storage'
 import { celebrate } from './celebrate'
 import { LOGGED, MOOD_LABELS, NOTICES, UNDONE, noticeFor, progressLabel, welcomeLine } from './copy'
+import { createDragonScreen } from './dragon-screen'
 import { newId } from './ids'
+import { createNav, type Route } from './nav'
+import { watchScrollFade } from './scroll-fade'
 import { placeSpeech } from './speech'
 import { createToast } from './toast'
 import { createUpdateGate } from './updates'
@@ -139,7 +143,12 @@ export function startApp(doc: Document): App {
     fill: byId(doc, 'xp-fill'),
     list: byId<HTMLUListElement>(doc, 'task-list'),
     undo: byId<HTMLButtonElement>(doc, 'undo'),
+    home: byId(doc, 'home'),
+    dragonScreen: byId(doc, 'dragon-screen'),
   }
+  const dragonScreen = createDragonScreen(doc, el.dragonScreen, { tasks: TASKS, stats: STATS, stages: STAGES })
+  const refreshTaskFade = watchScrollFade(byId(doc, 'tasks'))
+  let route: Route = 'home'
   const toast = createToast(
     byId(doc, 'toast'),
     byId(doc, 'toast-text'),
@@ -183,7 +192,7 @@ export function startApp(doc: Document): App {
    * so a PWA restored in the background doesn't use it up.
    */
   function maybeWelcome(now = Date.now()) {
-    if (doc.visibilityState !== 'visible') return
+    if (doc.visibilityState !== 'visible' || route !== 'home') return
     const { mood, lastLogDay } = moodFor(data.events, now, MOODS)
     if (!welcome.shouldWelcome(mood, lastLogDay)) return
     const line = welcomeLine(mood, dayKey(now))
@@ -247,6 +256,7 @@ export function startApp(doc: Document): App {
     if (signature !== taskSignature) {
       taskSignature = signature
       el.list.replaceChildren(...visible.map(({ task, a }) => taskButton(doc, task, a, data.settings, now)))
+      refreshTaskFade()
     }
 
     // The Undo row always keeps its space, so task buttons never shift under the thumb.
@@ -254,6 +264,17 @@ export function startApp(doc: Document): App {
     el.undo.classList.toggle('is-idle', !canUndo)
     el.undo.disabled = !canUndo
     el.undo.setAttribute('aria-hidden', String(!canUndo))
+
+    if (route === 'dragon') {
+      dragonScreen.render({
+        events: data.events,
+        settings: data.settings,
+        stage: progress.stage,
+        progress: progress.fraction,
+        mood,
+        now,
+      })
+    }
 
     scheduleRefresh(now)
   }
@@ -349,6 +370,23 @@ export function startApp(doc: Document): App {
       ;({ data, readOnly, notice } = load())
       render()
     }
+  })
+
+  // Screens. Switching never logs or undoes anything, and Home keeps its state
+  // (toast, task buttons) while hidden.
+  createNav(doc, byId(doc, 'tabbar'), (next, from) => {
+    route = next
+    el.home.hidden = next !== 'home'
+    el.dragonScreen.hidden = next !== 'dragon'
+    if (from === null) return // the first render happens below
+    if (next !== 'home') {
+      hush()
+      // "+XP" floats live on <body> (position: fixed): don't let one drift over another screen.
+      doc.querySelectorAll('.float-xp').forEach((f) => f.remove())
+    }
+    render()
+    // Coming back to Home can show a welcome that hasn't been seen yet, never a repeat.
+    if (next === 'home') maybeWelcome()
   })
 
   render()

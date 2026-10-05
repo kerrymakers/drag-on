@@ -13,52 +13,58 @@
     <title>Drag-on</title>
   </head>
   <body>
-    <main class="app" id="app">
+    <div class="app" id="app">
       <div class="notice" id="notice" role="status" hidden>
         <p class="notice-text" id="notice-text"></p>
         <button type="button" class="notice-close" id="notice-close" aria-label="Dismiss">×</button>
       </div>
 
-      <header class="top">
-        <p class="dragon-name" id="dragon-name">your dragon</p>
-        <div class="stage-row">
-          <h1 class="stage-name" id="stage-name">Egg</h1>
-          <span class="mood-chip" id="mood-chip" data-mood="happy">Happy</span>
-        </div>
-      </header>
+      <main class="screen home" id="home" aria-label="Home">
+        <header class="top">
+          <p class="dragon-name" id="dragon-name">your dragon</p>
+          <div class="stage-row">
+            <h1 class="stage-name" id="stage-name">Egg</h1>
+            <span class="mood-chip" id="mood-chip" data-mood="happy">Happy</span>
+          </div>
+        </header>
 
-      <section class="dragon" aria-label="Your dragon">
-        <div class="dragon-art" id="dragon-art" tabindex="-1"></div>
-        <p class="speech" id="speech" aria-live="polite"></p>
-      </section>
+        <section class="dragon" aria-label="Your dragon">
+          <div class="dragon-art" id="dragon-art" tabindex="-1"></div>
+          <p class="speech" id="speech" aria-live="polite"></p>
+        </section>
 
-      <section class="growth" aria-label="Growth">
-        <div class="toast" id="toast" role="status" aria-live="polite">
-          <span class="toast-text" id="toast-text"></span>
-          <button type="button" class="toast-undo" id="toast-undo" disabled>Undo</button>
-        </div>
-        <div class="growth-row">
-          <span class="growth-label" id="growth-label">100 XP to hatch</span>
-          <span class="growth-total"><span id="xp-total">0</span> XP</span>
-        </div>
-        <div
-          class="xp-bar"
-          id="xp-bar"
-          role="progressbar"
-          aria-labelledby="growth-label"
-          aria-valuemin="0"
-          aria-valuemax="100"
-          aria-valuenow="0"
-        >
-          <div class="xp-fill" id="xp-fill"></div>
-        </div>
-      </section>
+        <section class="growth" aria-label="Growth">
+          <div class="toast" id="toast" role="status" aria-live="polite">
+            <span class="toast-text" id="toast-text"></span>
+            <button type="button" class="toast-undo" id="toast-undo" disabled>Undo</button>
+          </div>
+          <div class="growth-row">
+            <span class="growth-label" id="growth-label">100 XP to hatch</span>
+            <span class="growth-total"><span id="xp-total">0</span> XP</span>
+          </div>
+          <div
+            class="xp-bar"
+            id="xp-bar"
+            role="progressbar"
+            aria-labelledby="growth-label"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+          >
+            <div class="xp-fill" id="xp-fill"></div>
+          </div>
+        </section>
 
-      <section class="tasks" aria-label="Today's tasks">
-        <ul class="task-list" id="task-list"></ul>
-        <button type="button" class="undo is-idle" id="undo" disabled aria-hidden="true">Undo last log</button>
-      </section>
-    </main>
+        <section class="tasks scroll-fade" id="tasks" aria-label="Today's tasks">
+          <ul class="task-list" id="task-list"></ul>
+          <button type="button" class="undo is-idle" id="undo" disabled aria-hidden="true">Undo last log</button>
+        </section>
+      </main>
+
+      <main class="screen dragon-screen" id="dragon-screen" aria-labelledby="ds-title" hidden></main>
+
+      <nav class="tabbar" id="tabbar" aria-label="Screens"></nav>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

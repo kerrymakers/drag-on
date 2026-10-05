@@ -35,6 +35,14 @@ export const TASKS: readonly Task[] = [
     archived: false,
   },
   {
+    id: 'selfcare',
+    name: 'Looked after myself',
+    stat: 'heart',
+    xp: 25,
+    rules: { kind: 'oncePerDay' },
+    archived: false,
+  },
+  {
     id: 'avoided',
     name: "Something I've been avoiding",
     stat: 'discipline',

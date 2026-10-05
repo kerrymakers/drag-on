@@ -1,5 +1,6 @@
 // Words the app says. Warm, never guilt-tripping. Not game logic, not balancing.
 
+import { daysBetween } from '../game/day'
 import type { MoodId } from '../game/types'
 import type { LoadNotice } from '../storage'
 
@@ -80,4 +81,39 @@ export function noticeFor(notice: LoadNotice): string | null {
   return notice === 'backupFailed' || notice === 'newerVersion' || notice === 'unavailable'
     ? NOTICES[notice]
     : null
+}
+
+/** Words on the Dragon screen, in the dragon's voice. */
+export const DRAGON_SCREEN = {
+  statsTitle: "What I'm good at",
+  /** Before any log has gone towards a stat. */
+  statsEmpty: "Log something and I'll start getting stronger!",
+  historyTitle: "How I've grown",
+  /** The first stage, before the first log. */
+  firstStageWaiting: 'Waiting for you',
+  /** An upcoming stage: never its name. */
+  locked: '???',
+  lockedLabel: 'A surprise for later',
+} as const
+
+/** A short, cheerful line under the name, by how many stages have been reached. */
+export function dragonScreenLine(stagesReached: number): string {
+  if (stagesReached <= 1) return "I can't wait to see who I'll become."
+  return "Look how far we've come together!"
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/**
+ * A game day ("YYYY-MM-DD") as a friendly date: "Today", "Yesterday", "5 Oct",
+ * or "5 Oct 2025" when it's from another year than `todayKey`.
+ */
+export function friendlyDay(dayKey: string, todayKey: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dayKey)
+  if (!m) return dayKey
+  const ago = daysBetween(dayKey, todayKey)
+  if (ago === 0) return 'Today'
+  if (ago === 1) return 'Yesterday'
+  const label = `${Number(m[3])} ${MONTHS[Number(m[2]) - 1] ?? ''}`.trim()
+  return m[1] === todayKey.slice(0, 4) ? label : `${label} ${m[1]}`
 }
