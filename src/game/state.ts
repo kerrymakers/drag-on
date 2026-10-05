@@ -1,7 +1,7 @@
 // Derived state, calculated from the event log every time. Nothing here is stored.
 
 import { WAKE_GRACE_MINUTES } from '../config/time'
-import { clockToDayMinutes, dayKey, minutesSinceDayStart, weekdayOf } from './day'
+import { clockToDayMinutes, dayKey, instantInDay, minutesSinceDayStart, nextDayStart, weekdayOf } from './day'
 import type { GameEvent, LogEvent, Settings, Stage, Task, TaskAvailability } from './types'
 
 /** Log events that haven't been undone, in the order they were appended. */
@@ -110,4 +110,28 @@ export function taskAvailability(
   const limit = rules.kind === 'oncePerDay' ? 1 : rules.max
   if (task.archived) return HIDDEN(count, limit)
   return { visible: true, canLog: count < limit, countToday: count, limit }
+}
+
+/**
+ * The stage reached by going from `prevXp` to `nextXp`, if it's higher than before;
+ * otherwise null. Undo (XP going down) never counts as a change worth celebrating.
+ */
+export function stageUp(prevXp: number, nextXp: number, stages: readonly Stage[]): Stage | null {
+  if (nextXp <= prevXp) return null
+  const before = stageFor(prevXp, stages)
+  const after = stageFor(nextXp, stages)
+  return after.xpFrom > before.xpFrom ? after : null
+}
+
+/**
+ * The next moment after `now` when what the home screen shows can change on its own:
+ * the next 04:00 day start, or the minute the wake-up window closes if that's sooner.
+ */
+export function nextRefreshAt(settings: Settings, now: number): number {
+  const dayStart = nextDayStart(now)
+  const deadline = wakeDeadline(settings, now)
+  if (deadline == null) return dayStart
+  // The window closes at the start of the minute after the (inclusive) deadline minute.
+  const closes = instantInDay(dayKey(now), deadline + 1)
+  return closes > now && closes < dayStart ? closes : dayStart
 }

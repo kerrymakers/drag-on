@@ -85,6 +85,57 @@ function toDayMinutes(minutesSinceMidnight: number): number {
   return (minutesSinceMidnight - DAY_START_HOUR * 60 + 24 * 60) % (24 * 60)
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/** The London clock's lead over UTC at instant `t`, in ms (0 in GMT, 1 hour in BST). */
+function offsetAt(t: number): number {
+  const c = wallClock(t)
+  return Date.UTC(c.year, c.month - 1, c.day, c.hour, c.minute) - Math.floor(t / 60_000) * 60_000
+}
+
+/**
+ * The instant at which the London wall clock reads the given date and time.
+ *
+ * Clock changes make some wall times missing or doubled, and we map them like this:
+ * - A missing time (01:00 to 01:59 on the spring-forward day) maps to the instant
+ *   using the offset from before the change, which reads one hour later on the clock.
+ *   So 01:30 becomes 01:30 UTC, which is 02:30 BST.
+ * - A doubled time (01:00 to 01:59 on the fall-back day) maps to the later
+ *   occurrence, in GMT.
+ *
+ * The day-start (04:00) and wake times are never missing or doubled in London, so
+ * this only matters for completeness. There is at most one change in a 48-hour
+ * window, so the offsets a day either side are the only two candidates.
+ */
+function instantOfWallClock(year: number, month: number, day: number, minutesSinceMidnight: number): number {
+  const wall = Date.UTC(year, month - 1, day, 0, minutesSinceMidnight)
+  const before = offsetAt(wall - DAY_MS)
+  const after = offsetAt(wall + DAY_MS)
+  const matches = [wall - before, wall - after].filter((t) => t + offsetAt(t) === wall)
+  if (matches.length > 0) return Math.max(...matches) // doubled: the later one
+  return wall - before // missing: carry on with the offset from before the change
+}
+
+/**
+ * The instant at which game day `key` is `dayMinutes` minutes past its 04:00 start
+ * on the wall clock. dayMinutes may run past midnight (up to 1439 = 03:59 next morning).
+ */
+export function instantInDay(key: string, dayMinutes: number): number {
+  const [y, m, d] = key.split('-').map(Number)
+  return instantOfWallClock(y ?? 1970, m ?? 1, d ?? 1, DAY_START_HOUR * 60 + dayMinutes)
+}
+
+/** The game day after `key`. */
+export function nextDayKey(key: string): string {
+  const [y, m, d] = key.split('-').map(Number)
+  return shiftDate(y ?? 1970, m ?? 1, d ?? 1, 1)
+}
+
+/** The next 04:00 day start strictly after `now`. */
+export function nextDayStart(now: number): number {
+  return instantInDay(nextDayKey(dayKey(now)), 0)
+}
+
 const WEEKDAYS: readonly Weekday[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 
 /** Day of the week for a day key, worked out from the calendar date alone. */

@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS } from '../config/settings'
 import { STAGES } from '../config/stages'
 import { TASKS } from '../config/tasks'
-import { activeLogs, progressToNextStage, stageFor, taskAvailability, totalXp } from './state'
+import {
+  activeLogs,
+  nextRefreshAt,
+  progressToNextStage,
+  stageFor,
+  stageUp,
+  taskAvailability,
+  totalXp,
+} from './state'
 import { at, log, undo } from '../testing/helpers'
 import type { Settings, Stage, Task } from './types'
 
@@ -270,5 +278,60 @@ describe('taskAvailability: daily limits', () => {
     const archived = { ...walk, archived: true }
     expect(taskAvailability(archived, [], settings, MON('12:00')).visible).toBe(false)
     expect(taskAvailability({ ...wake, archived: true }, [], settings, MON('05:00')).visible).toBe(false)
+  })
+})
+
+describe('stageUp', () => {
+  it('reports the new stage when XP crosses a threshold', () => {
+    expect(stageUp(90, 120, TEST_STAGES)?.id).toBe('hatchling')
+    expect(stageUp(99, 100, TEST_STAGES)?.id).toBe('hatchling')
+  })
+
+  it('reports nothing within a stage', () => {
+    expect(stageUp(10, 50, TEST_STAGES)).toBeNull()
+    expect(stageUp(100, 140, TEST_STAGES)).toBeNull()
+  })
+
+  it('reports only the final stage when several are crossed at once', () => {
+    expect(stageUp(0, 600, TEST_STAGES)?.id).toBe('whelp')
+  })
+
+  it('never reports going down (undo)', () => {
+    expect(stageUp(120, 90, TEST_STAGES)).toBeNull()
+    expect(stageUp(100, 100, TEST_STAGES)).toBeNull()
+  })
+
+  it('celebrates again when the threshold is re-crossed after an undo', () => {
+    expect(stageUp(110, 85, TEST_STAGES)).toBeNull()
+    expect(stageUp(85, 110, TEST_STAGES)?.id).toBe('hatchling')
+  })
+})
+
+describe('nextRefreshAt', () => {
+  it('is the wake window closing (06:46) when that comes first', () => {
+    expect(nextRefreshAt(settings, MON('05:00'))).toBe(MON('06:46:00'))
+    expect(nextRefreshAt(settings, MON('06:45:59'))).toBe(MON('06:46:00'))
+  })
+
+  it('is the next 04:00 once the wake window has closed', () => {
+    expect(nextRefreshAt(settings, MON('06:46:00'))).toBe(TUE('04:00'))
+    expect(nextRefreshAt(settings, MON('23:00'))).toBe(TUE('04:00'))
+  })
+
+  it('is the next 04:00 on days with no wake target', () => {
+    const sat = at('2026-10-10T05:00:00+01:00')
+    expect(nextRefreshAt(settings, sat)).toBe(at('2026-10-11T04:00:00+01:00'))
+  })
+
+  it('treats the small hours as the end of the previous day', () => {
+    // 02:00 Tuesday is Monday's game day; Monday's window closed long ago.
+    expect(nextRefreshAt(settings, TUE('02:00'))).toBe(TUE('04:00'))
+  })
+
+  it('follows the wall clock across a clock change', () => {
+    // Saturday night 24 Oct: the next day starts at 04:00 GMT, after the clocks go back.
+    expect(nextRefreshAt(settings, at('2026-10-24T22:00:00+01:00'))).toBe(at('2026-10-25T04:00:00Z'))
+    // First GMT Monday: the window closes at 06:46 GMT.
+    expect(nextRefreshAt(settings, at('2026-10-26T05:00:00Z'))).toBe(at('2026-10-26T06:46:00Z'))
   })
 })

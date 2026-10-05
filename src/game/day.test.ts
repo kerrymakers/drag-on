@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { clockToDayMinutes, dayKey, dayMinutesToClock, minutesSinceDayStart, weekdayOf } from './day'
+import {
+  clockToDayMinutes,
+  dayKey,
+  dayMinutesToClock,
+  instantInDay,
+  nextDayKey,
+  minutesSinceDayStart,
+  nextDayStart,
+  weekdayOf,
+} from './day'
 import { at } from '../testing/helpers'
 
 describe('dayKey', () => {
@@ -114,5 +123,93 @@ describe('weekdayOf', () => {
 
   it('pairs with dayKey so 02:00 Tuesday is Monday', () => {
     expect(weekdayOf(dayKey(at('2026-10-06T02:00:00+01:00')))).toBe('mon')
+  })
+})
+
+describe('instantInDay', () => {
+  it('finds the instant of a wall-clock time on a game day', () => {
+    expect(instantInDay('2026-10-05', 0)).toBe(at('2026-10-05T04:00:00+01:00'))
+    expect(instantInDay('2026-10-05', 166)).toBe(at('2026-10-05T06:46:00+01:00'))
+    expect(instantInDay('2026-12-01', 0)).toBe(at('2026-12-01T04:00:00Z'))
+  })
+
+  it('runs past midnight into the small hours of the same game day', () => {
+    expect(instantInDay('2026-10-05', 1439)).toBe(at('2026-10-06T03:59:00+01:00'))
+    expect(dayKey(instantInDay('2026-10-05', 1439))).toBe('2026-10-05')
+  })
+
+  it('handles both clock-change days', () => {
+    expect(instantInDay('2026-03-29', 0)).toBe(at('2026-03-29T04:00:00+01:00'))
+    expect(instantInDay('2026-10-25', 0)).toBe(at('2026-10-25T04:00:00Z'))
+    expect(instantInDay('2026-03-28', 0)).toBe(at('2026-03-28T04:00:00Z'))
+    expect(instantInDay('2026-10-24', 0)).toBe(at('2026-10-24T04:00:00+01:00'))
+  })
+})
+
+describe('nextDayKey', () => {
+  it('steps one calendar day, across months and years', () => {
+    expect(nextDayKey('2026-10-05')).toBe('2026-10-06')
+    expect(nextDayKey('2026-02-28')).toBe('2026-03-01')
+    expect(nextDayKey('2026-12-31')).toBe('2027-01-01')
+  })
+})
+
+describe('nextDayStart', () => {
+  it('is the coming 04:00, whether now is evening or the small hours', () => {
+    expect(nextDayStart(at('2026-10-05T12:00:00+01:00'))).toBe(at('2026-10-06T04:00:00+01:00'))
+    expect(nextDayStart(at('2026-10-06T03:59:59+01:00'))).toBe(at('2026-10-06T04:00:00+01:00'))
+  })
+
+  it('is strictly after now, even exactly at 04:00', () => {
+    expect(nextDayStart(at('2026-10-06T04:00:00+01:00'))).toBe(at('2026-10-07T04:00:00+01:00'))
+  })
+
+  it('lands on 04:00 local time across both clock changes', () => {
+    // Spring forward: Saturday's game day is 23 hours long.
+    const sat = at('2026-03-28T12:00:00Z')
+    expect(nextDayStart(sat)).toBe(at('2026-03-29T04:00:00+01:00'))
+    expect(nextDayStart(at('2026-03-29T02:30:00+01:00'))).toBe(at('2026-03-29T04:00:00+01:00'))
+    // Fall back: Saturday's game day is 25 hours long.
+    expect(nextDayStart(at('2026-10-24T12:00:00+01:00'))).toBe(at('2026-10-25T04:00:00Z'))
+    expect(nextDayStart(at('2026-10-25T01:30:00Z'))).toBe(at('2026-10-25T04:00:00Z'))
+  })
+})
+
+describe('wall times that are missing or doubled by a clock change', () => {
+  it('maps a missing time (spring forward) using the offset from before the change', () => {
+    // 01:30 on Sun 29 Mar 2026 never happens; game day 28 Mar + 1290 min = 01:30.
+    expect(instantInDay('2026-03-28', 1290)).toBe(at('2026-03-29T01:30:00Z')) // = 02:30 BST
+  })
+
+  it('maps a doubled time (fall back) to the later occurrence, in GMT', () => {
+    // 01:30 on Sun 25 Oct 2026 happens twice; game day 24 Oct + 1290 min = 01:30.
+    expect(instantInDay('2026-10-24', 1290)).toBe(at('2026-10-25T01:30:00Z'))
+  })
+
+  it('finds the next 04:00 from inside the doubled hour', () => {
+    // 00:30Z and 00:59Z on 25 Oct are the first (BST) 01:30 and 01:59.
+    expect(nextDayStart(at('2026-10-25T00:30:00Z'))).toBe(at('2026-10-25T04:00:00Z'))
+    expect(nextDayStart(at('2026-10-25T00:59:00Z'))).toBe(at('2026-10-25T04:00:00Z'))
+    // And from the second (GMT) occurrence.
+    expect(nextDayStart(at('2026-10-25T01:30:00Z'))).toBe(at('2026-10-25T04:00:00Z'))
+  })
+
+  it('finds the next 04:00 either side of the missing hour', () => {
+    expect(nextDayStart(at('2026-03-29T00:59:00Z'))).toBe(at('2026-03-29T03:00:00Z'))
+    expect(nextDayStart(at('2026-03-29T02:59:00Z'))).toBe(at('2026-03-29T03:00:00Z'))
+  })
+
+  it('round-trips every minute of both clock-change days', () => {
+    for (const key of ['2026-03-28', '2026-03-29', '2026-10-24', '2026-10-25']) {
+      for (let m = 0; m < 1440; m++) {
+        const t = instantInDay(key, m)
+        // Except the missing hour, the instant reads back as the same day and minute.
+        const missing = key === '2026-03-28' && m >= 1260 && m < 1320
+        if (!missing) {
+          expect(dayKey(t)).toBe(key)
+          expect(minutesSinceDayStart(t)).toBe(m)
+        }
+      }
+    }
   })
 })

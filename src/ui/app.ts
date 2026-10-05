@@ -1,19 +1,31 @@
-// The home screen: wires game logic and storage to the DOM.
+// The home screen: wires game logic, storage and art to the DOM.
 // This is the only layer that reads the clock (Date.now) and generates ids.
 
+import { react, renderDragon } from '../art'
 import { STAGES } from '../config/stages'
 import { TASKS } from '../config/tasks'
-import { createLogEvent, createUndoEvent, undoableLog } from '../game/log'
-import { stageFor, taskAvailability, totalXp, wakeDeadline } from '../game/state'
 import { dayMinutesToClock } from '../game/day'
+import { createLogEvent, createUndoEvent, undoableLog } from '../game/log'
+import {
+  nextRefreshAt,
+  progressToNextStage,
+  stageFor,
+  stageUp,
+  taskAvailability,
+  totalXp,
+  wakeDeadline,
+} from '../game/state'
 import type { GameEvent, Settings, Task, TaskAvailability } from '../game/types'
 import { STORAGE_KEY, load, requestPersistence, save } from '../storage'
+import { celebrate } from './celebrate'
+import { LOGGED, NOTICES, UNDONE, noticeFor, progressLabel } from './copy'
 import { newId } from './ids'
+import { createToast } from './toast'
+import { createUpdateGate } from './updates'
 
-const CAPTIONS: Record<string, string> = {
-  egg: 'An egg is waiting…',
-  hatchling: 'Your dragon has hatched!',
-}
+const TICK_MS = 60_000
+/** setTimeout's ceiling; anything longer fires immediately. */
+const MAX_TIMEOUT = 2 ** 31 - 1
 
 function byId<T extends HTMLElement>(doc: Document, id: string): T {
   const el = doc.getElementById(id)
@@ -73,53 +85,120 @@ function taskButton(
   return li
 }
 
-export function startApp(doc: Document): void {
+function prefersReducedMotion(): boolean {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+}
+
+function haptic() {
+  try {
+    navigator.vibrate?.(30)
+  } catch {
+    // Not supported or not allowed: the visual feedback is enough.
+  }
+}
+
+/** "+40 XP" rising from the button that was tapped. */
+function floatXp(doc: Document, from: DOMRect, text: string) {
+  const el = doc.createElement('span')
+  el.className = 'float-xp'
+  el.textContent = text
+  el.setAttribute('aria-hidden', 'true')
+  el.style.left = `${from.right - 24}px`
+  el.style.top = `${from.top + 6}px`
+  doc.body.append(el)
+  window.setTimeout(() => el.remove(), 900)
+}
+
+export interface App {
+  /** A new version is active; reload when it won't interrupt anything. */
+  requestReload(): void
+}
+
+export function startApp(doc: Document): App {
   let { data, readOnly, notice } = load()
-  if (readOnly) console.warn(`Not saving on this device (${notice}), so nothing stored is overwritten.`)
   void requestPersistence()
 
   const el = {
+    notice: byId(doc, 'notice'),
+    noticeText: byId(doc, 'notice-text'),
+    noticeClose: byId<HTMLButtonElement>(doc, 'notice-close'),
     name: byId(doc, 'dragon-name'),
     stage: byId(doc, 'stage-name'),
+    art: byId(doc, 'dragon-art'),
+    label: byId(doc, 'growth-label'),
     xp: byId(doc, 'xp-total'),
-    gain: byId(doc, 'xp-gain'),
-    caption: byId(doc, 'dragon-caption'),
+    bar: byId(doc, 'xp-bar'),
+    fill: byId(doc, 'xp-fill'),
     list: byId<HTMLUListElement>(doc, 'task-list'),
     undo: byId<HTMLButtonElement>(doc, 'undo'),
   }
+  const toast = createToast(
+    byId(doc, 'toast'),
+    byId(doc, 'toast-text'),
+    byId<HTMLButtonElement>(doc, 'toast-undo'),
+  )
+  const updates = createUpdateGate(doc)
 
-  let gainTimer: number | undefined
-  function flash(text: string) {
-    el.gain.textContent = text
-    el.gain.classList.remove('is-showing')
-    void el.gain.offsetWidth // restart the fade
-    el.gain.classList.add('is-showing')
-    window.clearTimeout(gainTimer)
-    gainTimer = window.setTimeout(() => {
-      el.gain.classList.remove('is-showing')
-      el.gain.textContent = ''
-    }, 1600)
+  // Gentle notices: shown once per session at most, and dismissible.
+  let noticeDismissed = false
+  function showNotice(text: string) {
+    if (noticeDismissed) return
+    el.noticeText.textContent = text
+    el.notice.hidden = false
+  }
+  el.noticeClose.addEventListener('click', () => {
+    noticeDismissed = true
+    el.notice.hidden = true
+  })
+  const loadNotice = noticeFor(notice)
+  if (readOnly) console.warn(`Not saving on this device (${notice}), so nothing stored is overwritten.`)
+  if (loadNotice) showNotice(loadNotice)
+
+  let refreshTimer: number | undefined
+  let taskSignature = ''
+  function scheduleRefresh(now: number) {
+    window.clearTimeout(refreshTimer)
+    const wait = Math.min(MAX_TIMEOUT, Math.max(0, nextRefreshAt(data.settings, now) - now) + 500)
+    refreshTimer = window.setTimeout(() => render(), wait)
   }
 
   function render(now = Date.now()) {
     const xp = totalXp(data.events)
-    const stage = stageFor(xp, STAGES)
+    const progress = progressToNextStage(xp, STAGES)
     el.name.textContent = data.settings.dragonName ?? 'your dragon'
-    el.stage.textContent = stage.name
-    el.xp.textContent = String(xp)
-    el.caption.textContent = CAPTIONS[stage.id] ?? ''
+    el.stage.textContent = progress.stage.name
+    renderDragon(el.art, { stage: progress.stage.id, progress: progress.fraction })
 
-    const items: HTMLLIElement[] = []
-    for (const task of TASKS) {
-      const a = taskAvailability(task, data.events, data.settings, now)
-      if (a.visible) items.push(taskButton(doc, task, a, data.settings, now))
+    const label = progressLabel(progress.stage.id, progress.xpToNext, progress.next?.name ?? null)
+    el.label.textContent = label
+    el.xp.textContent = String(xp)
+    const percent = Math.round(progress.fraction * 100)
+    el.fill.style.width = `${percent}%`
+    el.bar.setAttribute('aria-valuenow', String(percent))
+    el.bar.setAttribute('aria-valuetext', label)
+
+    // Only rebuild the buttons when something about them changed, so a tick never
+    // swaps a button out from under a finger or drops keyboard focus.
+    const visible = TASKS.map((task) => ({
+      task,
+      a: taskAvailability(task, data.events, data.settings, now),
+    })).filter(({ a }) => a.visible)
+    const signature = visible
+      .map(({ task, a }) => `${task.id}:${a.canLog}:${a.countToday}/${a.limit}:${task.name}:${task.xp}`)
+      .join('|')
+      .concat(`|${wakeDeadline(data.settings, now)}`)
+    if (signature !== taskSignature) {
+      taskSignature = signature
+      el.list.replaceChildren(...visible.map(({ task, a }) => taskButton(doc, task, a, data.settings, now)))
     }
-    el.list.replaceChildren(...items)
+
     // The Undo row always keeps its space, so task buttons never shift under the thumb.
     const canUndo = undoableLog(data.events, now) !== null
     el.undo.classList.toggle('is-idle', !canUndo)
     el.undo.disabled = !canUndo
     el.undo.setAttribute('aria-hidden', String(!canUndo))
+
+    scheduleRefresh(now)
   }
 
   /**
@@ -129,40 +208,78 @@ export function startApp(doc: Document): void {
    */
   function commit(event: GameEvent) {
     data = { ...data, events: [...data.events, event] }
+    updates.noteActivity()
     if (readOnly) return
     try {
       save(data)
     } catch (err) {
       console.warn('Could not save to this device', err)
+      showNotice(NOTICES.saveFailed)
     }
+  }
+
+  function undoLast() {
+    const now = Date.now()
+    const event = createUndoEvent(data.events, now, newId())
+    if (event) {
+      commit(event)
+      toast.show(UNDONE)
+    }
+    render(now)
   }
 
   el.list.addEventListener('click', (e) => {
     const button = (e.target as Element).closest<HTMLButtonElement>('button.task')
     const task = TASKS.find((t) => t.id === button?.dataset.taskId)
-    if (!task) return
+    if (!button || !task) return
     const now = Date.now()
+    const prevXp = totalXp(data.events)
     const event = createLogEvent(task, data.events, data.settings, now, newId())
-    if (event) {
-      commit(event)
-      flash(`+${event.xpAwarded} XP`)
+    if (!event) {
+      render(now) // the screen was stale (e.g. the wake window just closed)
+      return
     }
+
+    // Save first: everything after this is feedback.
+    const rect = button.getBoundingClientRect()
+    commit(event)
+    haptic()
     render(now)
+
+    const fresh = el.list.querySelector<HTMLElement>(`button.task[data-task-id="${task.id}"]`)
+    fresh?.classList.add('is-logged')
+    floatXp(doc, rect, `+${event.xpAwarded} XP`)
+    react(el.art, 'log')
+    toast.show(LOGGED(event.xpAwarded, task.name), undoLast)
+
+    const reached = stageUp(prevXp, totalXp(data.events), STAGES)
+    if (reached) {
+      updates.setBusy(true)
+      celebrate(doc, {
+        from: stageFor(prevXp, STAGES),
+        to: reached,
+        reducedMotion: prefersReducedMotion(),
+        background: doc.getElementById('app'),
+        // The tapped button if it can still take focus (a once-a-day task is now done
+        // and disabled), else the next task to log, else the dragon.
+        returnFocus: () =>
+          el.list.querySelector<HTMLElement>(`button.task[data-task-id="${task.id}"]:not(:disabled)`) ??
+          el.list.querySelector<HTMLElement>('button.task:not(:disabled)') ??
+          el.art,
+        onClose: () => updates.setBusy(false),
+      })
+    }
   })
 
-  el.undo.addEventListener('click', () => {
-    const now = Date.now()
-    const event = createUndoEvent(data.events, now, newId())
-    if (event) {
-      commit(event)
-      flash('Undone')
-    }
-    render(now)
-  })
+  el.undo.addEventListener('click', undoLast)
+
+  // Decorative: a little bounce. Never logs anything.
+  el.art.addEventListener('click', () => react(el.art, 'tap'))
 
   doc.addEventListener('visibilitychange', () => {
     if (doc.visibilityState === 'visible') render()
   })
+  window.setInterval(() => render(), TICK_MS)
 
   // Another tab saved: pick up its events. In read-only mode, keep this session's
   // in-memory taps on screen instead.
@@ -174,4 +291,5 @@ export function startApp(doc: Document): void {
   })
 
   render()
+  return { requestReload: () => updates.requestReload() }
 }
