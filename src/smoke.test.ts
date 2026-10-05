@@ -7,8 +7,10 @@ describe('scaffold', () => {
     expect(viteConfig.base).toBe('/drag-on/')
   })
 
-  it('ships the placeholder home screen', () => {
-    expect(html).toContain('An egg is waiting…')
+  it('ships the home screen shell the UI renders into', () => {
     expect(html).toContain('viewport-fit=cover')
+    for (const id of ['dragon-name', 'stage-name', 'xp-total', 'xp-gain', 'task-list', 'undo']) {
+      expect(html).toContain(`id="${id}"`)
+    }
   })
 })

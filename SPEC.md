@@ -32,8 +32,8 @@ The task list is editable in settings. I can add, rename, archive and set XP for
 | Got up on time | Discipline | 30 | Only counts if logged before that day's target time + 15 min grace. Only shown on days that have a target time (see Wake-up schedule) |
 | Gym / workout | Strength | 40 | Once per day |
 | Went for a walk | Strength | 15 | Once per day |
-| Read for 20 minutes | Wisdom | 15 | Once per day |
-| Something I've been avoiding | Discipline | 25 | Can be logged up to 3 times a day, with an optional short note |
+| Read for 20 minutes | Wisdom | 25 | Once per day |
+| Something I've been avoiding | Discipline | 15 | Can be logged up to 2 times a day, with an optional short note |
 
 XP reflects how hard a task is for me, not how hard it is in general. I should be able to change it.
 
@@ -72,9 +72,11 @@ Total XP drives the stage. The thresholds give a fast early win (hatching within
 | Egg | 0 | Day 1 |
 | Hatchling | 100 | 2 to 3 days |
 | Whelp | 500 | About 2 weeks |
-| Juvenile | 1,500 | About 1 month |
+| Juvenile | 1,300 | About 1 month |
 | Adult | 3,500 | About 2 to 3 months |
 | Elder | 7,000 | About 5 to 6 months |
+
+Balanced 2026-10-05 after simulation: typical user hatches ~day 3, Juvenile ~day 34, Elder ~6 months.
 
 The thresholds are config values and easy to rebalance.
 

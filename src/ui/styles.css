@@ -3,10 +3,14 @@
 
   --bg: #fff6ec;
   --surface: #ffffff;
+  --surface-done: #fbeee0;
   --text: #4a3328;
   --text-soft: #7d6152;
   --accent: #f6b98a;
-  --shadow: 0 10px 30px rgb(160 100 60 / 0.15);
+  --accent-strong: #b8622c;
+  --tick: #5f8a4c;
+  --shadow: 0 6px 18px rgb(160 100 60 / 0.14);
+  --shadow-pressed: 0 2px 6px rgb(160 100 60 / 0.18);
 
   --egg-light: #fffaf2;
   --egg-dark: #f7d9b8;
@@ -14,11 +18,12 @@
   --egg-spot: #f6b98a;
 
   --radius-lg: 28px;
+  --radius-md: 20px;
   --space: 16px;
 
   font-family:
     system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  line-height: 1.4;
+  line-height: 1.35;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
 }
@@ -27,10 +32,14 @@
   :root {
     --bg: #2b211c;
     --surface: #3a2d26;
+    --surface-done: #33271f;
     --text: #fbeee2;
     --text-soft: #d6bfae;
     --accent: #e8a173;
-    --shadow: 0 10px 30px rgb(0 0 0 / 0.35);
+    --accent-strong: #f3b98f;
+    --tick: #a9d18e;
+    --shadow: 0 6px 18px rgb(0 0 0 / 0.35);
+    --shadow-pressed: 0 2px 6px rgb(0 0 0 / 0.4);
 
     --egg-light: #fdf1e2;
     --egg-dark: #e9c39c;
@@ -57,11 +66,18 @@ body {
   min-height: 100dvh;
 }
 
+[hidden] {
+  display: none !important;
+}
+
+/* Header up top, dragon in the middle, tasks in the thumb zone. */
 .app {
   min-height: 100dvh;
+  max-width: 480px;
+  margin: 0 auto;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
   padding:
     calc(env(safe-area-inset-top) + var(--space))
     calc(env(safe-area-inset-right) + var(--space))
@@ -69,33 +85,78 @@ body {
     calc(env(safe-area-inset-left) + var(--space));
 }
 
-.card {
-  width: 100%;
-  max-width: 360px;
-  padding: 32px 24px;
-  border-radius: var(--radius-lg);
-  background: var(--surface);
-  box-shadow: var(--shadow);
+.top {
   text-align: center;
+}
+
+.dragon-name {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.95rem;
+}
+
+.stage-name {
+  margin: 2px 0 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+.xp {
+  position: relative;
+  margin: 2px 0 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--accent-strong);
+}
+
+.xp-gain {
+  position: absolute;
+  margin-left: 8px;
+  opacity: 0;
+  white-space: nowrap;
+}
+
+.xp-gain.is-showing {
+  animation: xp-gain 1.6s ease-out forwards;
+}
+
+@keyframes xp-gain {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  15%,
+  70% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+.dragon {
+  flex: 1 1 auto;
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .egg {
   display: block;
-  width: min(60%, 200px);
-  height: auto;
-  margin: 0 auto 20px;
+  width: auto;
+  height: min(26dvh, 210px);
+  min-height: 110px;
+  max-width: 60%;
   transform-origin: 50% 90%;
   animation: egg-wobble 3.2s ease-in-out infinite;
 }
 
-.card-title {
-  margin: 0 0 8px;
-  font-size: 1.5rem;
-  font-weight: 700;
-}
-
-.card-text {
-  margin: 0;
+.dragon-caption {
+  margin: 10px 0 0;
   color: var(--text-soft);
   font-size: 1rem;
 }
@@ -121,8 +182,130 @@ body {
   }
 }
 
+.tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task {
+  width: 100%;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 18px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    transform 120ms ease-out,
+    box-shadow 120ms ease-out;
+}
+
+.task:active:not(:disabled) {
+  transform: scale(0.97);
+  box-shadow: var(--shadow-pressed);
+}
+
+.task:focus-visible,
+.undo:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.task.is-done {
+  background: var(--surface-done);
+  color: var(--text-soft);
+  box-shadow: none;
+  cursor: default;
+}
+
+.task-label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.task-hint {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-soft);
+}
+
+.task-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  font-size: 0.95rem;
+}
+
+.task-xp {
+  color: var(--accent-strong);
+}
+
+.task-count {
+  color: var(--text-soft);
+  font-weight: 500;
+}
+
+.task-tick {
+  color: var(--tick);
+}
+
+.undo {
+  align-self: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 22px;
+  background: transparent;
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 0.95rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* Nothing to undo: keep the space, hide it from eyes, taps and screen readers. */
+.undo.is-idle {
+  visibility: hidden;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .egg {
     animation: none;
+  }
+  .task {
+    transition: none;
+  }
+  .task:active:not(:disabled) {
+    transform: none;
+  }
+  .xp-gain.is-showing {
+    animation: none;
+    opacity: 1;
   }
 }

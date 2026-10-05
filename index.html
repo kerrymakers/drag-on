@@ -14,7 +14,17 @@
   </head>
   <body>
     <main class="app" id="app">
-      <section class="card" aria-labelledby="egg-title">
+      <header class="top">
+        <p class="dragon-name" id="dragon-name">your dragon</p>
+        <h1 class="stage-name" id="stage-name">Egg</h1>
+        <p class="xp">
+          <span id="xp-total">0</span> XP
+          <span class="xp-gain" id="xp-gain" aria-live="polite"></span>
+        </p>
+      </header>
+
+      <section class="dragon" aria-label="Your dragon">
+        <!-- Placeholder art. Moves to src/art/ in Slice 3. -->
         <svg class="egg" viewBox="0 0 512 512" role="img" aria-label="A speckled egg">
           <defs>
             <radialGradient id="egg-shell" cx="40%" cy="35%" r="70%">
@@ -33,8 +43,12 @@
           <ellipse cx="214" cy="374" rx="26" ry="20" fill="var(--egg-spot)" />
           <ellipse cx="190" cy="130" rx="18" ry="34" transform="rotate(30 190 130)" fill="#fff" opacity="0.6" />
         </svg>
-        <h1 id="egg-title" class="card-title">An egg is waiting…</h1>
-        <p class="card-text">Something warm and wriggly is nearly ready to meet you.</p>
+        <p class="dragon-caption" id="dragon-caption">An egg is waiting…</p>
+      </section>
+
+      <section class="tasks" aria-label="Today's tasks">
+        <ul class="task-list" id="task-list"></ul>
+        <button type="button" class="undo is-idle" id="undo" disabled aria-hidden="true">Undo last log</button>
       </section>
     </main>
     <script type="module" src="/src/main.ts"></script>

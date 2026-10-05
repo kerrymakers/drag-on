@@ -1,0 +1,475 @@
+// Balance simulation for Drag-on.
+//
+// Run with:  npx vite-node scripts/simulate.ts [days] [runs]
+//
+// MEASURED (uses the real code in src/game/ and src/config/):
+//   - which logs are accepted (createLogEvent + taskAvailability: wake-up window,
+//     no-target weekends, once-per-day, avoided daily limit from config), XP per log, totalXp,
+//     stageFor, dayKey (Europe/London, 04:00 boundary, including clock changes).
+//   - stat totals: summed from each accepted log's task.stat (the stat mapping is
+//     real config; the stat derivation function doesn't exist yet).
+//
+// PROJECTED (the spec describes these but there is no code yet; numbers here
+// are this script's reading of SPEC.md, not the app's behaviour):
+//   - mood (days since last log), treats (20%/log), rare items (3%/log),
+//     overall streak, streak freezes (1 per 7-day streak, max 2), milestone items (7/30/100).
+
+import { createLogEvent, dayKey, stageFor, totalXp, weekdayOf } from '../src/game'
+import type { GameEvent, LogEvent, StatId, Task } from '../src/game'
+import { TASKS } from '../src/config/tasks'
+import { STAGES } from '../src/config/stages'
+import { STATS } from '../src/config/stats'
+import { DEFAULT_SETTINGS } from '../src/config/settings'
+import { TIME_ZONE } from '../src/config/time'
+
+const DAYS = Number(process.argv[2] ?? 365)
+const RUNS = Number(process.argv[3] ?? 300)
+// Optional what-if, applied in memory only (config files are never changed):
+// Variants set absolute values, never relative ones, so they can't double-apply.
+//   --variant=evo     avoided = 15xp max 2/day, read = 25xp (now the real config, so a no-op)
+//   --variant=juv     Juvenile threshold = 1300 (now the real config, so a no-op)
+//   --variant=rare6   rare item chance 3% -> 6% (projection)
+const VARIANT = process.argv.find((a) => a.startsWith('--variant='))?.split('=')[1] ?? null
+const BASE_SEED = 20261005
+const START = { y: 2026, m: 10, d: 5 } // a Monday; crosses the Oct and Mar clock changes
+
+// Spec-implied odds (projection only, no reward config exists yet).
+const TREAT_CHANCE = 0.2
+const RARE_CHANCE = VARIANT === 'rare6' ? 0.06 : 0.03
+const MILESTONES = [7, 30, 100]
+const FREEZE_EVERY = 7
+const FREEZE_MAX = 2
+
+// ---------- seeded RNG ----------
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0
+    let t = a
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+// ---------- London wall-clock -> instant (script-only helper) ----------
+const fmt = new Intl.DateTimeFormat('en-GB', {
+  timeZone: TIME_ZONE,
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+})
+function londonInstant(y: number, m: number, d: number, hh: number, mm: number): number {
+  for (const offsetH of [0, 1]) {
+    const t = Date.UTC(y, m - 1, d, hh - offsetH, mm)
+    const [h, mi] = fmt.format(t).split(':').map(Number)
+    if (h === hh && mi === mm) return t
+  }
+  throw new Error(`No instant for ${y}-${m}-${d} ${hh}:${mm}`)
+}
+function calendarDay(i: number): { y: number; m: number; d: number } {
+  const dt = new Date(Date.UTC(START.y, START.m - 1, START.d + i))
+  return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() }
+}
+
+// ---------- user profiles ----------
+interface DayPlan {
+  wakeOnTime: number // chance, on target days, of getting up on time and logging it in the window
+  wakeLateTry: number // chance of trying to log it after the window anyway (should be refused)
+  gym: number
+  walk: number
+  read: number
+  avoided: number // expected avoided-task logs attempted per day (may exceed 3; the cap is real)
+}
+interface Profile {
+  name: string
+  plan: (day: number, rng: () => number, ctx: RunCtx) => DayPlan | null // null = no logging at all
+}
+interface RunCtx {
+  gaps: Array<[number, number]> // [startDay, endDay) with no logging
+}
+
+const keen: Profile = {
+  name: 'Keen',
+  plan: (_d, rng) =>
+    rng() < 0.05
+      ? null // the odd day off (ill, travel)
+      : { wakeOnTime: 0.9, wakeLateTry: 0.5, gym: 0.7, walk: 0.8, read: 0.8, avoided: 1.8 },
+}
+const typical: Profile = {
+  name: 'Typical',
+  plan: (_d, rng) =>
+    rng() < 0.08
+      ? null
+      : { wakeOnTime: 0.6, wakeLateTry: 0.2, gym: 0.36, walk: 0.25, read: 0.25, avoided: 0.35 },
+}
+const patchy: Profile = {
+  name: 'Patchy',
+  plan: (d, rng, ctx) => {
+    if (ctx.gaps.some(([a, b]) => d >= a && d < b)) return null
+    const goodWeek = Math.floor(d / 7) % 2 === 0
+    if (goodWeek)
+      return { wakeOnTime: 0.65, wakeLateTry: 0.2, gym: 0.4, walk: 0.3, read: 0.3, avoided: 0.5 }
+    if (rng() < 0.45) return null
+    return { wakeOnTime: 0.25, wakeLateTry: 0.1, gym: 0.12, walk: 0.15, read: 0.1, avoided: 0.15 }
+  },
+}
+// Habit-focused typicals, to test whether different habits give different looks.
+const gymFan: Profile = {
+  name: 'Typical, gym-focused (gym 4x/wk, walks, little else)',
+  plan: (_d, rng) =>
+    rng() < 0.08 ? null : { wakeOnTime: 0.4, wakeLateTry: 0.2, gym: 0.57, walk: 0.5, read: 0.15, avoided: 0.2 },
+}
+const reader: Profile = {
+  name: 'Typical, reader (reads most days, gym 1x/wk)',
+  plan: (_d, rng) =>
+    rng() < 0.08 ? null : { wakeOnTime: 0.5, wakeLateTry: 0.2, gym: 0.15, walk: 0.2, read: 0.85, avoided: 0.3 },
+}
+const PROFILES = [keen, typical, patchy, gymFan, reader]
+
+function poisson(lambda: number, rng: () => number): number {
+  const L = Math.exp(-lambda)
+  let k = 0
+  let p = 1
+  do {
+    k++
+    p *= rng()
+  } while (p > L)
+  return k - 1
+}
+
+// ---------- one run ----------
+interface RunResult {
+  stageDay: Record<string, number | null> // first game day index (1-based) at each stage
+  xpByDay: number[]
+  stats: Record<StatId, number>
+  topStatAtJuvenile: StatId | null
+  topStatEnd: StatId
+  logs: number
+  refused: Record<string, number>
+  activeDays: number
+  dailyLogDays: boolean[]
+  rewards: { treats: number; rares: number; milestoneItems: number; milestoneFirsts: number }
+  rareDays: number[]
+  streak: { longest: number; freezesEarned: number; freezesUsed: number; breaks: number }
+  mood: { happy: number; content: number; sleepy: number; grumpy: number }
+  longestGapWithoutNew: number // days between "new things" (stage, rare item, milestone)
+  longestGapStagesOnly: number
+  comebacks: Array<{ gapLen: number; xpWeekAfter: number }>
+}
+
+const TASK_LIST: readonly Task[] =
+  VARIANT === 'evo'
+    ? TASKS.map((t) =>
+        t.id === 'avoided'
+          ? { ...t, xp: 15, rules: { kind: 'maxPerDay', max: 2 } }
+          : t.id === 'read'
+            ? { ...t, xp: 25 }
+            : t,
+      )
+    : TASKS
+const STAGE_LIST = VARIANT === 'juv' ? STAGES.map((s) => (s.id === 'juvenile' ? { ...s, xpFrom: 1300 } : s)) : STAGES
+const TASK_BY_ID = new Map<string, Task>(TASK_LIST.map((t) => [t.id, t]))
+const task = (id: string): Task => {
+  const t = TASK_BY_ID.get(id)
+  if (!t) throw new Error(`Missing task ${id}`)
+  return t
+}
+
+function topStat(stats: Record<StatId, number>): StatId {
+  let best: StatId = STATS[0]!.id
+  for (const s of STATS) if (stats[s.id] > stats[best]) best = s.id
+  return best
+}
+
+function simulate(profile: Profile, seed: number): RunResult {
+  const rng = mulberry32(seed)
+  const ctx: RunCtx = { gaps: [] }
+  if (profile === patchy) {
+    // One 5-8 day gap in the first two months, and one 10-14 day "holiday" gap later.
+    const g1 = 21 + Math.floor(rng() * 30)
+    ctx.gaps.push([g1, g1 + 5 + Math.floor(rng() * 4)])
+    const g2 = 100 + Math.floor(rng() * 50)
+    ctx.gaps.push([g2, g2 + 10 + Math.floor(rng() * 5)])
+  }
+
+  const events: GameEvent[] = []
+  const stats = Object.fromEntries(STATS.map((s) => [s.id, 0])) as Record<StatId, number>
+  const stageDay: Record<string, number | null> = Object.fromEntries(
+    STAGE_LIST.map((s) => [s.id, null]),
+  )
+  stageDay[STAGE_LIST[0]!.id] = 0
+  const xpByDay: number[] = []
+  const refused: Record<string, number> = {}
+  const dailyLogDays: boolean[] = []
+  let topStatAtJuvenile: StatId | null = null
+  let logs = 0
+  let id = 0
+  const rewards = { treats: 0, rares: 0, milestoneItems: 0, milestoneFirsts: 0 }
+  const rareDays: number[] = []
+  const newThingDays: number[] = [0]
+  const stageDays: number[] = [0]
+  const milestonesSeen = new Set<number>()
+
+  for (let i = 0; i < DAYS; i++) {
+    const { y, m, d } = calendarDay(i)
+    const plan = profile.plan(i, rng, ctx)
+    const todays: GameEvent[] = [] // the rules only look at today's logs, so this keeps runs fast
+    const attempts: Array<{ taskId: string; ts: number }> = []
+    if (plan) {
+      const target = DEFAULT_SETTINGS.wakeSchedule[weekdayOf(dayKey(londonInstant(y, m, d, 12, 0)))]
+      if (target != null) {
+        // Also try at weekends occasionally? No: the button is hidden. Weekday attempts only.
+        const [th, tm] = target.split(':').map(Number) as [number, number]
+        if (rng() < plan.wakeOnTime) {
+          const mins = th * 60 + tm + Math.floor(rng() * 16) // 0-15 min after target, inside grace
+          attempts.push({ taskId: 'wake', ts: londonInstant(y, m, d, Math.floor(mins / 60), mins % 60) })
+        } else if (rng() < plan.wakeLateTry) {
+          const mins = th * 60 + tm + 16 + Math.floor(rng() * 90) // after the grace window
+          attempts.push({ taskId: 'wake', ts: londonInstant(y, m, d, Math.floor(mins / 60), mins % 60) })
+        }
+      } else if (rng() < 0.1) {
+        // Weekend: a stray attempt should be refused (no target that day).
+        attempts.push({ taskId: 'wake', ts: londonInstant(y, m, d, 8, 0) })
+      }
+      if (rng() < plan.gym) attempts.push({ taskId: 'gym', ts: londonInstant(y, m, d, 18, 30) })
+      if (rng() < plan.walk) attempts.push({ taskId: 'walk', ts: londonInstant(y, m, d, 13, 0) })
+      if (rng() < plan.read) {
+        // Sometimes read after midnight: should still count for this game day.
+        const late = rng() < 0.2
+        const n = calendarDay(i + 1)
+        attempts.push({
+          taskId: 'read',
+          ts: late ? londonInstant(n.y, n.m, n.d, 0, 30) : londonInstant(y, m, d, 22, 0),
+        })
+      }
+      const avoidedTries = poisson(plan.avoided, rng)
+      for (let k = 0; k < avoidedTries; k++)
+        attempts.push({ taskId: 'avoided', ts: londonInstant(y, m, d, 10 + k, 0) })
+    }
+    attempts.sort((a, b) => a.ts - b.ts)
+
+    let loggedToday = false
+    for (const a of attempts) {
+      const t = task(a.taskId)
+      const ev = createLogEvent(t, todays, DEFAULT_SETTINGS, a.ts, `e${id++}`)
+      if (!ev) {
+        refused[a.taskId] = (refused[a.taskId] ?? 0) + 1
+        continue
+      }
+      if (dayKey(ev.timestamp) !== dayKey(londonInstant(y, m, d, 12, 0)))
+        throw new Error('dayKey put a log on the wrong game day')
+      todays.push(ev)
+      events.push(ev)
+      stats[t.stat] += (ev as LogEvent).xpAwarded
+      logs++
+      loggedToday = true
+      // Projected reward roll.
+      const r = rng()
+      if (r < RARE_CHANCE) {
+        rewards.rares++
+        rareDays.push(i + 1)
+        newThingDays.push(i + 1)
+      } else if (r < RARE_CHANCE + TREAT_CHANCE) rewards.treats++
+    }
+    dailyLogDays.push(loggedToday)
+
+    const xp = totalXp(events)
+    xpByDay.push(xp)
+    for (const s of STAGE_LIST) {
+      if (stageDay[s.id] == null && stageFor(xp, STAGE_LIST).xpFrom >= s.xpFrom) {
+        stageDay[s.id] = i + 1
+        newThingDays.push(i + 1)
+        stageDays.push(i + 1)
+        if (s.id === 'juvenile') topStatAtJuvenile = topStat(stats)
+      }
+    }
+  }
+
+  // Projected streaks and freezes (overall "days with at least one log").
+  let streak = 0
+  let longest = 0
+  let freezes = 0
+  let freezesEarned = 0
+  let freezesUsed = 0
+  let breaks = 0
+  dailyLogDays.forEach((logged, i) => {
+    if (logged) {
+      streak++
+      longest = Math.max(longest, streak)
+      if (streak % FREEZE_EVERY === 0 && freezes < FREEZE_MAX) {
+        freezes++
+        freezesEarned++
+      }
+      if (MILESTONES.includes(streak)) {
+        rewards.milestoneItems++
+        newThingDays.push(i + 1)
+        if (!milestonesSeen.has(streak)) {
+          milestonesSeen.add(streak)
+          rewards.milestoneFirsts++
+        }
+      }
+    } else if (streak > 0) {
+      if (freezes > 0) {
+        freezes--
+        freezesUsed++
+      } else {
+        streak = 0
+        breaks++
+      }
+    }
+  })
+
+  // Projected mood per day (measured at end of day: days since the last log day).
+  const mood = { happy: 0, content: 0, sleepy: 0, grumpy: 0 }
+  let last = -1
+  dailyLogDays.forEach((logged, i) => {
+    if (logged) last = i
+    if (last < 0) return
+    const since = i - last
+    if (since === 0) mood.happy++
+    else if (since === 1) mood.content++
+    else if (since <= 3) mood.sleepy++
+    else mood.grumpy++
+  })
+
+  // Comebacks: after any run of 4+ empty days, XP earned in the 7 days after returning.
+  const comebacks: RunResult['comebacks'] = []
+  let empty = 0
+  dailyLogDays.forEach((logged, i) => {
+    if (!logged) empty++
+    else {
+      if (empty >= 4 && i + 7 <= DAYS) {
+        const before = xpByDay[i - 1] ?? 0
+        comebacks.push({ gapLen: empty, xpWeekAfter: (xpByDay[i + 6] ?? 0) - before })
+      }
+      empty = 0
+    }
+  })
+
+  const maxGap = (days: number[]) => {
+    const s = [...new Set(days)].sort((a, b) => a - b)
+    s.push(DAYS)
+    let g = 0
+    for (let k = 1; k < s.length; k++) g = Math.max(g, s[k]! - s[k - 1]!)
+    return g
+  }
+
+  return {
+    stageDay,
+    xpByDay,
+    stats,
+    topStatAtJuvenile,
+    topStatEnd: topStat(stats),
+    logs,
+    refused,
+    activeDays: dailyLogDays.filter(Boolean).length,
+    dailyLogDays,
+    rewards,
+    rareDays,
+    streak: { longest, freezesEarned, freezesUsed, breaks },
+    mood,
+    longestGapWithoutNew: maxGap(newThingDays),
+    longestGapStagesOnly: stageDays.reduce((g, d, k) => (k ? Math.max(g, d - stageDays[k - 1]!) : g), 0),
+    comebacks,
+  }
+}
+
+// ---------- reporting ----------
+function pct(xs: number[], p: number): number {
+  const s = [...xs].sort((a, b) => a - b)
+  return s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))]!
+}
+const med = (xs: number[]) => pct(xs, 50)
+const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length)
+const r1 = (n: number) => Math.round(n * 10) / 10
+
+console.log(`Drag-on balance sim: ${DAYS} days x ${RUNS} runs per profile, base seed ${BASE_SEED}`)
+console.log(`Variant: ${VARIANT ?? 'none (real config)'}`)
+console.log(`Stages: ${STAGE_LIST.map((s) => `${s.name} ${s.xpFrom}`).join(', ')}`)
+console.log(`Tasks: ${TASK_LIST.map((t) => `${t.id} ${t.xp}xp/${t.stat}${t.rules.kind === 'maxPerDay' ? ` max${t.rules.max}` : ''}`).join(', ')}\n`)
+
+for (const p of PROFILES) {
+  const runs = Array.from({ length: RUNS }, (_, k) => simulate(p, BASE_SEED + k * 7919))
+  console.log(`=== ${p.name} ===`)
+  const xp180 = runs.map((r) => r.xpByDay[179] ?? NaN)
+  const xpEnd = runs.map((r) => r.xpByDay[DAYS - 1]!)
+  console.log(
+    `XP/day avg ${r1(mean(xpEnd) / DAYS)} | XP day 180 median ${med(xp180)} | XP day ${DAYS} median ${med(xpEnd)}`,
+  )
+  console.log(
+    `Active days ${r1((mean(runs.map((r) => r.activeDays)) / DAYS) * 100)}% | logs/active day ${r1(
+      mean(runs.map((r) => r.logs / Math.max(1, r.activeDays))),
+    )}`,
+  )
+  const refusedAll: Record<string, number> = {}
+  for (const r of runs)
+    for (const [k, v] of Object.entries(r.refused)) refusedAll[k] = (refusedAll[k] ?? 0) + v
+  console.log(
+    `Refused by real rules (per run avg): ${Object.entries(refusedAll)
+      .map(([k, v]) => `${k} ${r1(v / RUNS)}`)
+      .join(', ')}`,
+  )
+  console.log('Day stage reached (p10 / median / p90; "-" = not reached by end, % reached):')
+  for (const s of STAGE_LIST.slice(1)) {
+    const ds = runs.map((r) => r.stageDay[s.id]).filter((x): x is number => x != null)
+    const reached = (ds.length / RUNS) * 100
+    console.log(
+      `  ${s.name.padEnd(10)} ${ds.length ? `${pct(ds, 10)} / ${med(ds)} / ${pct(ds, 90)}` : '-'}  (${r1(reached)}% reached)`,
+    )
+  }
+  const statShare = (pick: (r: RunResult) => StatId | null) => {
+    const c: Record<string, number> = {}
+    for (const r of runs) {
+      const s = pick(r)
+      if (s) c[s] = (c[s] ?? 0) + 1
+    }
+    return Object.entries(c)
+      .map(([k, v]) => `${k} ${r1((v / RUNS) * 100)}%`)
+      .join(', ')
+  }
+  console.log(`Top stat at Juvenile: ${statShare((r) => r.topStatAtJuvenile)}`)
+  console.log(`Top stat at end:      ${statShare((r) => r.topStatEnd)}`)
+  const statAvg = STATS.map((s) => `${s.id} ${Math.round(mean(runs.map((r) => r.stats[s.id])))}`)
+  console.log(`Avg stat XP at end: ${statAvg.join(', ')}`)
+  console.log(
+    `Longest wait between two stage-ups (measured): median ${med(runs.map((r) => r.longestGapStagesOnly))} days`,
+  )
+  console.log('-- projections (spec only, no code yet) --')
+  const per180 = (n: number) => r1((n / DAYS) * 180)
+  console.log(
+    `Per 180 days: treats ${per180(mean(runs.map((r) => r.rewards.treats)))}, rare drops ${per180(
+      mean(runs.map((r) => r.rewards.rares)),
+    )}, milestone items ${per180(mean(runs.map((r) => r.rewards.milestoneItems)))} (first-time ${r1(
+      mean(runs.map((r) => r.rewards.milestoneFirsts)),
+    )} over ${DAYS}d)`,
+  )
+  console.log(
+    `First rare item day: median ${med(runs.map((r) => r.rareDays[0] ?? DAYS + 1))}; avg gap between rares ${r1(
+      DAYS / Math.max(1, mean(runs.map((r) => r.rewards.rares))),
+    )} days`,
+  )
+  console.log(
+    `Longest overall streak: median ${med(runs.map((r) => r.streak.longest))}, p90 ${pct(
+      runs.map((r) => r.streak.longest),
+      90,
+    )} | freezes earned ${r1(mean(runs.map((r) => r.streak.freezesEarned)))}, used ${r1(
+      mean(runs.map((r) => r.streak.freezesUsed)),
+    )}, streak breaks ${r1(mean(runs.map((r) => r.streak.breaks)))}`,
+  )
+  const m = (k: keyof RunResult['mood']) => r1(mean(runs.map((r) => r.mood[k])))
+  console.log(`Mood days: happy ${m('happy')}, content ${m('content')}, sleepy ${m('sleepy')}, grumpy ${m('grumpy')}`)
+  console.log(
+    `Longest stretch with nothing new (stage/rare/milestone): median ${med(
+      runs.map((r) => r.longestGapWithoutNew),
+    )}, p90 ${pct(runs.map((r) => r.longestGapWithoutNew), 90)} days`,
+  )
+  const cb = runs.flatMap((r) => r.comebacks)
+  if (cb.length)
+    console.log(
+      `Comebacks after 4+ empty days: ${r1(cb.length / RUNS)}/run, avg gap ${r1(
+        mean(cb.map((c) => c.gapLen)),
+      )} days, XP in week after return ${Math.round(mean(cb.map((c) => c.xpWeekAfter)))}`,
+    )
+  console.log('')
+}
