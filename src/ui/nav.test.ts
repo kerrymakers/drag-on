@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { TABS, navAction, routeFromHash, tabTap } from './nav'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { GOING_BACK_TIMEOUT_MS, TABS, goingBackGuard, navAction, routeFromHash, tabTap, type GuardHost } from './nav'
 
 describe('routeFromHash', () => {
   it('maps the tab hashes to their routes', () => {
@@ -52,5 +52,64 @@ describe('tabTap', () => {
   it('works normally once popstate has cleared the flag', () => {
     expect(tabTap(false, 'home', 'dragon', false)).toEqual({ action: 'push', goingBack: false })
     expect(tabTap(false, 'dragon', 'home', false)).toEqual({ action: 'replace', goingBack: false })
+  })
+})
+
+describe('goingBackGuard', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  /** A stand-in window: real (faked) timers and a plain event target. */
+  function fakeWindow() {
+    const events = new EventTarget()
+    const host: GuardHost = {
+      setTimeout: (fn, ms) => setTimeout(fn, ms) as unknown as number,
+      clearTimeout: (id) => clearTimeout(id),
+      addEventListener: (type, fn) => events.addEventListener(type, fn),
+    }
+    return { host, fire: (type: 'popstate' | 'pageshow') => events.dispatchEvent(new Event(type)) }
+  }
+
+  it('starts clear', () => {
+    expect(goingBackGuard(fakeWindow().host).active).toBe(false)
+  })
+
+  it('clears itself after GOING_BACK_TIMEOUT_MS if no popstate arrives', () => {
+    const guard = goingBackGuard(fakeWindow().host)
+    guard.set(true)
+    vi.advanceTimersByTime(GOING_BACK_TIMEOUT_MS - 1)
+    expect(guard.active).toBe(true)
+    vi.advanceTimersByTime(1)
+    expect(guard.active).toBe(false)
+  })
+
+  it('clears on popstate', () => {
+    const { host, fire } = fakeWindow()
+    const guard = goingBackGuard(host)
+    guard.set(true)
+    fire('popstate')
+    expect(guard.active).toBe(false)
+  })
+
+  it('clears on pageshow (a page restored from the back/forward cache)', () => {
+    const { host, fire } = fakeWindow()
+    const guard = goingBackGuard(host)
+    guard.set(true)
+    fire('pageshow')
+    expect(guard.active).toBe(false)
+    expect(vi.getTimerCount()).toBe(0) // the timeout was cancelled too
+  })
+
+  it('restarts the timeout when set again, and an old timer never clears a newer back()', () => {
+    const { host, fire } = fakeWindow()
+    const guard = goingBackGuard(host)
+    guard.set(true)
+    vi.advanceTimersByTime(GOING_BACK_TIMEOUT_MS - 100)
+    fire('popstate')
+    guard.set(true) // a second back() soon after
+    vi.advanceTimersByTime(100) // when the first timer would have fired
+    expect(guard.active).toBe(true)
+    vi.advanceTimersByTime(GOING_BACK_TIMEOUT_MS - 100)
+    expect(guard.active).toBe(false)
   })
 })

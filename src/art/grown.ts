@@ -1,7 +1,8 @@
 // Whelp, Juvenile, Adult and Elder. Placeholder art in the same soft, round style
 // as the Hatchling; each is bigger and more confident than the last.
-// Juvenile and later use the neutral look until stat evolution arrives (M3).
+// Juvenile and later take an evolution look (looks.ts); neutral draws them as they are.
 
+import { lookFeatures, type EvolutionLook, type LookAnchors } from './looks'
 import { dragonSvg, eyes, pair, type Anchors } from './parts'
 
 const WHELP: Anchors = { eyes: { y: 204, dx: 46, rx: 22, ry: 28 }, headTop: 110, body: { cy: 362, rx: 118, ry: 110 }, headBox: [100, 36, 412, 306] }
@@ -37,9 +38,11 @@ export function whelpSvg(): string {
 
 const JUVENILE: Anchors = { eyes: { y: 166, dx: 42, rx: 18, ry: 23 }, headTop: 86, body: { cy: 372, rx: 112, ry: 104 }, headBox: [120, 10, 392, 252] }
 
-export function juvenileSvg(): string {
+const JUVENILE_LOOK: LookAnchors = { snoutTop: 180, forehead: 112, flower: [212, 100], wingSpots: [[92, 214], [134, 238]], size: 1 }
+
+export function juvenileSvg(look: EvolutionLook = 'neutral'): string {
   return dragonSvg(
-    { stage: 'juvenile', label: 'A confident young dragon with strong wings', scale: 0.95, anchors: JUVENILE },
+    { evolution: look, features: lookFeatures(look, JUVENILE, JUVENILE_LOOK), stage: 'juvenile', label: 'A confident young dragon with strong wings', scale: 0.95, anchors: JUVENILE },
     `
     ${pair('hd-wing', 'M192 286 C152 172 62 150 22 212 C52 216 68 232 72 256 C90 242 112 246 122 264 C136 252 158 256 168 274 Z')}
     ${pair('hd-wing-line', 'M190 284 C154 196 92 170 30 206')}
@@ -73,9 +76,11 @@ export function juvenileSvg(): string {
 
 const ADULT: Anchors = { eyes: { y: 134, dx: 38, rx: 16, ry: 20 }, headTop: 66, body: { cy: 374, rx: 124, ry: 108 }, headBox: [136, -6, 376, 212] }
 
-export function adultSvg(): string {
+const ADULT_LOOK: LookAnchors = { snoutTop: 148, forehead: 84, flower: [218, 84], wingSpots: [[78, 146], [124, 180]], size: 1 }
+
+export function adultSvg(look: EvolutionLook = 'neutral'): string {
   return dragonSvg(
-    { stage: 'adult', label: 'A strong, proud dragon with wide wings', scale: 1, anchors: ADULT },
+    { evolution: look, features: lookFeatures(look, ADULT, ADULT_LOOK), stage: 'adult', label: 'A strong, proud dragon with wide wings', scale: 1, anchors: ADULT },
     `
     ${pair('hd-wing', 'M198 270 C152 118 44 76 8 148 C32 154 46 170 48 196 C68 180 94 186 104 206 C120 194 144 198 152 218 C166 210 186 216 192 238 Z')}
     ${pair('hd-wing-line', 'M196 268 C160 150 90 110 14 150 M190 250 C150 186 104 176 54 194 M186 236 C160 206 130 200 104 206')}
@@ -112,9 +117,11 @@ export function adultSvg(): string {
 
 const ELDER: Anchors = { eyes: { y: 132, dx: 38, rx: 15, ry: 17 }, headTop: 62, body: { cy: 374, rx: 128, ry: 110 }, headBox: [126, -8, 386, 260] }
 
-export function elderSvg(): string {
+const ELDER_LOOK: LookAnchors = { snoutTop: 146, forehead: 88, flower: [216, 80], wingSpots: [[72, 124], [118, 158]], size: 1 }
+
+export function elderSvg(look: EvolutionLook = 'neutral'): string {
   return dragonSvg(
-    { stage: 'elder', label: 'A wise, gentle old dragon', scale: 1, anchors: ELDER },
+    { evolution: look, features: lookFeatures(look, ELDER, ELDER_LOOK), stage: 'elder', label: 'A wise, gentle old dragon', scale: 1, anchors: ELDER },
     `
     ${pair('hd-wing', 'M200 264 C150 104 40 54 2 128 C28 134 42 152 44 178 C64 162 92 166 102 188 C118 174 144 178 152 200 C168 192 188 200 194 224 Z')}
     ${pair('hd-wing-line', 'M198 262 C160 136 86 90 8 128 M192 246 C150 176 102 162 50 176 M188 232 C160 196 128 188 102 190')}

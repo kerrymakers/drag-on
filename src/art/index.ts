@@ -5,6 +5,9 @@ import './art.css'
 import { eggSvg, type CrackLevel } from './egg'
 import { adultSvg, elderSvg, juvenileSvg, whelpSvg } from './grown'
 import { hatchlingSvg } from './hatchling'
+import { knownLook, type EvolutionLook } from './looks'
+
+export { EVOLVED_LOOKS, type EvolutionLook } from './looks'
 
 /** Visual only, not balancing: how far toward hatching the egg shows each crack. */
 export const CRACK_SMALL_AT = 0.5
@@ -17,6 +20,12 @@ export interface DragonLook {
   progress: number
   /** How the dragon feels. Shown with overlays and posture, not separate drawings. */
   mood?: MoodLook
+  /**
+   * The evolution look (a stat id). The game decides when the dragon has one; the art
+   * draws it on any stage that has look art, and draws neutral for 'neutral', unknown
+   * ids and stages without look art.
+   */
+  look?: string | undefined
 }
 
 export type MoodLook = 'happy' | 'content' | 'sleepy' | 'grumpy'
@@ -37,18 +46,28 @@ function art(look: DragonLook): { key: string; svg: string } {
     const crack = crackLevel(look.progress)
     return { key: `egg-${crack}`, svg: eggSvg(crack, String(++uidCounter)) }
   }
-  const draw = STAGE_ART[look.stage]
-  if (draw) return { key: look.stage, svg: draw() }
-  // An id the art doesn't know (a stage added to config later): the most grown-up look.
-  return { key: 'elder', svg: elderSvg() }
+  const known = STAGE_ART[look.stage]
+  const stage = known ? look.stage : 'elder' // an id the art doesn't know (a stage added later): the most grown-up look
+  const { draw, looks } = known ?? STAGE_ART.elder!
+  const evolved = looks ? knownLook(look.look) : 'neutral'
+  return { key: evolved === 'neutral' ? stage : `${stage}-${evolved}`, svg: draw(evolved) }
 }
 
-const STAGE_ART: Record<string, () => string> = {
-  hatchling: hatchlingSvg,
-  whelp: whelpSvg,
-  juvenile: juvenileSvg,
-  adult: adultSvg,
-  elder: elderSvg,
+/**
+ * Each stage's drawing, and whether it has art for the evolution looks. Which stage
+ * the dragon first evolves at is game config (EVOLVES_AT_STAGE), not decided here.
+ */
+const STAGE_ART: Record<string, { draw: (look: EvolutionLook) => string; looks: boolean }> = {
+  hatchling: { draw: hatchlingSvg, looks: false },
+  whelp: { draw: whelpSvg, looks: false },
+  juvenile: { draw: juvenileSvg, looks: true },
+  adult: { draw: adultSvg, looks: true },
+  elder: { draw: elderSvg, looks: true },
+}
+
+/** True if a stage id has art for the evolution looks (unknown ids draw as the most grown-up stage). */
+export function hasLookArt(stage: string): boolean {
+  return (STAGE_ART[stage] ?? STAGE_ART.elder!).looks
 }
 
 /**

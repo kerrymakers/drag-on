@@ -3,10 +3,11 @@
 
 import { react, renderDragon } from '../art'
 import { dayKey } from '../game/day'
+import type { LookId } from '../game/evolution'
 import { stageHistory } from '../game/stage-history'
 import { statTotals } from '../game/stats'
 import type { GameEvent, MoodId, Settings, Stage, Stat, StatId, Task } from '../game/types'
-import { DRAGON_SCREEN, MOOD_LABELS, dragonScreenLine, friendlyDay } from './copy'
+import { DRAGON_SCREEN, MOOD_LABELS, dragonScreenLine, friendlyDay, lookLabel } from './copy'
 import { ICONS } from './icons'
 import { watchScrollFade } from './scroll-fade'
 
@@ -17,6 +18,8 @@ export interface DragonScreenState {
   /** 0 to 1 toward the next stage, for the art. */
   progress: number
   mood: MoodId
+  /** The evolution look: 'neutral' (nothing shown) before Juvenile. */
+  look: LookId
   now: number
 }
 
@@ -63,7 +66,14 @@ export function createDragonScreen(doc: Document, root: HTMLElement, config: Dra
   stageName.id = 'ds-title'
   const mood = el(doc, 'span', 'mood-chip')
   stageRow.append(stageName, mood)
-  header.append(name, stageRow)
+  // The look's friendly name, from Juvenile on. Nothing before, so it stays a surprise.
+  const lookChip = el(doc, 'p', 'look-chip')
+  lookChip.hidden = true
+  const lookIcon = el(doc, 'span', 'look-chip-icon')
+  lookIcon.setAttribute('aria-hidden', 'true')
+  const lookText = el(doc, 'span', 'look-chip-text')
+  lookChip.append(lookIcon, lookText)
+  header.append(name, stageRow, lookChip)
 
   const art = el(doc, 'div', 'ds-art')
   art.setAttribute('aria-hidden', 'true')
@@ -151,7 +161,16 @@ export function createDragonScreen(doc: Document, root: HTMLElement, config: Dra
       stageName.textContent = state.stage.name
       mood.textContent = MOOD_LABELS[state.mood]
       mood.dataset.mood = state.mood
-      renderDragon(art, { stage: state.stage.id, progress: state.progress, mood: state.mood })
+      renderDragon(art, { stage: state.stage.id, progress: state.progress, mood: state.mood, look: state.look })
+      if (state.look === 'neutral') {
+        lookChip.hidden = true
+        delete lookChip.dataset.look
+      } else if (lookChip.dataset.look !== state.look || lookChip.hidden) {
+        lookChip.hidden = false
+        lookChip.dataset.look = state.look
+        lookIcon.innerHTML = STAT_ICON[state.look]
+        lookText.textContent = lookLabel(state.look)
+      }
 
       const totals = statTotals(state.events, config.tasks, config.stats)
       const fractions = barFractions(totals.map((t) => t.xp))

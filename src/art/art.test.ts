@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { EVOLVES_AT_STAGE } from '../config/evolution'
 import { STAGES } from '../config/stages'
+import { STATS } from '../config/stats'
 import { adultSvg, elderSvg, juvenileSvg, whelpSvg } from './grown'
 import { hatchlingSvg } from './hatchling'
-import { CRACK_BIG_AT, CRACK_SMALL_AT, crackLevel } from './index'
+import { CRACK_BIG_AT, CRACK_SMALL_AT, crackLevel, hasLookArt } from './index'
 import { eggSvg } from './egg'
+import { EVOLVED_LOOKS, knownLook } from './looks'
 import { mirror } from './parts'
 
 describe('crackLevel', () => {
@@ -95,5 +98,62 @@ describe('mood parts', () => {
   it('the egg has its nightcap and glow', () => {
     expect(drawings.egg).toContain('egg-cap')
     expect(drawings.egg).toContain('egg-glow')
+  })
+})
+
+describe('evolution looks', () => {
+  const LOOKS = ['strength', 'discipline', 'wisdom', 'heart'] as const
+  const STAGE_SVGS = { juvenile: juvenileSvg, adult: adultSvg, elder: elderSvg }
+
+  it('has a look for every stat in config', () => {
+    expect([...EVOLVED_LOOKS].sort()).toEqual(STATS.map((s) => s.id).sort())
+  })
+
+  it('neutral draws exactly as before, with no look parts', () => {
+    for (const [id, draw] of Object.entries(STAGE_SVGS)) {
+      expect(draw('neutral'), id).toBe(draw())
+      expect(draw(), id).not.toContain('look-part')
+    }
+  })
+
+  it('every look on every evolving stage is tagged, adds its own parts and keeps every mood overlay', () => {
+    for (const [id, draw] of Object.entries(STAGE_SVGS)) {
+      for (const look of LOOKS) {
+        const svg = draw(look)
+        const name = `${id} ${look}`
+        expect(svg, name).toContain(`data-evolution="${look}"`)
+        expect(svg, name).toContain(`look-${look}`)
+        for (const other of LOOKS) if (other !== look) expect(svg, name).not.toContain(`look-${other}`)
+        for (const cls of ['mood-happy', 'mood-sleepy', 'mood-grumpy', 'mood-zzz', 'mood-blanket', 'mood-tail']) {
+          expect(svg, `${name} ${cls}`).toContain(cls)
+        }
+        expect(svg, name).not.toContain('NaN')
+        expect(svg, name).not.toContain('undefined')
+      }
+    }
+  })
+
+  it('draws glasses over the mood lids, and everything else under them', () => {
+    const svg = juvenileSvg('wisdom')
+    expect(svg.indexOf('look-glasses')).toBeGreaterThan(svg.lastIndexOf('mood-lid'))
+    for (const look of ['strength', 'discipline', 'heart'] as const) {
+      const s = juvenileSvg(look)
+      expect(s.indexOf(`look-${look}`), look).toBeLessThan(s.indexOf('mood-lid'))
+    }
+  })
+
+  it('has look art for every stage the game can evolve at (EVOLVES_AT_STAGE and later)', () => {
+    const from = STAGES.findIndex((s) => s.id === EVOLVES_AT_STAGE)
+    expect(from, EVOLVES_AT_STAGE).toBeGreaterThan(0)
+    for (const s of STAGES.slice(from)) expect(hasLookArt(s.id), s.id).toBe(true)
+    // A stage added to config later draws as the most grown-up look, which has look art.
+    expect(hasLookArt('some-later-stage')).toBe(true)
+  })
+
+  it('treats unknown or missing looks as neutral', () => {
+    expect(knownLook(undefined)).toBe('neutral')
+    expect(knownLook('neutral')).toBe('neutral')
+    expect(knownLook('charisma')).toBe('neutral')
+    expect(knownLook('wisdom')).toBe('wisdom')
   })
 })

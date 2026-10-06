@@ -1,6 +1,6 @@
 // Shared pieces for the dragon drawings. Every colour is a CSS custom property
-// (see art.css), and each svg carries data-stage and data-evolution, so Milestone 3
-// can recolour or add features per stat without redrawing the stages.
+// (see art.css), and each svg carries data-stage and data-evolution, so an evolution
+// look can recolour a stage and add features (looks.ts) without redrawing it.
 
 /**
  * Mirrors a path drawn on the left across the centre line (x = 256).
@@ -62,9 +62,12 @@ export interface Anchors {
   headBox: readonly [number, number, number, number]
 }
 
-/** An invisible rectangle marking the area a speech bubble must not cover. */
-export function headBoxRect([x0, y0, x1, y1]: readonly [number, number, number, number]): string {
-  return `<rect class="dragon-head-box" x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" fill="none" stroke="none" pointer-events="none" />`
+/**
+ * An invisible rectangle marking the area a speech bubble must not cover. With
+ * `followsPose`, CSS moves it with the mood posture (curled up sits lower).
+ */
+export function headBoxRect([x0, y0, x1, y1]: readonly [number, number, number, number], followsPose = false): string {
+  return `<rect class="dragon-head-box${followsPose ? ' follows-pose' : ''}" x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" fill="none" stroke="none" pointer-events="none" />`
 }
 
 const r1 = (n: number) => Math.round(n * 10) / 10
@@ -149,6 +152,10 @@ export interface StageSvgOptions {
   anchors: Anchors
   /** Extra classes on the breathing group (e.g. hatchling-body). */
   bodyClass?: string
+  /** The evolution look, for data-evolution (default 'neutral'). */
+  evolution?: string
+  /** Look features: `under` sits below the mood overlays, `over` on top of them (e.g. glasses). */
+  features?: { under: string; over: string }
 }
 
 /**
@@ -156,13 +163,16 @@ export interface StageSvgOptions {
  * Structure: scale (attribute) > .dragon-pose (mood posture, hop) > .dragon-body
  * (breathing) > drawing + mood parts.
  */
-export function dragonSvg({ stage, label, scale, anchors, bodyClass }: StageSvgOptions, body: string): string {
+export function dragonSvg(
+  { stage, label, scale, anchors, bodyClass, evolution = 'neutral', features }: StageSvgOptions,
+  body: string,
+): string {
   return `
-<svg class="dragon-svg dragon-${stage}" data-stage="${stage}" data-evolution="neutral" data-mood="content" viewBox="0 0 512 512" role="img" aria-label="${label}">
+<svg class="dragon-svg dragon-${stage}" data-stage="${stage}" data-evolution="${evolution}" data-mood="content" viewBox="0 0 512 512" role="img" aria-label="${label}">
   <g transform="translate(256 492) scale(${scale}) translate(-256 -492)">
-    ${headBoxRect(anchors.headBox)}
+    ${headBoxRect(anchors.headBox, true)}
     <g class="dragon-pose">
-      <g class="${bodyClass ? `${bodyClass} ` : ''}dragon-body">${body}${moodParts(anchors)}</g>
+      <g class="${bodyClass ? `${bodyClass} ` : ''}dragon-body">${body}${features?.under ?? ''}${moodParts(anchors)}${features?.over ?? ''}</g>
     </g>
   </g>
 </svg>`

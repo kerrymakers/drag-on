@@ -87,7 +87,7 @@ Each stage change is a big moment: a full-screen animation and a short message f
 
 ### Evolution
 
-When the dragon reaches Juvenile, its highest stat decides its look (colour, markings or features). A Strength dragon looks sturdy, a Wisdom dragon looks scholarly, and so on. The look can shift later if a different stat overtakes it.
+When the dragon reaches Juvenile, its highest stat decides its look (colour, markings or features). A Strength dragon looks sturdy, a Wisdom dragon looks scholarly, and so on. The look can shift later if a different stat overtakes it by more than a small margin (`LOOK_CHANGE_MARGIN`: more than 10%), so a balanced dragon doesn't flip back and forth. Ties go to the stat order in config. The first time the dragon takes on each look gets a gentle celebration. Changing back to a look it has had before happens quietly.
 
 ### Mood
 

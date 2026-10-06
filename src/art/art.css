@@ -447,13 +447,24 @@
 }
 
 /* Posture: curled up snuggles down; happy has the odd little hop. */
+.dragon-svg {
+  --curl-pose: translateY(12px) scale(1.05, 0.9);
+}
 .dragon-pose {
   /* Fixed in svg units for the same reason as .dragon-body. */
   transform-origin: 256px 492px;
   transition: transform 600ms var(--bounce);
 }
 [data-mood='grumpy'] .dragon-pose {
-  transform: translateY(12px) scale(1.05, 0.9);
+  transform: var(--curl-pose);
+}
+/* The speech bubble's keep-clear box moves with the curled-up head (straight away,
+   not animated, so the bubble is placed where the head ends up). */
+.dragon-head-box.follows-pose {
+  transform-origin: 256px 492px;
+}
+[data-mood='grumpy'] .dragon-head-box.follows-pose {
+  transform: var(--curl-pose);
 }
 [data-mood='happy'] .dragon-pose {
   animation: mood-hop 5.5s ease-in-out infinite;
@@ -583,6 +594,180 @@
   100% {
     transform: scale(1, 1);
   }
+}
+
+/* ---------- Evolution looks ----------
+   From Juvenile on, the top stat recolours the dragon. Every drawn part, mood lids
+   and tail included, reads these tokens, so each look works with every mood. */
+.dragon-svg[data-evolution='strength'] {
+  --dragon-skin: #e9806b;
+  --dragon-belly: #ffe4d6;
+  --dragon-wing: #f4a693;
+  --dragon-horn: #fff1df;
+  --dragon-outline: #b14f3e;
+  --dragon-plate: #f7bfae;
+  --dragon-cheek: #e5606a;
+  --look-accent: #f6c48f;
+  --look-accent-edge: #b14f3e;
+}
+.dragon-svg[data-evolution='discipline'] {
+  --dragon-skin: #a597e2;
+  --dragon-belly: #f1edff;
+  --dragon-wing: #c8bff3;
+  --dragon-horn: #fff4e3;
+  --dragon-outline: #6a5bb5;
+  --dragon-plate: #d8d0f7;
+  --dragon-cheek: #f193ad;
+  --dragon-gem: #ffd36b;
+  --look-accent: #f6bf55;
+  --look-accent-soft: #ffe9b0;
+}
+.dragon-svg[data-evolution='wisdom'] {
+  --dragon-skin: #67bab1;
+  --dragon-belly: #e3f6f1;
+  --dragon-wing: #9fd8d0;
+  --dragon-horn: #fff4dc;
+  --dragon-outline: #367f78;
+  --dragon-plate: #b9e7e0;
+  --dragon-cheek: #f2958a;
+  --look-accent: #fff2c4;
+  --look-frame: #7a4e2d;
+  --look-lens: rgb(255 255 255 / 0.22);
+}
+.dragon-svg[data-evolution='heart'] {
+  --dragon-skin: #f191aa;
+  --dragon-belly: #ffe8ee;
+  --dragon-wing: #f8bccb;
+  --dragon-horn: #fff4e8;
+  --dragon-outline: #c05476;
+  --dragon-plate: #f9ccd7;
+  --dragon-cheek: #e2566f;
+  --look-accent: #fff7ec;
+  --look-accent-soft: #ffd36b;
+  --look-wingmark: #fff2f5;
+}
+
+@media (prefers-color-scheme: dark) {
+  .dragon-svg[data-evolution='strength'] {
+    --dragon-skin: #e47a64;
+    --dragon-belly: #fde0d0;
+    --dragon-wing: #ef9d89;
+    --dragon-outline: #a8483a;
+    --dragon-plate: #f2b4a2;
+    --look-accent: #f2bb84;
+  }
+  .dragon-svg[data-evolution='discipline'] {
+    --dragon-skin: #9c8ddc;
+    --dragon-belly: #ece7fd;
+    --dragon-wing: #bfb4ee;
+    --dragon-outline: #6152ab;
+    --dragon-plate: #cfc6f3;
+    --look-accent: #f2b84a;
+  }
+  .dragon-svg[data-evolution='wisdom'] {
+    --dragon-skin: #5fb2a9;
+    --dragon-belly: #dcf2ec;
+    --dragon-wing: #95d0c7;
+    --dragon-outline: #2f756e;
+    --dragon-plate: #ade0d8;
+    --look-frame: #5a3820;
+  }
+  .dragon-svg[data-evolution='heart'] {
+    --dragon-skin: #ec88a2;
+    --dragon-belly: #fde3ea;
+    --dragon-wing: #f4b1c2;
+    --dragon-outline: #b44a6b;
+    --dragon-plate: #f6c2cf;
+  }
+}
+
+/* Sturdy */
+.lk-plate {
+  fill: var(--look-accent);
+  stroke: var(--look-accent-edge, var(--dragon-outline));
+  stroke-width: 8;
+  stroke-linejoin: round;
+}
+.lk-plate-ridge {
+  fill: none;
+  stroke: var(--dragon-outline);
+  stroke-width: 5;
+  stroke-linecap: round;
+  opacity: 0.4;
+}
+.lk-nosehorn {
+  fill: var(--dragon-horn);
+  stroke: var(--dragon-outline);
+  stroke-width: 6;
+  stroke-linejoin: round;
+}
+[data-evolution='strength'] .hd-brow {
+  stroke-width: 8;
+}
+
+/* Steadfast */
+.lk-sash {
+  fill: none;
+  stroke: var(--dragon-outline);
+  stroke-width: 30;
+  stroke-linecap: round;
+}
+.lk-sash-stripe {
+  fill: none;
+  stroke: var(--look-accent);
+  stroke-width: 20;
+  stroke-linecap: round;
+}
+.lk-badge {
+  fill: var(--look-accent-soft);
+  stroke: var(--dragon-outline);
+  stroke-width: 5;
+}
+.lk-star {
+  fill: var(--dragon-gem);
+  stroke: var(--dragon-outline);
+  stroke-width: 4;
+  stroke-linejoin: round;
+}
+
+/* Scholarly */
+.lk-lens {
+  fill: var(--look-lens);
+  stroke: var(--look-frame);
+  stroke-width: 6;
+}
+.lk-frame {
+  fill: none;
+  stroke: var(--look-frame);
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+.lk-wingmark {
+  fill: var(--look-wingmark, var(--look-accent));
+  stroke: var(--dragon-outline);
+  stroke-width: 3;
+  stroke-linejoin: round;
+  opacity: 0.9;
+}
+@media (prefers-color-scheme: dark) {
+  .lk-lens {
+    fill: rgb(255 255 255 / 0.14);
+  }
+}
+
+/* Warm-hearted */
+.lk-petal {
+  fill: var(--look-accent);
+  stroke: var(--dragon-outline);
+  stroke-width: 4;
+}
+.lk-flower-centre {
+  fill: var(--look-accent-soft);
+  stroke: var(--dragon-outline);
+  stroke-width: 3;
+}
+[data-evolution='heart'] .hd-cheek {
+  opacity: 0.7;
 }
 
 /* Reduced motion: everything idle stands still. !important so no mood or stage rule

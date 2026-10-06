@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { STAGES } from '../config/stages'
+import { STATS } from '../config/stats'
 import { dragonProgress } from '../game/state'
 import type { GameEvent, Stage } from '../game/types'
-import { STAGE_UP, progressLabel } from './copy'
+import { LOOK_CHANGE, LOOK_NAMES, LOOK_REVEAL, STAGE_UP, STAGE_UP_FALLBACK, celebrationCopy, lookLabel, progressLabel } from './copy'
 
 const labelFor = (events: GameEvent[], stages: readonly Stage[]) => {
   const p = dragonProgress(events, stages)
@@ -43,5 +44,32 @@ describe('stage-up copy', () => {
       expect(STAGE_UP[s.id]?.message, s.id).toBeTruthy()
       expect(STAGE_UP[s.id]?.button, s.id).toBeTruthy()
     }
+  })
+})
+
+describe('look copy', () => {
+  it('names every stat in config, warmly', () => {
+    for (const s of STATS) {
+      expect(LOOK_NAMES[s.id], s.id).toBeTruthy()
+      expect(lookLabel(s.id)).toBe(`${LOOK_NAMES[s.id]} dragon`)
+      expect(LOOK_REVEAL[s.id], s.id).toContain(LOOK_NAMES[s.id])
+      expect(LOOK_CHANGE[s.id]?.message, s.id).toContain(LOOK_NAMES[s.id])
+    }
+  })
+
+  it('a stage-up with a new look keeps the stage words and names the look underneath', () => {
+    const c = celebrationCopy('juvenile', 'wisdom')
+    expect(c.message).toBe(STAGE_UP.juvenile?.message)
+    expect(c.button).toBe(STAGE_UP.juvenile?.button)
+    expect(c.sub).toBe(LOOK_REVEAL.wisdom)
+  })
+
+  it('a stage-up without a new look has no extra line', () => {
+    expect(celebrationCopy('adult', null)).toEqual({ ...STAGE_UP.adult, sub: null })
+    expect(celebrationCopy('mystery', null)).toEqual({ ...STAGE_UP_FALLBACK, sub: null })
+  })
+
+  it('a new look on its own uses the look words', () => {
+    expect(celebrationCopy(null, 'heart')).toEqual({ ...LOOK_CHANGE.heart, sub: null })
   })
 })

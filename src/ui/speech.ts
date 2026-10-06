@@ -17,7 +17,12 @@ export interface Placement {
   maxWidth: number
   /** Which side of the bubble points at the dragon. */
   tail: Tail
+  /** The smaller text size, used only when the normal size doesn't fit anywhere. */
+  compact: boolean
 }
+
+/** The bubble's size at a given max width, in the normal or compact text size. */
+export type Measure = (maxWidth: number, compact: boolean) => { width: number; height: number }
 
 const GAP = 10
 const MIN_WIDTH = 120
@@ -26,16 +31,42 @@ const MAX_WIDTH = 240
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n))
 
 /**
- * Tries, in order: above the head, to its left, to its right, below it. Each must fit
- * inside `area` without touching `avoid` (the head, headgear and zzz). If nothing fits,
- * it uses the roomier side and accepts a small overlap. `measure` returns the bubble's
- * size at a given max width.
+ * Tries, in order: above the head, to its left or right (roomier side first), below
+ * it. Each must fit inside `area` without touching `avoid` (the head and everything
+ * on it, plus the zzz). If none fits, it tries them all again in the compact size.
+ * Only if that fails too does it fall back to the roomier side, still inside the area
+ * (left to right and top to bottom wherever the area is big enough), accepting a
+ * small overlap with the head rather than covering what's below the dragon.
  */
-export function placeSpeech(
+export function placeSpeech(area: Box, avoid: Box, measure: Measure): Placement {
+  for (const compact of [false, true]) {
+    const p = cleanFit(area, avoid, (w) => measure(w, compact), compact)
+    if (p) return p
+  }
+  const areaW = area.right - area.left
+  const areaH = area.bottom - area.top
+  const leftSpace = avoid.left - area.left - GAP
+  const rightSpace = area.right - avoid.right - GAP
+  const side = leftSpace >= rightSpace ? 'left' : 'right'
+  const maxWidth = Math.min(areaW, clamp(Math.max(leftSpace, rightSpace), MIN_WIDTH, MAX_WIDTH))
+  const { width, height } = measure(maxWidth, true)
+  const left = side === 'left' ? avoid.left - area.left - GAP - width : avoid.right - area.left + GAP
+  return {
+    left: clamp(left, 0, Math.max(0, areaW - width)),
+    top: clamp(avoid.top - area.top, 0, Math.max(0, areaH - height)),
+    maxWidth,
+    tail: side === 'left' ? 'right' : 'left',
+    compact: true,
+  }
+}
+
+/** The first placement that fits cleanly at one text size, or null. */
+function cleanFit(
   area: Box,
   avoid: Box,
   measure: (maxWidth: number) => { width: number; height: number },
-): Placement {
+  compact: boolean,
+): Placement | null {
   const areaW = area.right - area.left
   const areaH = area.bottom - area.top
   const centreX = (avoid.left + avoid.right) / 2 - area.left
@@ -50,6 +81,7 @@ export function placeSpeech(
         top: avoid.top - area.top - height - GAP,
         maxWidth,
         tail: 'down',
+        compact,
       }
     }
   }
@@ -66,6 +98,7 @@ export function placeSpeech(
       top: clamp(avoid.top - area.top, 0, areaH - height),
       maxWidth,
       tail: side === 'left' ? 'right' : 'left',
+      compact,
     }
   }
   const sides = leftSpace >= rightSpace ? (['left', 'right'] as const) : (['right', 'left'] as const)
@@ -84,18 +117,9 @@ export function placeSpeech(
         top: avoid.bottom - area.top + GAP,
         maxWidth,
         tail: 'up',
+        compact,
       }
     }
   }
-
-  // Nothing fits cleanly: the roomier side, at the top.
-  const side = leftSpace >= rightSpace ? 'left' : 'right'
-  const maxWidth = clamp(Math.max(leftSpace, rightSpace), MIN_WIDTH, MAX_WIDTH)
-  const { width, height } = measure(maxWidth)
-  return {
-    left: side === 'left' ? Math.max(0, avoid.left - area.left - GAP - width) : Math.min(areaW - width, avoid.right - area.left + GAP),
-    top: clamp(avoid.top - area.top, 0, Math.max(0, areaH - height)),
-    maxWidth,
-    tail: side === 'left' ? 'right' : 'left',
-  }
+  return null
 }

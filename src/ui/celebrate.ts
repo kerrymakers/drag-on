@@ -1,16 +1,18 @@
-// The full-screen stage-up moment. It appears after the log is already saved,
-// so it's never part of the logging path. Tap anywhere (or the button) to close.
+// The full-screen stage-up moment, and the gentler one for a new evolution look.
+// It appears after the log is already saved, so it's never part of the logging path.
+// Tap anywhere (or the button) to close.
 
 import { react, renderDragon } from '../art'
-import type { Stage } from '../game/types'
-import { STAGE_UP, STAGE_UP_FALLBACK } from './copy'
+import type { LookId } from '../game/evolution'
+import type { Stage, StatId } from '../game/types'
+import { celebrationCopy } from './copy'
 
 /**
  * How each stage arrives. Built from shared pieces (the from/to layers, a glow and
  * a burst of sparkles); the CSS for each lives under .reveal-<kind> in styles.css.
  * The egg hatch has its own shake, crack and pop.
  */
-export type RevealKind = 'hatch' | 'spring' | 'flutter' | 'soar' | 'radiant'
+export type RevealKind = 'hatch' | 'spring' | 'flutter' | 'soar' | 'radiant' | 'shimmer'
 
 const REVEALS: Record<string, RevealKind> = {
   hatchling: 'hatch',
@@ -26,8 +28,14 @@ const SPARKS = 10
 const CLOSE_GUARD_MS = 600
 
 export interface CelebrateOptions {
+  /** The stage before and after. The same stage means a change of look only (a gentle shimmer). */
   from: Stage
   to: Stage
+  /** The evolution look before and after ('neutral' before Juvenile). */
+  fromLook?: LookId
+  toLook?: LookId
+  /** A look the dragon has never had before, to name in the message; otherwise null. */
+  newLook?: StatId | null
   reducedMotion: boolean
   /** Made inert while the dialog is open, so focus and taps can't reach it. */
   background?: HTMLElement | null
@@ -40,9 +48,10 @@ let overlayCount = 0
 
 export function celebrate(
   doc: Document,
-  { from, to, reducedMotion, background, returnFocus, onClose }: CelebrateOptions,
+  { from, to, fromLook, toLook, newLook = null, reducedMotion, background, returnFocus, onClose }: CelebrateOptions,
 ): void {
-  const copy = STAGE_UP[to.id] ?? STAGE_UP_FALLBACK
+  const lookOnly = from.id === to.id
+  const copy = celebrationCopy(lookOnly ? null : to.id, newLook)
   const messageId = `overlay-message-${++overlayCount}`
   const overlay = doc.createElement('div')
   overlay.className = 'overlay'
@@ -51,7 +60,7 @@ export function celebrate(
   overlay.setAttribute('aria-modal', 'true')
   overlay.setAttribute('aria-labelledby', messageId)
 
-  const kind: RevealKind = from.id === 'egg' ? 'hatch' : (REVEALS[to.id] ?? 'spring')
+  const kind: RevealKind = lookOnly ? 'shimmer' : from.id === 'egg' ? 'hatch' : (REVEALS[to.id] ?? 'spring')
   overlay.classList.add(`reveal-${kind}`)
 
   const card = doc.createElement('div')
@@ -85,18 +94,26 @@ export function celebrate(
   message.className = 'overlay-message'
   message.id = messageId
   message.textContent = copy.message
+  // A new look gets its own warm line, under the stage-up message.
+  const sub = copy.sub ? doc.createElement('p') : null
+  if (sub) {
+    sub.className = 'overlay-sub'
+    sub.id = `${messageId}-sub`
+    sub.textContent = copy.sub
+    overlay.setAttribute('aria-describedby', sub.id)
+  }
   const button = doc.createElement('button')
   button.type = 'button'
   button.className = 'overlay-button'
   button.textContent = copy.button
 
-  card.append(stageEl, message, button)
+  card.append(stageEl, message, ...(sub ? [sub] : []), button)
   overlay.append(card)
   if (reducedMotion) overlay.classList.add('is-calm')
 
   // Growing up is a happy moment, whatever the mood was before.
-  renderDragon(fromLayer, { stage: from.id, progress: 1, mood: 'happy' })
-  renderDragon(toLayer, { stage: to.id, progress: 0, mood: 'happy' })
+  renderDragon(fromLayer, { stage: from.id, progress: 1, mood: 'happy', look: fromLook })
+  renderDragon(toLayer, { stage: to.id, progress: 0, mood: 'happy', look: toLook })
   doc.body.append(overlay)
   if (background) background.inert = true
   overlay.focus({ preventScroll: true })
@@ -108,6 +125,9 @@ export function celebrate(
   if (reducedMotion) {
     // A calm crossfade from the old look to the new one.
     later(600, reveal)
+  } else if (kind === 'shimmer') {
+    // Same stage, new look: a soft shimmer from one to the other, no wiggle or pop.
+    later(450, reveal)
   } else if (kind === 'hatch') {
     react(fromLayer, 'hatch') // shake…
     later(720, () => overlay.classList.add('is-popping')) // …crack and pop…

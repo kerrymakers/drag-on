@@ -11,17 +11,17 @@
 //     dayKey (Europe/London, 04:00 boundary, including clock changes).
 //   - stat totals: the real statTotals() (src/game/stats.ts), applied to each accepted log
 //     and checked against statTotals() over the whole log at the end of every run.
-//   - evolution look rule (script's reading of the agreed rule; no code yet): at Juvenile
-//     the look is the highest stat, ties to config stat order; afterwards it changes only
-//     when another stat strictly overtakes the current look's stat.
+//   - evolution look: the real evolutionLook() + lookChange() (src/game/evolution.ts) with
+//     config/evolution.ts, re-run after every accepted log so every change is counted.
 //
 // PROJECTED (the spec describes these but there is no code yet; numbers here
 // are this script's reading of SPEC.md, not the app's behaviour):
 //   - treats (20%/log), rare items (3%/log),
 //     overall streak, streak freezes (1 per 7-day streak, max 2), milestone items (7/30/100).
 
-import { createLogEvent, dayKey, dragonStage, moodFor, statTotals, totalXp, weekdayOf } from '../src/game'
-import type { GameEvent, LogEvent, MoodId, StatId, Task } from '../src/game'
+import { createLogEvent, dayKey, dragonStage, evolutionLook, lookChange, moodFor, statTotals, totalXp, weekdayOf } from '../src/game'
+import type { Evolution, GameEvent, LogEvent, MoodId, StatId, Task } from '../src/game'
+import { EVOLVES_AT_STAGE, LOOK_CHANGE_MARGIN } from '../src/config/evolution'
 import { MOODS } from '../src/config/mood'
 import { TASKS } from '../src/config/tasks'
 import { STAGES } from '../src/config/stages'
@@ -37,11 +37,14 @@ const RUNS = Number(process.argv[3] ?? 300)
 //   --variant=juv     Juvenile threshold = 1300 (now the real config, so a no-op)
 //   --variant=rare6   rare item chance 3% -> 6% (projection)
 //   --variant=heart20 / heart25  selfcare XP 15 -> 20 / 25
-//   --margin=N       look rule what-if: overtaking stat must lead by more than N% of the current look's XP
+//   --margin=N       look rule what-if: overrides LOOK_CHANGE_MARGIN with N% (in memory only)
+//   --profiles=a,b   only run profiles whose key is listed (see PROFILES)
 //   --variant=mood35  sleepy from 3 days, grumpy from 5 (instead of config/mood.ts)
 const VARIANT = process.argv.find((a) => a.startsWith('--variant='))?.split('=')[1] ?? null
 const EXACT = process.argv.includes('--exact')
-const MARGIN = Number(process.argv.find((a) => a.startsWith('--margin='))?.split('=')[1] ?? 0) / 100
+const MARGIN_ARG = process.argv.find((a) => a.startsWith('--margin='))?.split('=')[1]
+const MARGIN = MARGIN_ARG === undefined ? LOOK_CHANGE_MARGIN : Number(MARGIN_ARG) / 100
+const PROFILE_FILTER = process.argv.find((a) => a.startsWith('--profiles='))?.split('=')[1]?.split(',') ?? null
 // Chance the app is opened (at 12:00) on a day with no log. Log days always count as an open.
 const PEEK_CHANCE = 0.3
 const MOOD_LIST =
@@ -101,6 +104,7 @@ interface DayPlan {
   avoided: number // expected avoided-task logs attempted per day (may exceed 3; the cap is real)
 }
 interface Profile {
+  key: string
   name: string
   plan: (day: number, rng: () => number, ctx: RunCtx) => DayPlan | null // null = no logging at all
 }
@@ -109,6 +113,7 @@ interface RunCtx {
 }
 
 const keen: Profile = {
+  key: 'keen',
   name: 'Keen',
   plan: (_d, rng) =>
     rng() < 0.05
@@ -116,6 +121,7 @@ const keen: Profile = {
       : { wakeOnTime: 0.9, wakeLateTry: 0.5, gym: 0.7, walk: 0.8, read: 0.8, selfcare: 0.6, avoided: 1.8 },
 }
 const typical: Profile = {
+  key: 'typical',
   name: 'Typical',
   plan: (_d, rng) =>
     rng() < 0.08
@@ -123,6 +129,7 @@ const typical: Profile = {
       : { wakeOnTime: 0.6, wakeLateTry: 0.2, gym: 0.36, walk: 0.25, read: 0.25, selfcare: 0.3, avoided: 0.35 },
 }
 const patchy: Profile = {
+  key: 'patchy',
   name: 'Patchy',
   plan: (d, rng, ctx) => {
     if (ctx.gaps.some(([a, b]) => d >= a && d < b)) return null
@@ -135,23 +142,72 @@ const patchy: Profile = {
 }
 // Habit-focused typicals, to test whether different habits give different looks.
 const gymFan: Profile = {
+  key: 'gym',
   name: 'Typical, gym-focused (gym 4x/wk, walks, little else)',
   plan: (_d, rng) =>
     rng() < 0.08 ? null : { wakeOnTime: 0.4, wakeLateTry: 0.2, gym: 0.57, walk: 0.5, read: 0.15, selfcare: 0.2, avoided: 0.2 },
 }
 const reader: Profile = {
+  key: 'reader',
   name: 'Typical, reader (reads most days, gym 1x/wk)',
   plan: (_d, rng) =>
     rng() < 0.08 ? null : { wakeOnTime: 0.5, wakeLateTry: 0.2, gym: 0.15, walk: 0.2, read: 0.85, selfcare: 0.3, avoided: 0.3 },
 }
 const heart: Profile = {
+  key: 'heart',
   name: 'Typical, heart-focused (self-care most days, moderate rest)',
   plan: (_d, rng) =>
     rng() < 0.08
       ? null
       : { wakeOnTime: 0.5, wakeLateTry: 0.2, gym: 0.25, walk: 0.3, read: 0.25, selfcare: 0.85, avoided: 0.3 },
 }
-const PROFILES = [keen, typical, patchy, gymFan, reader, heart]
+// Balanced: aims for roughly equal XP per stat (about 15/day each).
+const balanced: Profile = {
+  key: 'balanced',
+  name: 'Balanced (about equal XP per stat)',
+  plan: (_d, rng) =>
+    rng() < 0.08 ? null : { wakeOnTime: 0.5, wakeLateTry: 0.2, gym: 0.25, walk: 0.35, read: 0.65, selfcare: 0.65, avoided: 0.3 },
+}
+// Light self-care: self-care 4-5 days a week, not much else. Is Heart reachable without being extreme?
+const heartLight: Profile = {
+  key: 'heartlite',
+  name: 'Self-care 4-5x/wk, light on everything else',
+  plan: (_d, rng) =>
+    rng() < 0.08 ? null : { wakeOnTime: 0.4, wakeLateTry: 0.2, gym: 0.15, walk: 0.25, read: 0.2, selfcare: 0.65, avoided: 0.2 },
+}
+// Early riser: the wake-up habit sticks, plus chores; little else.
+const riser: Profile = {
+  key: 'riser',
+  name: 'Early riser (wake 4/5 weekdays, chores)',
+  plan: (_d, rng) =>
+    rng() < 0.08 ? null : { wakeOnTime: 0.8, wakeLateTry: 0.2, gym: 0.2, walk: 0.25, read: 0.25, selfcare: 0.25, avoided: 0.6 },
+}
+// Habit shift: gym-heavy for the first 120 days, then swaps the gym for reading.
+const shifter: Profile = {
+  key: 'shift',
+  name: 'Shifter (gym-heavy to day 120, then reader)',
+  plan: (d, rng) =>
+    rng() < 0.08
+      ? null
+      : d < 120
+        ? { wakeOnTime: 0.4, wakeLateTry: 0.2, gym: 0.57, walk: 0.5, read: 0.15, selfcare: 0.2, avoided: 0.2 }
+        : { wakeOnTime: 0.4, wakeLateTry: 0.2, gym: 0.1, walk: 0.2, read: 0.85, selfcare: 0.2, avoided: 0.2 },
+}
+// Lapsing: typical for 2 months, then rare logging (about 1 day a week).
+const lapsing: Profile = {
+  key: 'lapsing',
+  name: 'Lapsing (typical to day 60, then ~1 day a week)',
+  plan: (d, rng) =>
+    d < 60
+      ? rng() < 0.08
+        ? null
+        : { wakeOnTime: 0.6, wakeLateTry: 0.2, gym: 0.36, walk: 0.25, read: 0.25, selfcare: 0.3, avoided: 0.35 }
+      : rng() < 0.85
+        ? null
+        : { wakeOnTime: 0.6, wakeLateTry: 0.2, gym: 0.36, walk: 0.25, read: 0.25, selfcare: 0.3, avoided: 0.35 },
+}
+const ALL_PROFILES = [keen, typical, patchy, balanced, gymFan, reader, heart, heartLight, riser, shifter, lapsing]
+const PROFILES = PROFILE_FILTER ? ALL_PROFILES.filter((p) => PROFILE_FILTER.includes(p.key)) : ALL_PROFILES
 
 function poisson(lambda: number, rng: () => number): number {
   const L = Math.exp(-lambda)
@@ -173,7 +229,10 @@ interface RunResult {
   topStatEnd: StatId
   lookAtJuvenile: StatId | null
   lookEnd: StatId | null
-  lookChanges: number // look changes after Juvenile under the strict-overtake rule
+  lookChanges: number // look changes after the first look (real evolutionLook + lookChange)
+  lookChangeDays: number[]
+  looksSeen: StatId[]
+  juvenileDayByLook: number | null // game day the look first left 'neutral'
   logs: number
   refused: Record<string, number>
   activeDays: number
@@ -239,9 +298,12 @@ function simulate(profile: Profile, seed: number): RunResult {
   const refused: Record<string, number> = {}
   const dailyLogDays: boolean[] = []
   let topStatAtJuvenile: StatId | null = null
-  let look: StatId | null = null
   let lookAtJuvenile: StatId | null = null
   let lookChanges = 0
+  const lookChangeDays: number[] = []
+  let juvenileDayByLook: number | null = null
+  const rules = { evolvesAt: EVOLVES_AT_STAGE, margin: MARGIN }
+  let evo: Evolution = { look: 'neutral', seen: [] }
   let logs = 0
   let id = 0
   const rewards = { treats: 0, rares: 0, milestoneItems: 0, milestoneFirsts: 0 }
@@ -327,13 +389,16 @@ function simulate(profile: Profile, seed: number): RunResult {
       if (!EXACT) todays.push(ev)
       events.push(ev)
       for (const st of statTotals([ev], TASK_LIST, STATS)) stats[st.stat.id] += st.xp
-      if (look !== null) {
-        // Strict overtake: switch only if some stat is now strictly above the current look.
-        const lead = topStat(stats)
-        if (stats[lead] > stats[look] * (1 + MARGIN)) {
-          look = lead
+      {
+        const next = evolutionLook(events, TASK_LIST, STATS, STAGE_LIST, rules)
+        if (evo.look === 'neutral' && next.look !== 'neutral') {
+          lookAtJuvenile = next.look
+          juvenileDayByLook = i + 1
+        } else if (lookChange(evo, next)) {
           lookChanges++
+          lookChangeDays.push(i + 1)
         }
+        evo = next
       }
       logs++
       loggedToday = true
@@ -365,8 +430,6 @@ function simulate(profile: Profile, seed: number): RunResult {
         stageDays.push(i + 1)
         if (s.id === 'juvenile') {
           topStatAtJuvenile = topStat(stats)
-          look = topStatAtJuvenile // ties already go to config order in topStat
-          lookAtJuvenile = look
         }
       }
     }
@@ -375,6 +438,8 @@ function simulate(profile: Profile, seed: number): RunResult {
   // Check the running totals against the real statTotals over the whole log.
   for (const st of statTotals(events, TASK_LIST, STATS))
     if (st.xp !== stats[st.stat.id]) throw new Error(`statTotals mismatch for ${st.stat.id}`)
+  if (juvenileDayByLook !== null && juvenileDayByLook !== stageDay['juvenile'])
+    throw new Error('first look did not appear on the Juvenile day')
 
   // Projected streaks and freezes (overall "days with at least one log").
   let streak = 0
@@ -439,8 +504,11 @@ function simulate(profile: Profile, seed: number): RunResult {
     topStatAtJuvenile,
     topStatEnd: topStat(stats),
     lookAtJuvenile,
-    lookEnd: look,
+    lookEnd: evo.look === 'neutral' ? null : evo.look,
     lookChanges,
+    lookChangeDays,
+    looksSeen: evo.seen,
+    juvenileDayByLook,
     logs,
     refused,
     activeDays: dailyLogDays.filter(Boolean).length,
@@ -468,7 +536,7 @@ const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.le
 const r1 = (n: number) => Math.round(n * 10) / 10
 
 console.log(`Drag-on balance sim: ${DAYS} days x ${RUNS} runs per profile, base seed ${BASE_SEED}`)
-console.log(`Variant: ${VARIANT ?? 'none (real config)'}${MARGIN ? `, look margin ${MARGIN * 100}%` : ''}`)
+console.log(`Variant: ${VARIANT ?? 'none (real config)'}; look margin ${r1(MARGIN * 100)}%${MARGIN_ARG === undefined ? ' (config)' : ' (what-if)'}, evolves at ${EVOLVES_AT_STAGE}`)
 console.log(`Stages: ${STAGE_LIST.map((s) => `${s.name} ${s.xpFrom}`).join(', ')}`)
 console.log(`Tasks: ${TASK_LIST.map((t) => `${t.id} ${t.xp}xp/${t.stat}${t.rules.kind === 'maxPerDay' ? ` max${t.rules.max}` : ''}`).join(', ')}\n`)
 
@@ -513,7 +581,25 @@ for (const p of PROFILES) {
   }
   console.log(`Top stat at Juvenile: ${statShare((r) => r.topStatAtJuvenile)}`)
   console.log(`Top stat at end:      ${statShare((r) => r.topStatEnd)}`)
-  console.log(`Look at end (strict-overtake rule): ${statShare((r) => r.lookEnd)}`)
+  console.log(`Look at Juvenile (real evolutionLook): ${statShare((r) => r.lookAtJuvenile)}`)
+  console.log(`Look at end:          ${statShare((r) => r.lookEnd)}`)
+  {
+    const seenN = runs.map((r) => r.looksSeen.length)
+    const c: Record<number, number> = {}
+    for (const n of seenN) c[n] = (c[n] ?? 0) + 1
+    console.log(
+      `Distinct looks seen: mean ${r1(mean(seenN))} | ${Object.entries(c)
+        .map(([k, v]) => `${k}: ${r1((v / RUNS) * 100)}%`)
+        .join(', ')} | ever had: ${STATS.map(
+        (s) => `${s.id} ${r1((runs.filter((r) => r.looksSeen.includes(s.id)).length / RUNS) * 100)}%`,
+      ).join(', ')}`,
+    )
+    const mismatch = runs.filter((r) => r.lookEnd !== null && r.lookEnd !== r.topStatEnd).length
+    console.log(`Look at end differs from top stat at end: ${r1((mismatch / RUNS) * 100)}% of runs`)
+    const changeDays = runs.flatMap((r) => r.lookChangeDays)
+    if (changeDays.length)
+      console.log(`Look change days (all runs): p10 ${pct(changeDays, 10)}, median ${med(changeDays)}, p90 ${pct(changeDays, 90)}`)
+  }
   {
     const lc = runs.map((r) => r.lookChanges)
     const juvDays = runs.map((r) => r.stageDay['juvenile']).filter((x): x is number => x != null)

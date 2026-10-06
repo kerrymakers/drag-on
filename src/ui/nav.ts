@@ -57,6 +57,50 @@ export function tabTap(goingBack: boolean, from: Route, to: Route, pushedFromHom
 
 const STATE_KEY = 'dragOnTab'
 
+/**
+ * How long a history.back() may take before the double-tap guard gives up. Normally
+ * the popstate clears it within a frame or two; this only stops a lost popstate (or a
+ * page restored from the back/forward cache) leaving the tabs ignoring every tap.
+ */
+export const GOING_BACK_TIMEOUT_MS = 500
+
+/** The bits of a window the going-back guard needs (a real window, or a fake in tests). */
+export interface GuardHost {
+  setTimeout(fn: () => void, ms: number): number
+  clearTimeout(id: number | undefined): void
+  addEventListener(type: 'popstate' | 'pageshow', fn: () => void): void
+}
+
+export interface GoingBackGuard {
+  /** True from a history.back() until its popstate, a pageshow or the timeout. */
+  readonly active: boolean
+  set(value: boolean): void
+}
+
+/**
+ * Remembers that a history.back() is on its way, so a second tap can't go back again.
+ * Cleared by the popstate that follows, by a pageshow (a page restored from the
+ * back/forward cache) or after GOING_BACK_TIMEOUT_MS, so a lost popstate can't leave
+ * the tabs ignoring every tap.
+ */
+export function goingBackGuard(host: GuardHost): GoingBackGuard {
+  let active = false
+  let timer: number | undefined
+  function set(value: boolean) {
+    active = value
+    host.clearTimeout(timer)
+    timer = value ? host.setTimeout(() => (active = false), GOING_BACK_TIMEOUT_MS) : undefined
+  }
+  host.addEventListener('popstate', () => set(false))
+  host.addEventListener('pageshow', () => set(false))
+  return {
+    get active() {
+      return active
+    },
+    set,
+  }
+}
+
 export interface Nav {
   readonly route: Route
 }
@@ -91,7 +135,8 @@ export function createNav(doc: Document, bar: HTMLElement, onRoute: (route: Rout
     onRoute(next, from)
   }
 
-  let goingBack = false
+  // Must be created before the popstate/pageshow listeners below, so the guard clears first.
+  const goingBack = goingBackGuard(win)
 
   const pushedFromHome = () =>
     typeof win.history.state === 'object' && win.history.state !== null && STATE_KEY in win.history.state
@@ -104,8 +149,8 @@ export function createNav(doc: Document, bar: HTMLElement, onRoute: (route: Rout
     const tab = TABS.find((t) => t.route === to)
     const from = route ?? 'home'
     if (!tab) return
-    const tap = tabTap(goingBack, from, to, pushedFromHome())
-    goingBack = tap.goingBack
+    const tap = tabTap(goingBack.active, from, to, pushedFromHome())
+    if (tap.goingBack !== goingBack.active) goingBack.set(tap.goingBack)
     switch (tap.action) {
       case 'none':
         return
@@ -123,9 +168,10 @@ export function createNav(doc: Document, bar: HTMLElement, onRoute: (route: Rout
   })
 
   const fromLocation = () => apply(routeFromHash(win.location.hash))
-  win.addEventListener('popstate', () => {
-    goingBack = false
-    fromLocation()
+  // The guard clears itself on popstate and pageshow (any back() in flight is long gone).
+  win.addEventListener('popstate', fromLocation)
+  win.addEventListener('pageshow', (e) => {
+    if (e.persisted) fromLocation()
   })
   win.addEventListener('hashchange', fromLocation)
   fromLocation()

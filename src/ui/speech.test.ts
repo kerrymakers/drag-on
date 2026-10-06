@@ -53,6 +53,41 @@ describe('placeSpeech', () => {
     expect(overlaps(toPage(area, p), head)).toBe(false)
   })
 
+  it('uses the normal size whenever it fits', () => {
+    const area = { left: 16, top: 100, right: 394, bottom: 500 }
+    const head = { left: 120, top: 260, right: 290, bottom: 380 }
+    expect(placeSpeech(area, head, measure).compact).toBe(false)
+  })
+
+  it('switches to the compact size when the normal one would run out of the area', () => {
+    // A short area with the head in the middle: beside it, the normal bubble is too tall.
+    const sized = (maxWidth: number, compact: boolean) => {
+      const width = Math.min(maxWidth, 220)
+      const lines = Math.ceil(220 / width)
+      return { width, height: compact ? 10 + lines * 16 : 18 + lines * 22 }
+    }
+    const area = { left: 0, top: 0, right: 328, bottom: 60 }
+    const head = { left: 70, top: 0, right: 180, bottom: 50 }
+    expect(sized(328 - 180 - 10, false).height).toBeGreaterThan(60) // the normal size is too tall
+    const p = placeSpeech(area, head, sized)
+    expect(p.compact).toBe(true)
+    const { width, height } = sized(p.maxWidth, true)
+    const bubble = { left: p.left, top: p.top, right: p.left + width, bottom: p.top + height }
+    expect(overlaps(bubble, head)).toBe(false)
+    expect(inside(bubble, area)).toBe(true)
+  })
+
+  it('keeps the fallback inside the area, so it never covers what is below the dragon', () => {
+    const area = { left: 0, top: 0, right: 300, bottom: 100 }
+    const head = { left: 100, top: 0, right: 200, bottom: 100 }
+    const p = placeSpeech(area, head, measure)
+    expect(p.compact).toBe(true)
+    const bubble = toPage(area, p)
+    expect(bubble.bottom).toBeLessThanOrEqual(area.bottom)
+    expect(bubble.left).toBeGreaterThanOrEqual(area.left)
+    expect(bubble.right).toBeLessThanOrEqual(area.right)
+  })
+
   it('always stays inside the area, even when nothing fits', () => {
     const area = { left: 0, top: 0, right: 200, bottom: 60 }
     const head = { left: 10, top: 0, right: 190, bottom: 60 }

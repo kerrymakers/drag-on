@@ -2,11 +2,13 @@
 // This is the only layer that reads the clock (Date.now) and generates ids.
 
 import { react, renderDragon, speechAnchor } from '../art'
+import { EVOLVES_AT_STAGE, LOOK_CHANGE_MARGIN } from '../config/evolution'
 import { MOODS } from '../config/mood'
 import { STAGES } from '../config/stages'
 import { STATS } from '../config/stats'
 import { TASKS } from '../config/tasks'
 import { dayKey, dayMinutesToClock } from '../game/day'
+import { evolutionLook, lookChange, type Evolution } from '../game/evolution'
 import { createLogEvent, createUndoEvent, undoableLog } from '../game/log'
 import {
   nextRefreshAt,
@@ -32,6 +34,13 @@ import { createUpdateGate } from './updates'
 import { createWelcome } from './welcome'
 
 const SPEECH_MS = 4000
+
+const EVOLUTION_RULES = { evolvesAt: EVOLVES_AT_STAGE, margin: LOOK_CHANGE_MARGIN }
+
+/** The dragon's evolution look and every look it has had, derived from the log. */
+function evolution(events: readonly GameEvent[]): Evolution {
+  return evolutionLook(events, TASKS, STATS, STAGES, EVOLUTION_RULES)
+}
 
 const TICK_MS = 60_000
 /** setTimeout's ceiling; anything longer fires immediately. */
@@ -168,11 +177,13 @@ export function startApp(doc: Document): App {
     const area = bubble.parentElement?.getBoundingClientRect()
     const avoid = speechAnchor(el.art)
     if (area && avoid) {
-      const p = placeSpeech(area, avoid, (maxWidth) => {
+      const p = placeSpeech(area, avoid, (maxWidth, compact) => {
         bubble.style.maxWidth = `${maxWidth}px`
+        bubble.classList.toggle('is-compact', compact)
         return { width: bubble.offsetWidth, height: bubble.offsetHeight }
       })
       bubble.style.maxWidth = `${p.maxWidth}px`
+      bubble.classList.toggle('is-compact', p.compact)
       bubble.style.left = `${Math.round(p.left)}px`
       bubble.style.top = `${Math.round(p.top)}px`
       bubble.dataset.tail = p.tail
@@ -231,9 +242,10 @@ export function startApp(doc: Document): App {
     el.name.textContent = data.settings.dragonName ?? 'your dragon'
     el.stage.textContent = progress.stage.name
     const { mood } = moodFor(data.events, now, MOODS)
+    const { look } = evolution(data.events)
     el.mood.textContent = MOOD_LABELS[mood]
     el.mood.dataset.mood = mood
-    renderDragon(el.art, { stage: progress.stage.id, progress: progress.fraction, mood })
+    renderDragon(el.art, { stage: progress.stage.id, progress: progress.fraction, mood, look })
 
     const label = progressLabel(progress.stage.id, progress.xpToNext, progress.next?.name ?? null)
     el.label.textContent = label
@@ -272,6 +284,7 @@ export function startApp(doc: Document): App {
         stage: progress.stage,
         progress: progress.fraction,
         mood,
+        look,
         now,
       })
     }
@@ -331,12 +344,21 @@ export function startApp(doc: Document): App {
     react(el.art, 'log')
     toast.show(LOGGED(event.xpAwarded, task.name), undoLast)
 
+    // A stage-up gets the full moment. A look the dragon has never had gets a gentle
+    // one; changing back to a look it has had before happens quietly (render did it).
     const reached = stageUp(before, data.events, STAGES)
-    if (reached) {
+    const lookBefore = evolution(before)
+    const lookAfter = evolution(data.events)
+    const newLook = lookChange(lookBefore, lookAfter)
+    if (reached || newLook?.firstTime) {
+      const from = dragonStage(before, STAGES)
       updates.setBusy(true)
       celebrate(doc, {
-        from: dragonStage(before, STAGES),
-        to: reached,
+        from,
+        to: reached ?? from,
+        fromLook: lookBefore.look,
+        toLook: lookAfter.look,
+        newLook: newLook?.firstTime ? newLook.look : null,
         reducedMotion: prefersReducedMotion(),
         background: doc.getElementById('app'),
         // The tapped button if it can still take focus (a once-a-day task is now done

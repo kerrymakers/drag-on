@@ -97,7 +97,8 @@ for (const [w, h] of SIZES) {
         const f = await artFit(page)
         const sh = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.scrollHeight])
         console.log(`${w}x${h} ${scheme} ${stage}`, JSON.stringify(f), 'label', await page.locator('#growth-label').textContent())
-        expect(f.look).toBe(stage)
+        // Seeded with gym logs, so from Juvenile on the dragon has the strength look.
+        expect(f.look).toBe(['juvenile', 'adult', 'elder'].includes(stage) ? `${stage}-strength` : stage)
         expect(sh[0]).toBeLessThanOrEqual(w)
         expect(sh[1]).toBeLessThanOrEqual(h)
         // Not clipped: inside its area (1px slack for stroke rounding) and below the header

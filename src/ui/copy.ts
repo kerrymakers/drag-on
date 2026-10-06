@@ -1,7 +1,7 @@
 // Words the app says. Warm, never guilt-tripping. Not game logic, not balancing.
 
 import { daysBetween } from '../game/day'
-import type { MoodId } from '../game/types'
+import type { MoodId, StatId } from '../game/types'
 import type { LoadNotice } from '../storage'
 
 /** The mood chip. "Grumpy" is the internal id only; it's never shown. */
@@ -52,6 +52,54 @@ export const STAGE_UP: Record<string, StageUpCopy> = {
 export const STAGE_UP_FALLBACK: StageUpCopy = {
   message: "Look at me! I'm growing, thanks to you.",
   button: 'Yay!',
+}
+
+/** A friendly name for each evolution look, shown on the Dragon screen from Juvenile on. */
+export const LOOK_NAMES: Record<StatId, string> = {
+  strength: 'Sturdy',
+  discipline: 'Steadfast',
+  wisdom: 'Scholarly',
+  heart: 'Warm-hearted',
+}
+
+/** The look chip on the Dragon screen, e.g. "Sturdy dragon". */
+export const lookLabel = (look: StatId): string => `${LOOK_NAMES[look]} dragon`
+
+/** Under the stage-up message, the first time the dragon takes on a look (usually at Juvenile). */
+export const LOOK_REVEAL: Record<StatId, string> = {
+  strength: "I'm growing up Sturdy, all strong and solid, like you!",
+  discipline: "I'm growing up Steadfast. We keep showing up, you and me!",
+  wisdom: "I'm growing up Scholarly. All that reading rubbed off on me!",
+  heart: "I'm growing up Warm-hearted, because you look after us both.",
+}
+
+/** A later look the dragon has never had before: a gentle, happy moment. */
+export const LOOK_CHANGE: Record<StatId, StageUpCopy> = {
+  strength: { message: "Ooh, I'm turning Sturdy! Feel how strong we're getting.", button: 'So strong!' },
+  discipline: { message: "Ooh, I'm turning Steadfast! You've been so steady lately.", button: 'Looking sharp!' },
+  wisdom: { message: "Ooh, I'm turning Scholarly! I even got reading glasses.", button: 'Very wise!' },
+  heart: { message: "Ooh, I'm turning Warm-hearted! Thank you for being kind to us.", button: 'Aww, lovely' },
+}
+
+export interface CelebrationCopy {
+  message: string
+  /** A second, smaller line naming a new look, if there is one. */
+  sub: string | null
+  button: string
+}
+
+/**
+ * What the celebration overlay says. A stage-up uses the stage's words, plus a line
+ * naming the look if this log also brought a look the dragon has never had. A look
+ * change on its own uses the look's words. `newLook` is null for no first-time look.
+ */
+export function celebrationCopy(stageUpTo: string | null, newLook: StatId | null): CelebrationCopy {
+  if (stageUpTo !== null) {
+    const stage = STAGE_UP[stageUpTo] ?? STAGE_UP_FALLBACK
+    return { message: stage.message, sub: newLook ? LOOK_REVEAL[newLook] : null, button: stage.button }
+  }
+  const look = newLook ? LOOK_CHANGE[newLook] : STAGE_UP_FALLBACK
+  return { message: look.message, sub: null, button: look.button }
 }
 
 /** The label above the XP bar. */
