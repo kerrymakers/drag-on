@@ -10,6 +10,7 @@ import {
   nextDayStart,
   weekdayOf,
 } from './day'
+import { logXp } from './rewards'
 import type {
   GameEvent,
   LogEvent,
@@ -28,9 +29,9 @@ export function activeLogs(events: readonly GameEvent[]): LogEvent[] {
   return events.filter((e): e is LogEvent => e.type === 'log' && !undone.has(e.id))
 }
 
-/** Total XP from active logs, using the XP saved on each event. */
+/** Total XP from active logs, using the XP saved on each event (treat bonuses included). */
 export function totalXp(events: readonly GameEvent[]): number {
-  return activeLogs(events).reduce((sum, e) => sum + e.xpAwarded, 0)
+  return activeLogs(events).reduce((sum, e) => sum + logXp(e), 0)
 }
 
 function sortedStages(stages: readonly Stage[]): Stage[] {

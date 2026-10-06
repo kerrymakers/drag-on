@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Page } from './fixtures'
 test.use({ timezoneId: 'Europe/London' })
 
 const shotDir = 'tests/screenshots'

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS } from '../config/settings'
+import { totalXp } from '../game/state'
 import type { GameEvent } from '../game/types'
 import {
   CORRUPT_KEY_PREFIX,
@@ -52,6 +53,43 @@ describe('load', () => {
     const data = { ...defaultData(), events: [logEvent, undoEvent] }
     save(data, store)
     expect(load(store)).toEqual({ data, readOnly: false, notice: 'ok' })
+  })
+
+  it('round-trips logs with a treat (schema stays at 1)', () => {
+    const treat: GameEvent = { ...logEvent, id: 't', reward: { kind: 'treat', bonusXp: 20 } }
+    const store = new FakeStore()
+    const data = { ...defaultData(), events: [logEvent, treat] }
+    save(data, store)
+    const loaded = load(store)
+    expect(loaded).toEqual({ data, readOnly: false, notice: 'ok' })
+    expect(totalXp(loaded.data.events)).toBe(40 + 40 + 20)
+  })
+
+  it('keeps a reward it does not recognise, untouched, and counts only the base XP', () => {
+    const later = { ...logEvent, id: 'l', reward: { kind: 'sparkle', colour: 'gold', bonusXp: 500 } }
+    const odd = { ...logEvent, id: 'o', reward: 'mystery' }
+    const raw = JSON.stringify({ schemaVersion: 1, events: [later, odd], settings: DEFAULT_SETTINGS })
+    const store = withRaw(raw)
+    const loaded = load(store)
+    expect(loaded.notice).toBe('ok')
+    expect(loaded.data.events).toEqual([later, odd])
+    expect(totalXp(loaded.data.events)).toBe(80)
+    save(loaded.data, store)
+    expect(JSON.parse(store.getItem(STORAGE_KEY)!).events).toEqual([later, odd])
+    expect(store.corruptKeys()).toEqual([])
+  })
+
+  it('keeps a log with a malformed treat, but never counts the bad bonus', () => {
+    const bad = [
+      { ...logEvent, id: 'n', reward: { kind: 'treat', bonusXp: -40 } },
+      { ...logEvent, id: 's', reward: { kind: 'treat', bonusXp: '999' } },
+      { ...logEvent, id: 'm', reward: { kind: 'treat' } },
+      { ...logEvent, id: 'z', reward: null },
+    ]
+    const loaded = load(withRaw(JSON.stringify({ schemaVersion: 1, events: bad, settings: DEFAULT_SETTINGS })))
+    expect(loaded.notice).toBe('ok')
+    expect(loaded.data.events).toHaveLength(4)
+    expect(totalXp(loaded.data.events)).toBe(4 * 40)
   })
 
   it('loads logs with and without a recorded stage (schema stays at 1)', () => {

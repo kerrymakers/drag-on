@@ -3,8 +3,9 @@ import { STAGES } from '../config/stages'
 import { STATS } from '../config/stats'
 import { dragonProgress } from '../game/state'
 import type { GameEvent, Stage } from '../game/types'
-import { LOOK_CHANGE, LOOK_NAMES, LOOK_REVEAL, STAGE_UP, STAGE_UP_FALLBACK, celebrationCopy, lookLabel, progressLabel } from './copy'
+import { LOGGED, LOOK_CHANGE, TREAT_FLOAT, loggedToast, LOOK_NAMES, LOOK_REVEAL, STAGE_UP, STAGE_UP_FALLBACK, celebrationCopy, lookLabel, progressLabel } from './copy'
 
+const from = (id: string) => STAGES.find((s) => s.id === id)!.xpFrom
 const labelFor = (events: GameEvent[], stages: readonly Stage[]) => {
   const p = dragonProgress(events, stages)
   return progressLabel(p.stage.id, p.xpToNext, p.next?.name ?? null)
@@ -24,13 +25,13 @@ describe('progressLabel', () => {
   })
 
   it('names the next stage after hatching', () => {
-    expect(labelFor([logOf(120)], STAGES)).toBe('380 XP to Whelp')
+    expect(labelFor([logOf(120)], STAGES)).toBe(`${from('whelp') - 120} XP to Whelp`)
   })
 
   it('stays positive when the stage is held ahead of the XP', () => {
     // Hatchling held at 120 XP after its threshold was raised to 150.
     const harder = STAGES.map((s) => (s.id === 'hatchling' ? { ...s, xpFrom: 150 } : s))
-    expect(labelFor([logOf(120, 'hatchling')], harder)).toBe('380 XP to Whelp')
+    expect(labelFor([logOf(120, 'hatchling')], harder)).toBe(`${from('whelp') - 120} XP to Whelp`)
   })
 
   it('says fully grown at the last stage', () => {
@@ -73,3 +74,21 @@ describe('look copy', () => {
     expect(celebrationCopy(null, 'heart')).toEqual({ ...LOOK_CHANGE.heart, sub: null })
   })
 })
+
+describe('LOGGED and TREAT_FLOAT', () => {
+  it('reads as before for a normal log', () => {
+    expect(LOGGED(25, 'Read for 20 minutes')).toBe('+25 XP · Read for 20 minutes')
+    expect(LOGGED(25, 'Read for 20 minutes', 0)).toBe('+25 XP · Read for 20 minutes')
+  })
+
+  it('shows a treat as the total, leaving the breakdown to the floats', () => {
+    expect(LOGGED(25, 'Read for 20 minutes', 13)).toBe('Treat! +38 XP · Read for 20 minutes')
+    expect(TREAT_FLOAT(13)).toBe('+13 treat')
+  })
+
+  it('splits the toast so only the task name can shorten', () => {
+    expect(loggedToast(25, 'Read for 20 minutes')).toEqual({ lead: '+25 XP · ', name: 'Read for 20 minutes' })
+    expect(loggedToast(25, 'Read for 20 minutes', 13)).toEqual({ lead: 'Treat! +38 XP · ', name: 'Read for 20 minutes' })
+  })
+})
+

@@ -35,6 +35,13 @@ export function defaultData(): SaveData {
 const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
 
+/**
+ * Whether a stored value is an event we can use. A log's `reward` isn't checked here:
+ * a shape this version doesn't know (from a later version) or a malformed treat keeps
+ * the event, so its base XP and history survive and the data round-trips untouched.
+ * Game logic counts only a well-formed treat's bonus (see logXp), so a bad reward can
+ * never add XP.
+ */
 function isEvent(v: unknown): v is GameEvent {
   if (!isObject(v) || typeof v.id !== 'string' || typeof v.timestamp !== 'number') return false
   if (!Number.isFinite(v.timestamp)) return false

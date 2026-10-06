@@ -30,7 +30,7 @@ export interface DragonLook {
 
 export type MoodLook = 'happy' | 'content' | 'sleepy' | 'grumpy'
 
-export type Reaction = 'log' | 'hatch' | 'tap' | 'perk'
+export type Reaction = 'log' | 'treat' | 'hatch' | 'tap' | 'perk'
 
 export function crackLevel(progress: number): CrackLevel {
   if (progress >= CRACK_BIG_AT) return 2
@@ -110,14 +110,17 @@ export function speechAnchor(container: HTMLElement): DOMRect | null {
   return new DOMRect(left, top, right - left, bottom - top)
 }
 
-/** A short one-off animation: a happy wiggle on log, a bounce on tap, a shake before hatching. */
+/**
+ * A short one-off animation: a happy wiggle on log, a delighted double hop on a treat,
+ * a bounce on tap, a shake before hatching.
+ */
 export function react(container: HTMLElement, kind: Reaction): void {
   const wrap = container.querySelector<HTMLElement>(':scope > .dragon-react')
   if (!wrap) return
   // Under reduced motion there's no animation, so animationend would never clear the class.
   const view = container.ownerDocument.defaultView
   if (view?.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
-  wrap.classList.remove('react-log', 'react-hatch', 'react-tap', 'react-perk')
+  wrap.classList.remove('react-log', 'react-treat', 'react-hatch', 'react-tap', 'react-perk')
   void wrap.offsetWidth // restart the animation if it's already running
   wrap.classList.add(`react-${kind}`)
   wrap.addEventListener(

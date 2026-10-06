@@ -1,4 +1,4 @@
-import { test, expect, type ConsoleMessage, type Page } from '@playwright/test'
+import { test, expect, type ConsoleMessage, type Page } from './fixtures'
 import { STAGES } from '../../src/config/stages'
 import { TASKS } from '../../src/config/tasks'
 

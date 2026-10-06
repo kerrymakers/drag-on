@@ -12,6 +12,8 @@
   --fill-from: #f7b37d;
   --fill-to: #ee8f5a;
   --tick: #5f8a4c;
+  --treat: #a3305f;
+  --treat-bg: #ffe1ec;
   --toast-bg: #4a3328;
   --toast-text: #fff6ec;
   --toast-action: #ffcfa6;
@@ -45,6 +47,8 @@
     --fill-from: #e9a06c;
     --fill-to: #f3b98f;
     --tick: #a9d18e;
+    --treat: #ffc2d8;
+    --treat-bg: #5a2f40;
     --toast-bg: #fbeee2;
     --toast-text: #2b211c;
     --toast-action: #a4531f;
@@ -562,6 +566,21 @@ body {
   padding: 12px 0;
 }
 
+/* A log's toast: the XP part always shows; only the task name shortens to "…". */
+.toast-text:has(.toast-lead) {
+  display: flex;
+  min-width: 0;
+}
+.toast-lead {
+  flex-shrink: 0;
+  white-space: pre;
+}
+.toast-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .toast:not(:has(.toast-undo:not([hidden]))) {
   padding-right: 16px;
 }
@@ -570,7 +589,7 @@ body {
   flex-shrink: 0;
   min-width: 44px;
   min-height: 44px;
-  padding: 0 14px;
+  padding: 0 10px;
   border: 0;
   border-radius: 22px;
   background: transparent;
@@ -607,6 +626,17 @@ body {
     opacity: 0;
     transform: translate(-100%, -260%) scale(1);
   }
+}
+
+/* A treat: a second float just after the XP one, a soft berry-pink pill. */
+.float-xp.float-treat {
+  color: var(--treat);
+  background: var(--treat-bg);
+  font-size: 1rem;
+  padding: 2px 10px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-pressed);
+  animation: float-xp 950ms ease-out 220ms both;
 }
 
 /* Stage-up overlay */
@@ -769,6 +799,9 @@ body {
   }
   .float-xp {
     animation: float-xp-calm 800ms ease-out forwards;
+  }
+  .float-xp.float-treat {
+    animation: float-xp-calm 950ms ease-out 220ms both;
   }
   .overlay-layer.is-to,
   .overlay.is-revealed .overlay-layer.is-to,

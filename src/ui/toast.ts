@@ -2,8 +2,11 @@
 
 const SHOW_MS = 5000
 
+/** A plain message, or a lead that always shows plus a name that may shorten to "…". */
+export type ToastMessage = string | { lead: string; name: string }
+
 export interface Toast {
-  show(text: string, onUndo?: () => void): void
+  show(message: ToastMessage, onUndo?: () => void): void
   hide(): void
 }
 
@@ -24,9 +27,20 @@ export function createToast(root: HTMLElement, text: HTMLElement, undo: HTMLButt
     undo.disabled = true
   }
 
-  function show(message: string, onUndo?: () => void) {
+  function show(message: ToastMessage, onUndo?: () => void) {
     window.clearTimeout(timer)
-    text.textContent = message
+    if (typeof message === 'string') {
+      text.textContent = message
+    } else {
+      const doc = text.ownerDocument
+      const lead = doc.createElement('span')
+      lead.className = 'toast-lead'
+      lead.textContent = message.lead
+      const name = doc.createElement('span')
+      name.className = 'toast-name'
+      name.textContent = message.name
+      text.replaceChildren(lead, name)
+    }
     undoHandler = onUndo
     undo.hidden = !onUndo
     undo.disabled = !onUndo

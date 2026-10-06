@@ -74,12 +74,12 @@ Total XP drives the stage. The thresholds give a fast early win (hatching within
 |-------|---------|----------------------|
 | Egg | 0 | Day 1 |
 | Hatchling | 100 | 2 to 3 days |
-| Whelp | 500 | About 2 weeks |
-| Juvenile | 1,300 | About 1 month |
-| Adult | 3,500 | About 2 to 3 months |
-| Elder | 7,000 | About 5 to 6 months |
+| Whelp | 600 | About 2 weeks |
+| Juvenile | 1,500 | About 1 month |
+| Adult | 4,000 | About 2 to 3 months |
+| Elder | 8,300 | About 5 to 6 months |
 
-Balanced 2026-10-05 after simulation: typical user hatches ~day 3, Juvenile ~day 34, Elder ~6 months.
+Balanced 2026-10-05 after simulation: typical user hatches ~day 3, Juvenile ~day 34, Elder ~6 months. Rebalanced 2026-10-06 for treats (+~10% XP): a typical user with treats reaches Whelp ~day 12, Juvenile ~day 30, Adult ~day 79, Elder ~day 164.
 
 The thresholds are config values and easy to rebalance.
 

@@ -10,7 +10,7 @@ import {
   taskAvailability,
   totalXp,
 } from './state'
-import { at, log, undo } from '../testing/helpers'
+import { at, log, treatLog, undo } from '../testing/helpers'
 import type { Settings, Stage, Task } from './types'
 
 const task = (id: string): Task => {
@@ -42,6 +42,13 @@ describe('activeLogs and totalXp', () => {
   it('sums xpAwarded from logs', () => {
     const events = [log(gym, MON('08:00')), log(walk, MON('12:00'))]
     expect(totalXp(events)).toBe(gym.xp + walk.xp)
+  })
+
+  it('adds treat bonuses to the base XP, and drops them with an undone log', () => {
+    const a = treatLog(gym, MON('08:00'), 20)
+    const b = treatLog(walk, MON('12:00'), 8)
+    expect(totalXp([a, b])).toBe(gym.xp + 20 + walk.xp + 8)
+    expect(totalXp([a, b, undo(b, MON('12:01'))])).toBe(gym.xp + 20)
   })
 
   it('ignores undone logs and keeps the rest', () => {

@@ -1,6 +1,6 @@
 // Phone-tester round 2 for Milestone 3, Slice 2: the welcome bubble in sleepy and
 // curled-up moods, at every stage and look, across the user's viewports.
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Page } from './fixtures'
 import { STAGES } from '../../src/config/stages'
 
 test.use({ timezoneId: 'Europe/London', locale: 'en-GB' })

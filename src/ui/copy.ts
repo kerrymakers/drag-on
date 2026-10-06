@@ -109,7 +109,25 @@ export function progressLabel(stageId: string, xpToNext: number, nextName: strin
   return `${xpToNext} XP to ${nextName}`
 }
 
-export const LOGGED = (xp: number, taskName: string) => `+${xp} XP · ${taskName}`
+/**
+ * The toast after a log, in two parts so only the task name ever shortens to "…".
+ * A treat shows the total ("Treat! +38 XP · Read"); the floats carry the breakdown.
+ */
+export interface LoggedToast {
+  lead: string
+  name: string
+}
+export const loggedToast = (xp: number, taskName: string, treatBonus = 0): LoggedToast => ({
+  lead: treatBonus > 0 ? `Treat! +${xp + treatBonus} XP · ` : `+${xp} XP · `,
+  name: taskName,
+})
+/** The whole toast as one string. */
+export const LOGGED = (xp: number, taskName: string, treatBonus = 0): string => {
+  const { lead, name } = loggedToast(xp, taskName, treatBonus)
+  return lead + name
+}
+/** The second float on a treat, e.g. "+13 treat". */
+export const TREAT_FLOAT = (bonus: number) => `+${bonus} treat`
 export const UNDONE = 'Undone'
 
 type NoticeKind = Extract<LoadNotice, 'backupFailed' | 'newerVersion' | 'unavailable'> | 'saveFailed'

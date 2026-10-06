@@ -1,5 +1,5 @@
 // Milestone 3, Slice 2: the evolution look.
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Page } from './fixtures'
 import { LOOK_CHANGE_MARGIN } from '../../src/config/evolution'
 import { STAGES } from '../../src/config/stages'
 import { TASKS } from '../../src/config/tasks'

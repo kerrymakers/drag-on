@@ -302,6 +302,9 @@
 .react-hatch {
   animation: react-hatch 700ms ease-in-out;
 }
+.react-treat {
+  animation: react-treat 680ms var(--bounce);
+}
 
 @keyframes react-tap {
   0% {
@@ -330,6 +333,31 @@
   }
   100% {
     transform: translateY(0) rotate(0);
+  }
+}
+
+/* A treat: a squish of delight, then two happy hops. Bigger than a log, still short. */
+@keyframes react-treat {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  12% {
+    transform: translateY(0) scale(1.06, 0.92);
+  }
+  32% {
+    transform: translateY(-18px) scale(0.96, 1.05) rotate(-4deg);
+  }
+  50% {
+    transform: translateY(0) scale(1.04, 0.95);
+  }
+  68% {
+    transform: translateY(-9px) scale(0.98, 1.02) rotate(4deg);
+  }
+  84% {
+    transform: translateY(0) scale(1.02, 0.98);
+  }
+  100% {
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -780,6 +808,7 @@
   .react-perk,
   .react-tap,
   .react-log,
+  .react-treat,
   .react-hatch {
     animation: none !important;
   }

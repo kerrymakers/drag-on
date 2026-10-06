@@ -1,5 +1,5 @@
 // Milestone 3, Slice 1: fixed layout, tab bar, Dragon screen, Heart task.
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Page } from './fixtures'
 import { STAGES } from '../../src/config/stages'
 import { TASKS } from '../../src/config/tasks'
 
@@ -263,12 +263,14 @@ for (const [w, h] of VIEWPORTS) {
   }
 }
 
+// Each log after the first lands 25 XP past the next stage's threshold (read from config).
+const stageFrom = (id: string) => STAGES.find((s) => s.id === id)!.xpFrom
 const ADULT_SEED = [
   { id: 'e1', type: 'log', taskId: 'read', timestamp: Date.parse('2025-12-20T12:00:00Z'), xpAwarded: 25 },
-  { id: 'e2', type: 'log', taskId: 'gym', timestamp: Date.parse('2026-09-05T12:00:00+01:00'), xpAwarded: 100 },
-  { id: 'e3', type: 'log', taskId: 'walk', timestamp: Date.parse('2026-09-15T12:00:00+01:00'), xpAwarded: 400 },
-  { id: 'e4', type: 'log', taskId: 'selfcare', timestamp: Date.parse('2026-09-25T12:00:00+01:00'), xpAwarded: 800 },
-  { id: 'e5', type: 'log', taskId: 'wake', timestamp: Date.parse('2026-10-05T12:00:00+01:00'), xpAwarded: 2200 },
+  { id: 'e2', type: 'log', taskId: 'gym', timestamp: Date.parse('2026-09-05T12:00:00+01:00'), xpAwarded: stageFrom('hatchling') },
+  { id: 'e3', type: 'log', taskId: 'walk', timestamp: Date.parse('2026-09-15T12:00:00+01:00'), xpAwarded: stageFrom('whelp') - stageFrom('hatchling') },
+  { id: 'e4', type: 'log', taskId: 'selfcare', timestamp: Date.parse('2026-09-25T12:00:00+01:00'), xpAwarded: stageFrom('juvenile') - stageFrom('whelp') },
+  { id: 'e5', type: 'log', taskId: 'wake', timestamp: Date.parse('2026-10-05T12:00:00+01:00'), xpAwarded: stageFrom('adult') - stageFrom('juvenile') },
 ]
 const STAGE_SEEDS: Record<string, { events: object[]; reached: number }> = {
   egg: { events: [], reached: 1 },

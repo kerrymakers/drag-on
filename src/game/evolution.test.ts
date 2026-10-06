@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { REWARDS } from '../config/rewards'
 import { LOOK_CHANGE_MARGIN } from '../config/evolution'
 import { DEFAULT_SETTINGS } from '../config/settings'
 import { STATS } from '../config/stats'
-import { at, undo } from '../testing/helpers'
+import { at, undo, NO_REWARD } from '../testing/helpers'
 import { evolutionLook, lookChange, type Evolution, type EvolutionRules } from './evolution'
 import { createLogEvent } from './log'
-import type { GameEvent, LogEvent, Stage, StatId, Task } from './types'
+import type { GameEvent, LogEvent, Reward, Stage, StatId, Task } from './types'
 
 // Small thresholds keep the numbers readable. Juvenile at 100.
 const STAGES_A: Stage[] = [
@@ -37,7 +38,7 @@ let clock = at('2026-10-05T12:00:00+01:00')
 /** Logs through createLogEvent, so stageReached is recorded as in the app. */
 function add(events: GameEvent[], stat: StatId | 'gone', xp: number, stages: readonly Stage[] = STAGES_A): GameEvent[] {
   const task: Task = stat === 'gone' ? { ...taskFor('heart'), id: 'gone' } : taskFor(stat)
-  const e = createLogEvent({ ...task, xp }, events, DEFAULT_SETTINGS, (clock += 1000), `e${++n}`, stages)
+  const e = createLogEvent({ ...task, xp }, events, DEFAULT_SETTINGS, (clock += 1000), `e${++n}`, stages, NO_REWARD, REWARDS)
   if (!e) throw new Error('refused')
   return [...events, e]
 }
@@ -278,3 +279,43 @@ describe('lookChange', () => {
     expect(lookChange(before, after)).toEqual({ look: 'strength', firstTime: false })
   })
 })
+
+describe('evolutionLook with treats', () => {
+  it("counts a treat's bonus toward total XP and its stat", () => {
+    // Base XP alone: 50 + 45 = 95, short of Juvenile (100), with strength ahead.
+    // A treat of 10 on the wisdom log reaches Juvenile and puts wisdom on top.
+    let events = add([], 'strength', 50)
+    const treat = createLogEvent(
+      { ...taskFor('wisdom'), xp: 45 },
+      events,
+      DEFAULT_SETTINGS,
+      (clock += 1000),
+      `e${++n}`,
+      STAGES_A,
+      { chance: REWARDS.rareChance, pick: 0 },
+      { ...REWARDS, treatBonusShare: 10 / 45 },
+    ) as LogEvent
+    expect(treat.reward).toEqual({ kind: 'treat', bonusXp: 10 })
+    expect(treat.stageReached).toBe('juvenile')
+    events = [...events, treat]
+    expect(evo(events)).toEqual({ look: 'wisdom', seen: ['wisdom'] })
+  })
+
+  it('takes the bonus back on undo', () => {
+    const events: GameEvent[] = [
+      { id: 'a', type: 'log', taskId: 't-strength', timestamp: clock, xpAwarded: 50 },
+      { id: 'b', type: 'log', taskId: 't-wisdom', timestamp: clock, xpAwarded: 45, reward: { kind: 'treat', bonusXp: 10 } },
+    ]
+    expect(evo(events).look).toBe('wisdom')
+    expect(evo([...events, undo(events[1]!, clock)])).toEqual({ look: 'neutral', seen: [] })
+  })
+
+  it('ignores a reward shape it does not recognise', () => {
+    const odd = { kind: 'confetti', bonusXp: 999 } as unknown as Reward
+    const events: GameEvent[] = [
+      { id: 'a', type: 'log', taskId: 't-wisdom', timestamp: clock, xpAwarded: 50, reward: odd },
+    ]
+    expect(evo(events)).toEqual({ look: 'neutral', seen: [] })
+  })
+})
+

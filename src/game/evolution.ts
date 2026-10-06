@@ -1,5 +1,6 @@
 // The dragon's evolution look, replayed from the event log. Nothing here is stored.
 
+import { logXp } from './rewards'
 import { activeLogs, stageFor } from './state'
 import type { GameEvent, Stage, StageId, Stat, StatId, Task } from './types'
 
@@ -69,10 +70,11 @@ export function evolutionLook(
   let look: LookId = 'neutral'
 
   for (const log of activeLogs(events)) {
-    xp += log.xpAwarded
+    const gained = logXp(log)
+    xp += gained
     const stat = statOf.get(log.taskId)
     const sum = stat === undefined ? undefined : totals.get(stat)
-    if (stat !== undefined && sum !== undefined) totals.set(stat, sum + log.xpAwarded)
+    if (stat !== undefined && sum !== undefined) totals.set(stat, sum + gained)
     const recorded = log.stageReached === undefined ? undefined : byId.get(log.stageReached)
     if (recorded && recorded.xpFrom > heldFrom) heldFrom = recorded.xpFrom
 

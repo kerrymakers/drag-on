@@ -1,5 +1,5 @@
 // Milestone 2, Slice 2: moods, the mood chip and the welcome back.
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Page } from './fixtures'
 import { STAGES } from '../../src/config/stages'
 import { TASKS } from '../../src/config/tasks'
 import { MOODS } from '../../src/config/mood'

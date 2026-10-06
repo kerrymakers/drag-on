@@ -1,5 +1,5 @@
 // Milestone 2, Slice 1: the grown stages, their reveals, and stage holding.
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Page } from './fixtures'
 import { STAGES } from '../../src/config/stages'
 import { TASKS } from '../../src/config/tasks'
 
@@ -238,7 +238,7 @@ test('stage-up button closes and undo back down shows nothing sad', async ({ pag
 })
 
 // 4. Held stage
-test('held stage: stageReached whelp below 500 shows Whelp, counting to Juvenile', async ({ page }, info) => {
+test('held stage: stageReached whelp below its threshold shows Whelp, counting to Juvenile', async ({ page }, info) => {
   const msgs = collectConsole(page)
   const total = 450
   await seed(page, [log(350, { stageReached: 'hatchling' }, 'a'), log(100, { stageReached: 'whelp' }, 'b')])

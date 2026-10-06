@@ -49,6 +49,31 @@ export interface Settings {
   dragonName: string | null
 }
 
+/**
+ * A variable reward, rolled once at log time and saved on the log.
+ * - treat: bonus XP on top of `xpAwarded`, counted toward the task's stat.
+ * - item: a rare collectible, worth no XP. (Nothing produces items yet.)
+ */
+export type Reward = { kind: 'treat'; bonusXp: number } | { kind: 'item'; itemId: string }
+
+/**
+ * A saved reward this version doesn't recognise (from a later version, or a malformed
+ * one). Storage keeps it as-is, so LogEvent.reward is typed to include it: code must
+ * check the shape at run time before trusting a field (see treatBonus). Hand-edited
+ * data could even hold a non-object; the run-time checks cover that too.
+ */
+export interface UnrecognisedReward {
+  readonly kind?: unknown
+}
+
+/** Two independent numbers in [0, 1), drawn by the caller (the UI) for one log. */
+export interface RewardRoll {
+  /** Decides whether there's a reward, and which kind. */
+  chance: number
+  /** Picks which item, for a rare roll. */
+  pick: number
+}
+
 /** A logged task. `xpAwarded` is fixed at log time, so later XP edits don't rewrite history. */
 export interface LogEvent {
   id: string
@@ -63,8 +88,11 @@ export interface LogEvent {
    * Undoing this log removes the hold. Older logs don't have it.
    */
   stageReached?: StageId
-  /** The variable-reward roll, saved at log time. Its shape arrives in Milestone 4. */
-  reward?: unknown
+  /**
+   * The variable reward rolled at log time, if any. Saved data written by a later
+   * version may hold a shape this version doesn't know; game logic ignores it (see logXp).
+   */
+  reward?: Reward | UnrecognisedReward
   note?: string
 }
 

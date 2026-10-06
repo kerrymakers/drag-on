@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { REWARDS } from '../config/rewards'
 import { DEFAULT_SETTINGS } from '../config/settings'
-import { at, log, undo } from '../testing/helpers'
+import { at, log, treatLog, undo, NO_REWARD } from '../testing/helpers'
 import { createLogEvent } from './log'
 import { stageHistory } from './stage-history'
 import { dragonStage } from './state'
@@ -27,7 +28,7 @@ const chunk = (xp: number): Task => ({
 let n = 0
 /** Logs through createLogEvent, so stageReached is recorded as in the app. */
 function logXp(events: GameEvent[], xp: number, when: number, stages: readonly Stage[] = STAGES_A): GameEvent[] {
-  const e = createLogEvent(chunk(xp), events, DEFAULT_SETTINGS, when, `h${++n}`, stages)
+  const e = createLogEvent(chunk(xp), events, DEFAULT_SETTINGS, when, `h${++n}`, stages, NO_REWARD, REWARDS)
   if (!e) throw new Error('refused')
   return [...events, e]
 }
@@ -155,3 +156,28 @@ describe('stageHistory', () => {
     expect(summary(events, [...STAGES_A].reverse())).toEqual(summary(events))
   })
 })
+
+describe('stageHistory with treats', () => {
+  const t = (xp: number) => ({ id: 'gym', xp })
+
+  it('dates a stage to the log whose treat bonus crossed the threshold', () => {
+    const events = [log(t(60), day(5)), treatLog(t(30), day(6), 15)] // 60, then 90 + 15 = 105
+    expect(summary(events)).toEqual([
+      ['egg', '2026-10-05'],
+      ['hatchling', '2026-10-06'],
+    ])
+  })
+
+  it('forgets the stage when the treat log is undone', () => {
+    const treat = treatLog(t(30), day(6), 15)
+    const events = [log(t(60), day(5)), treat, undo(treat, day(6, '12:01'))]
+    expect(summary(events)).toEqual([['egg', '2026-10-05']])
+  })
+
+  it('ignores a malformed treat bonus', () => {
+    const bad: LogEvent = { ...log(t(60), day(6)), reward: { kind: 'treat', bonusXp: -1000 } }
+    const notANumber: LogEvent = { ...log(t(30), day(7)), reward: { kind: 'treat', bonusXp: Number.NaN } }
+    expect(summary([bad, notANumber])).toEqual([['egg', '2026-10-06']])
+  })
+})
+

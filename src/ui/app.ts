@@ -1,8 +1,9 @@
 // The app shell: wires game logic, storage and art to the Home and Dragon screens.
-// This is the only layer that reads the clock (Date.now) and generates ids.
+// This is the only layer that reads the clock (Date.now), generates ids and rolls dice.
 
 import { react, renderDragon, speechAnchor } from '../art'
 import { EVOLVES_AT_STAGE, LOOK_CHANGE_MARGIN } from '../config/evolution'
+import { REWARDS } from '../config/rewards'
 import { MOODS } from '../config/mood'
 import { STAGES } from '../config/stages'
 import { STATS } from '../config/stats'
@@ -10,6 +11,7 @@ import { TASKS } from '../config/tasks'
 import { dayKey, dayMinutesToClock } from '../game/day'
 import { evolutionLook, lookChange, type Evolution } from '../game/evolution'
 import { createLogEvent, createUndoEvent, undoableLog } from '../game/log'
+import { treatBonus } from '../game/rewards'
 import {
   nextRefreshAt,
   dragonProgress,
@@ -20,10 +22,10 @@ import {
   totalXp,
   wakeDeadline,
 } from '../game/state'
-import type { GameEvent, Settings, Task, TaskAvailability } from '../game/types'
+import type { GameEvent, RewardRoll, Settings, Task, TaskAvailability } from '../game/types'
 import { STORAGE_KEY, load, requestPersistence, save } from '../storage'
 import { celebrate } from './celebrate'
-import { LOGGED, MOOD_LABELS, NOTICES, UNDONE, noticeFor, progressLabel, welcomeLine } from './copy'
+import { MOOD_LABELS, TREAT_FLOAT, loggedToast, NOTICES, UNDONE, noticeFor, progressLabel, welcomeLine } from './copy'
 import { createDragonScreen } from './dragon-screen'
 import { newId } from './ids'
 import { createNav, type Route } from './nav'
@@ -108,24 +110,43 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 }
 
-function haptic() {
+/** A short buzz on every log; a treat gets a happy double buzz. */
+const HAPTIC_LOG = 30
+const HAPTIC_TREAT = [30, 60, 45]
+
+function haptic(pattern: number | number[] = HAPTIC_LOG) {
   try {
-    navigator.vibrate?.(30)
+    navigator.vibrate?.(pattern)
   } catch {
     // Not supported or not allowed: the visual feedback is enough.
   }
 }
 
-/** "+40 XP" rising from the button that was tapped. */
-function floatXp(doc: Document, from: DOMRect, text: string) {
+/** The dice for a log's variable reward. Math.random is plenty for a pet dragon. */
+function rewardRoll(): RewardRoll {
+  return { chance: Math.random(), pick: Math.random() }
+}
+
+/**
+ * "+40 XP" rising from the button that was tapped. A treat float ("+20 treat")
+ * follows just after it, in its own warm style, starting at the button's top edge so
+ * it never parks over the button's own count or XP. Under reduced motion the floats
+ * don't rise, so both sit just above the button instead.
+ */
+function floatXp(doc: Document, from: DOMRect, text: string, treat = false) {
   const el = doc.createElement('span')
-  el.className = 'float-xp'
+  el.className = treat ? 'float-xp float-treat' : 'float-xp'
   el.textContent = text
   el.setAttribute('aria-hidden', 'true')
-  el.style.left = `${from.right - 24}px`
-  el.style.top = `${from.top + 6}px`
+  const still = prefersReducedMotion()
+  const top = still ? from.top - (treat ? 34 : 8) : from.top + (treat ? -12 : 6)
+  // A still treat pill also moves left, off the XP label of the button above.
+  const inset = treat ? (still ? 96 : 32) : 24
+  el.style.left = `${from.right - inset}px`
+  el.style.top = `${top}px`
   doc.body.append(el)
-  window.setTimeout(() => el.remove(), 900)
+  // The treat float starts after a CSS delay, so it lives a little longer.
+  window.setTimeout(() => el.remove(), treat ? 1300 : 900)
 }
 
 export interface App {
@@ -325,7 +346,7 @@ export function startApp(doc: Document): App {
     if (!button || !task) return
     const now = Date.now()
     const before = data.events
-    const event = createLogEvent(task, data.events, data.settings, now, newId(), STAGES)
+    const event = createLogEvent(task, data.events, data.settings, now, newId(), STAGES, rewardRoll(), REWARDS)
     if (!event) {
       render(now) // the screen was stale (e.g. the wake window just closed)
       return
@@ -334,15 +355,19 @@ export function startApp(doc: Document): App {
     // Save first: everything after this is feedback.
     const rect = button.getBoundingClientRect()
     commit(event)
+    // A treat is always good news, on top of the usual feedback. A normal log is unchanged.
+    const bonus = treatBonus(event)
     hush()
-    haptic()
+    haptic(bonus > 0 ? HAPTIC_TREAT : HAPTIC_LOG)
     render(now)
 
     const fresh = el.list.querySelector<HTMLElement>(`button.task[data-task-id="${task.id}"]`)
     fresh?.classList.add('is-logged')
     floatXp(doc, rect, `+${event.xpAwarded} XP`)
-    react(el.art, 'log')
-    toast.show(LOGGED(event.xpAwarded, task.name), undoLast)
+    if (bonus > 0) floatXp(doc, rect, TREAT_FLOAT(bonus), true)
+    react(el.art, bonus > 0 ? 'treat' : 'log')
+    const logged = loggedToast(event.xpAwarded, task.name, bonus)
+    toast.show(logged, undoLast)
 
     // A stage-up gets the full moment. A look the dragon has never had gets a gentle
     // one; changing back to a look it has had before happens quietly (render did it).
@@ -367,7 +392,15 @@ export function startApp(doc: Document): App {
           el.list.querySelector<HTMLElement>(`button.task[data-task-id="${task.id}"]:not(:disabled)`) ??
           el.list.querySelector<HTMLElement>('button.task:not(:disabled)') ??
           el.art,
-        onClose: () => updates.setBusy(false),
+        onClose: () => {
+          updates.setBusy(false)
+          // The overlay hid the treat's floats and outlasted its toast: say it again,
+          // with Undo while this log is still the one Undo would take back.
+          if (bonus > 0) {
+            const stillLatest = undoableLog(data.events, Date.now())?.id === event.id
+            toast.show(logged, stillLatest ? undoLast : undefined)
+          }
+        },
       })
     }
   })

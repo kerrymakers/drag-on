@@ -2,9 +2,10 @@
 // so changing thresholds later can't take it away. Undo removes the record.
 
 import { describe, expect, it } from 'vitest'
+import { REWARDS } from '../config/rewards'
 import { DEFAULT_SETTINGS } from '../config/settings'
 import { STAGES } from '../config/stages'
-import { at, log, undo } from '../testing/helpers'
+import { at, log, undo, NO_REWARD } from '../testing/helpers'
 import { createLogEvent, createUndoEvent } from './log'
 import { dragonProgress, dragonStage, heldStage, stageFor, stageUp, totalXp } from './state'
 import type { GameEvent, Stage, Task } from './types'
@@ -32,7 +33,7 @@ let minute = 0
 const NOON = at('2026-10-05T12:00:00+01:00')
 /** Logs through the real createLogEvent (so stageReached is recorded) and appends it. */
 function logXp(events: GameEvent[], xp: number, stages: readonly Stage[] = STAGES_A): GameEvent[] {
-  const e = createLogEvent(chunk(xp), events, DEFAULT_SETTINGS, NOON + ++minute * 1000, `e${minute}`, stages)
+  const e = createLogEvent(chunk(xp), events, DEFAULT_SETTINGS, NOON + ++minute * 1000, `e${minute}`, stages, NO_REWARD, REWARDS)
   if (!e) throw new Error('refused')
   return [...events, e]
 }
@@ -117,7 +118,7 @@ describe('dragonStage', () => {
     expect(dragonStage(old, STAGES).id).toBe('hatchling')
     expect(dragonProgress(old, STAGES).stage.id).toBe('hatchling')
     // The next log quietly records the stage it's already at, so it's held from then on.
-    const next = createLogEvent(chunk(5), old, DEFAULT_SETTINGS, NOON + 2, 'n', STAGES)
+    const next = createLogEvent(chunk(5), old, DEFAULT_SETTINGS, NOON + 2, 'n', STAGES, NO_REWARD, REWARDS)
     expect(next?.stageReached).toBe('hatchling')
     expect(stageUp(old, [...old, next as GameEvent], STAGES)).toBeNull()
   })
@@ -197,5 +198,38 @@ describe('stageUp', () => {
     const events = logXp(logXp([], 90), 30) // held hatchling at 120
     const harder = withThreshold('hatchling', 150)
     expect(stageUp(events, logXp(events, 40, harder), harder)).toBeNull() // 160 XP, still hatchling
+  })
+})
+
+describe('the 2026-10-06 rebalance for treats', () => {
+  // The thresholds before the rebalance, frozen here on purpose.
+  const OLD: Stage[] = [
+    { id: 'egg', name: 'Egg', xpFrom: 0 },
+    { id: 'hatchling', name: 'Hatchling', xpFrom: 100 },
+    { id: 'whelp', name: 'Whelp', xpFrom: 500 },
+    { id: 'juvenile', name: 'Juvenile', xpFrom: 1300 },
+    { id: 'adult', name: 'Adult', xpFrom: 3500 },
+    { id: 'elder', name: 'Elder', xpFrom: 7000 },
+  ]
+  const juvenileNow = STAGES.find((s) => s.id === 'juvenile')!.xpFrom
+
+  it('keeps a dragon at 1,350 XP that reached Juvenile under the old thresholds', () => {
+    let events = logXp([], 120, OLD) // hatchling
+    events = logXp(events, 480, OLD) // 600: whelp
+    events = logXp(events, 750, OLD) // 1,350: juvenile under the old thresholds
+    expect(last(events)).toMatchObject({ stageReached: 'juvenile' })
+    expect(totalXp(events)).toBe(1350)
+    expect(1350).toBeLessThan(juvenileNow) // the new threshold is above it
+    expect(dragonStage(events, STAGES).id).toBe('juvenile')
+    // The bar counts on toward Adult from there, never back down.
+    expect(dragonProgress(events, STAGES).stage.id).toBe('juvenile')
+    // Another log doesn't celebrate a stage it already has.
+    const after = logXp(events, 20, STAGES)
+    expect(stageUp(events, after, STAGES)).toBeNull()
+  })
+
+  it('follows the new thresholds for data with no records at all (saved before stage holding)', () => {
+    const events = [log({ id: 'gym', xp: 1350 }, NOON)] // old data, no records
+    expect(dragonStage(events, STAGES).id).toBe('whelp')
   })
 })

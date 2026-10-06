@@ -14,9 +14,14 @@
 //   - evolution look: the real evolutionLook() + lookChange() (src/game/evolution.ts) with
 //     config/evolution.ts, re-run after every accepted log so every change is counted.
 //
+//   - treats: the real rollReward() via createLogEvent with config/rewards.ts; bonus XP
+//     counted by the real totalXp/statTotals (logXp). Reward rolls use their own RNG
+//     stream, so each run is paired with a no-treat twin (same behaviour, treatChance 0)
+//     to measure exactly how much treats change stage days and looks.
+//
 // PROJECTED (the spec describes these but there is no code yet; numbers here
 // are this script's reading of SPEC.md, not the app's behaviour):
-//   - treats (20%/log), rare items (3%/log),
+//   - rare items (rolls landing in the real rare band are counted; items arrive in slice 2),
 //     overall streak, streak freezes (1 per 7-day streak, max 2), milestone items (7/30/100).
 
 import { createLogEvent, dayKey, dragonStage, evolutionLook, lookChange, moodFor, statTotals, totalXp, weekdayOf } from '../src/game'
@@ -28,6 +33,8 @@ import { STAGES } from '../src/config/stages'
 import { STATS } from '../src/config/stats'
 import { DEFAULT_SETTINGS } from '../src/config/settings'
 import { TIME_ZONE } from '../src/config/time'
+import { REWARDS } from '../src/config/rewards'
+import type { RewardConfig } from '../src/config/rewards'
 
 const DAYS = Number(process.argv[2] ?? 365)
 const RUNS = Number(process.argv[3] ?? 300)
@@ -54,9 +61,20 @@ const MOOD_LIST =
 const BASE_SEED = 20261005
 const START = { y: 2026, m: 10, d: 5 } // a Monday; crosses the Oct and Mar clock changes
 
-// Spec-implied odds (projection only, no reward config exists yet).
-const TREAT_CHANCE = 0.2
-const RARE_CHANCE = VARIANT === 'rare6' ? 0.06 : 0.03
+// Real reward config; what-ifs applied in memory only.
+//   --treat=N   treat chance N%   --bonus=N  treat bonus share N%
+const TREAT_ARG = process.argv.find((a) => a.startsWith('--treat='))?.split('=')[1]
+const BONUS_ARG = process.argv.find((a) => a.startsWith('--bonus='))?.split('=')[1]
+const REWARD_CFG: RewardConfig = {
+  ...REWARDS,
+  rareChance: VARIANT === 'rare6' ? 0.06 : REWARDS.rareChance,
+  treatChance: TREAT_ARG === undefined ? REWARDS.treatChance : Number(TREAT_ARG) / 100,
+  treatBonusShare: BONUS_ARG === undefined ? REWARDS.treatBonusShare : Number(BONUS_ARG) / 100,
+}
+const NO_TREATS: RewardConfig = { ...REWARD_CFG, treatChance: 0 }
+const RARE_CHANCE = REWARD_CFG.rareChance
+// Stage thresholds what-if: --stages=100,500,1300,3500,7000
+const STAGES_ARG = process.argv.find((a) => a.startsWith('--stages='))?.split('=')[1]?.split(',').map(Number)
 const MILESTONES = [7, 30, 100]
 const FREEZE_EVERY = 7
 const FREEZE_MAX = 2
@@ -140,6 +158,15 @@ const patchy: Profile = {
     return { wakeOnTime: 0.25, wakeLateTry: 0.1, gym: 0.12, walk: 0.15, read: 0.1, selfcare: 0.25, avoided: 0.15 }
   },
 }
+// Light: logs most weeks but not much; wake 2/5 weekdays, gym about once a week.
+const light: Profile = {
+  key: 'light',
+  name: 'Light (wake ~2/5, gym ~1x/wk, a little else, ~20% days off)',
+  plan: (_d, rng) =>
+    rng() < 0.2
+      ? null
+      : { wakeOnTime: 0.4, wakeLateTry: 0.2, gym: 0.17, walk: 0.2, read: 0.15, selfcare: 0.2, avoided: 0.2 },
+}
 // Habit-focused typicals, to test whether different habits give different looks.
 const gymFan: Profile = {
   key: 'gym',
@@ -206,7 +233,7 @@ const lapsing: Profile = {
         ? null
         : { wakeOnTime: 0.6, wakeLateTry: 0.2, gym: 0.36, walk: 0.25, read: 0.25, selfcare: 0.3, avoided: 0.35 },
 }
-const ALL_PROFILES = [keen, typical, patchy, balanced, gymFan, reader, heart, heartLight, riser, shifter, lapsing]
+const ALL_PROFILES = [keen, typical, light, patchy, balanced, gymFan, reader, heart, heartLight, riser, shifter, lapsing]
 const PROFILES = PROFILE_FILTER ? ALL_PROFILES.filter((p) => PROFILE_FILTER.includes(p.key)) : ALL_PROFILES
 
 function poisson(lambda: number, rng: () => number): number {
@@ -247,6 +274,9 @@ interface RunResult {
   longestGapWithoutNew: number // days between "new things" (stage, rare item, milestone)
   longestGapStagesOnly: number
   comebacks: Array<{ gapLen: number; xpWeekAfter: number }>
+  treatDays: boolean[] // per day: at least one treat
+  treatXp: number
+  rareBandRolls: number
 }
 
 const TASK_LIST: readonly Task[] =
@@ -261,7 +291,11 @@ const TASK_LIST: readonly Task[] =
     : VARIANT === 'heart20' || VARIANT === 'heart25'
       ? TASKS.map((t) => (t.id === 'selfcare' ? { ...t, xp: VARIANT === 'heart20' ? 20 : 25 } : t))
       : TASKS
-const STAGE_LIST = VARIANT === 'juv' ? STAGES.map((s) => (s.id === 'juvenile' ? { ...s, xpFrom: 1300 } : s)) : STAGES
+const STAGE_LIST = STAGES_ARG
+  ? STAGES.map((s, k) => (k === 0 ? s : { ...s, xpFrom: STAGES_ARG[k - 1]! }))
+  : VARIANT === 'juv'
+    ? STAGES.map((s) => (s.id === 'juvenile' ? { ...s, xpFrom: 1300 } : s))
+    : STAGES
 const TASK_BY_ID = new Map<string, Task>(TASK_LIST.map((t) => [t.id, t]))
 const task = (id: string): Task => {
   const t = TASK_BY_ID.get(id)
@@ -275,8 +309,10 @@ function topStat(stats: Record<StatId, number>): StatId {
   return best
 }
 
-function simulate(profile: Profile, seed: number): RunResult {
+function simulate(profile: Profile, seed: number, rewardCfg: RewardConfig = REWARD_CFG): RunResult {
   const rng = mulberry32(seed)
+  // Own stream for reward rolls, so the no-treat twin logs exactly the same tasks.
+  const rewardRng = mulberry32(seed ^ 0x7ea7)
   // Separate stream so app-open sampling can't shift the behaviour stream.
   const peekRng = mulberry32(seed ^ 0x5eed)
   const ctx: RunCtx = { gaps: [] }
@@ -316,6 +352,9 @@ function simulate(profile: Profile, seed: number): RunResult {
   const firstOpenMood = zeroMoods()
   const welcomeBack = { onLog: 0, onPeek: 0, peeksTotal: 0 }
   let stageRecords = 0
+  const treatDays: boolean[] = []
+  let treatXp = 0
+  let rareBandRolls = 0
 
   for (let i = 0; i < DAYS; i++) {
     const { y, m, d } = calendarDay(i)
@@ -370,9 +409,11 @@ function simulate(profile: Profile, seed: number): RunResult {
     attempts.sort((a, b) => a.ts - b.ts)
 
     let loggedToday = false
+    let treatToday = false
     for (const a of attempts) {
       const t = task(a.taskId)
-      const ev = createLogEvent(t, todays, DEFAULT_SETTINGS, a.ts, `e${id++}`, STAGE_LIST)
+      const roll = { chance: rewardRng(), pick: rewardRng() }
+      const ev = createLogEvent(t, todays, DEFAULT_SETTINGS, a.ts, `e${id++}`, STAGE_LIST, roll, rewardCfg)
       if (!ev) {
         refused[a.taskId] = (refused[a.taskId] ?? 0) + 1
         continue
@@ -402,15 +443,21 @@ function simulate(profile: Profile, seed: number): RunResult {
       }
       logs++
       loggedToday = true
-      // Projected reward roll.
-      const r = rng()
-      if (r < RARE_CHANCE) {
+      // Real reward on the event; rare band projected (no items yet).
+      if (ev.reward?.kind === 'treat') {
+        rewards.treats++
+        treatXp += ev.reward.bonusXp
+        treatToday = true
+      }
+      if (roll.chance < rewardCfg.rareChance) {
+        rareBandRolls++
         rewards.rares++
         rareDays.push(i + 1)
         newThingDays.push(i + 1)
-      } else if (r < RARE_CHANCE + TREAT_CHANCE) rewards.treats++
+      }
     }
     dailyLogDays.push(loggedToday)
+    treatDays.push(treatToday)
     const noon = londonInstant(y, m, d, 12, 0)
     if (events.length > 0) {
       const md = moodFor(events.filter((e) => e.timestamp <= noon || dayKey(e.timestamp) !== dayKey(noon)), noon, MOOD_LIST).mood
@@ -523,6 +570,9 @@ function simulate(profile: Profile, seed: number): RunResult {
     longestGapWithoutNew: maxGap(newThingDays),
     longestGapStagesOnly: stageDays.reduce((g, d, k) => (k ? Math.max(g, d - stageDays[k - 1]!) : g), 0),
     comebacks,
+    treatDays,
+    treatXp,
+    rareBandRolls,
   }
 }
 
@@ -542,6 +592,7 @@ console.log(`Tasks: ${TASK_LIST.map((t) => `${t.id} ${t.xp}xp/${t.stat}${t.rules
 
 for (const p of PROFILES) {
   const runs = Array.from({ length: RUNS }, (_, k) => simulate(p, BASE_SEED + k * 7919))
+  const twins = Array.from({ length: RUNS }, (_, k) => simulate(p, BASE_SEED + k * 7919, NO_TREATS))
   console.log(`=== ${p.name} ===`)
   const xp180 = runs.map((r) => r.xpByDay[179] ?? NaN)
   const xpEnd = runs.map((r) => r.xpByDay[DAYS - 1]!)
@@ -615,6 +666,72 @@ for (const p of PROFILES) {
   console.log(
     `Longest wait between two stage-ups (measured): median ${med(runs.map((r) => r.longestGapStagesOnly))} days`,
   )
+  console.log('-- treats (measured, real rollReward) --')
+  {
+    console.log('Paired with no-treat twin (same logs, treatChance 0): stage day median no-treat -> treats, days saved p10/median/p90')
+    for (const s of STAGE_LIST.slice(1)) {
+      const pairs = runs
+        .map((r, k) => [twins[k]!.stageDay[s.id], r.stageDay[s.id]] as const)
+        .filter((x): x is readonly [number, number] => x[0] != null && x[1] != null)
+      if (!pairs.length) continue
+      const saved = pairs.map(([a, b]) => a - b)
+      const twinDs = twins.map((r) => r.stageDay[s.id]).filter((x): x is number => x != null)
+      const ds = runs.map((r) => r.stageDay[s.id]).filter((x): x is number => x != null)
+      console.log(
+        `  ${s.name.padEnd(10)} ${med(twinDs)} -> ${med(ds)} | saved ${pct(saved, 10)} / ${med(saved)} / ${pct(saved, 90)} | reached ${r1((twinDs.length / RUNS) * 100)}% -> ${r1((ds.length / RUNS) * 100)}%`,
+      )
+    }
+    const xpUp = runs.map((r, k) => r.xpByDay[DAYS - 1]! / twins[k]!.xpByDay[DAYS - 1]! - 1)
+    console.log(`  XP boost from treats: median ${r1(med(xpUp) * 100)}%, p10 ${r1(pct(xpUp, 10) * 100)}%, p90 ${r1(pct(xpUp, 90) * 100)}%`)
+    const lookDiff = runs.filter((r, k) => r.lookEnd !== twins[k]!.lookEnd).length
+    const juvLookDiff = runs.filter((r, k) => r.lookAtJuvenile !== twins[k]!.lookAtJuvenile).length
+    console.log(
+      `  Look changes: ${r1(mean(twins.map((r) => r.lookChanges)))} -> ${r1(mean(runs.map((r) => r.lookChanges)))} per run | first look differs from twin ${r1((juvLookDiff / RUNS) * 100)}%, end look differs ${r1((lookDiff / RUNS) * 100)}%`,
+    )
+    const heartTwin = twins.filter((r) => r.looksSeen.includes('heart')).length
+    const heartReal = runs.filter((r) => r.looksSeen.includes('heart')).length
+    console.log(`  Ever a Heart look: ${r1((heartTwin / RUNS) * 100)}% -> ${r1((heartReal / RUNS) * 100)}%`)
+    // Frequency as felt by the user.
+    const perActive = mean(runs.map((r) => r.rewards.treats / Math.max(1, r.activeDays)))
+    const dayShare = mean(runs.map((r) => r.treatDays.filter(Boolean).length / Math.max(1, r.activeDays)))
+    const weeks = Math.floor(DAYS / 7)
+    const weeksWith = (r: RunResult) => {
+      let n = 0
+      let active = 0
+      for (let w = 0; w < weeks; w++) {
+        const slice = r.dailyLogDays.slice(w * 7, w * 7 + 7)
+        if (!slice.some(Boolean)) continue
+        active++
+        if (r.treatDays.slice(w * 7, w * 7 + 7).some(Boolean)) n++
+      }
+      return n / Math.max(1, active)
+    }
+    const drought = (r: RunResult) => {
+      // Longest run of consecutive active (log) days with no treat.
+      let g = 0
+      let cur = 0
+      r.dailyLogDays.forEach((l, i) => {
+        if (!l) return
+        if (r.treatDays[i]) cur = 0
+        else g = Math.max(g, ++cur)
+      })
+      return g
+    }
+    const droughtLogs = (r: RunResult) => r.logs / Math.max(1, r.rewards.treats)
+    console.log(
+      `  Treats/week ${r1(mean(runs.map((r) => r.rewards.treats)) / (DAYS / 7))} | per log day ${r1(perActive)} | log days with >=1 treat ${r1(dayShare * 100)}% | active weeks with >=1 treat ${r1(mean(runs.map(weeksWith)) * 100)}%`,
+    )
+    console.log(
+      `  Longest run of log days without a treat: median ${med(runs.map(drought))}, p90 ${pct(runs.map(drought), 90)} | logs per treat ${r1(mean(runs.map(droughtLogs)))} | bonus XP/run ${Math.round(mean(runs.map((r) => r.treatXp)))}`,
+    )
+    // A few named seeds, to show how different two players' journeys look.
+    const show = runs.slice(0, 6).map((r, k) => {
+      const ds = STAGE_LIST.slice(1).map((s) => `${r.stageDay[s.id] ?? '-'}(${twins[k]!.stageDay[s.id] ?? '-'})`)
+      return `    seed#${k}: ${ds.join(' ')} treats ${r.rewards.treats}`
+    })
+    console.log(`  Sample seeds, stage days with treats (no-treat twin): ${STAGE_LIST.slice(1).map((s) => s.name).join(' ')}`)
+    console.log(show.join('\n'))
+  }
   console.log('-- projections (spec only, no code yet) --')
   const per180 = (n: number) => r1((n / DAYS) * 180)
   console.log(

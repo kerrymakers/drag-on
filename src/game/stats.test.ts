@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { STATS } from '../config/stats'
 import { TASKS } from '../config/tasks'
-import { at, log, undo } from '../testing/helpers'
+import { at, log, treatLog, undo } from '../testing/helpers'
 import { totalXp } from './state'
 import { statTotals } from './stats'
 import type { GameEvent, StatId, Task } from './types'
@@ -20,6 +20,13 @@ describe('statTotals', () => {
     const totals = statTotals([], TASKS, STATS)
     expect(totals.map((s) => s.stat.id)).toEqual(['strength', 'discipline', 'wisdom', 'heart'])
     expect(totals.every((s) => s.xp === 0)).toBe(true)
+  })
+
+  it("counts a treat's bonus under the task's stat, and drops it on undo", () => {
+    const treat = treatLog(task('read'), NOON + 1000, 13)
+    const events: GameEvent[] = [log(task('gym'), NOON), treat]
+    expect(asRecord(events)).toMatchObject({ strength: task('gym').xp, wisdom: task('read').xp + 13 })
+    expect(asRecord([...events, undo(treat, NOON + 2000)])).toMatchObject({ wisdom: 0 })
   })
 
   it("totals each log's saved XP under its task's stat", () => {

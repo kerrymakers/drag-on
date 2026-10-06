@@ -1,6 +1,7 @@
 // When the dragon first reached each stage, replayed from the event log.
 
 import { dayKey } from './day'
+import { logXp } from './rewards'
 import { activeLogs, stageFor } from './state'
 import type { GameEvent, Stage } from './types'
 
@@ -33,7 +34,7 @@ export function stageHistory(events: readonly GameEvent[], stages: readonly Stag
   let held: Stage = first
 
   for (const log of logs) {
-    xp += log.xpAwarded
+    xp += logXp(log)
     const recorded = log.stageReached === undefined ? undefined : byId.get(log.stageReached)
     if (recorded && recorded.xpFrom > held.xpFrom) held = recorded
     const byXp = stageFor(xp, sorted)
