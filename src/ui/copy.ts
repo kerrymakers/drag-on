@@ -112,23 +112,81 @@ export function progressLabel(stageId: string, xpToNext: number, nextName: strin
 /**
  * The toast after a log, in two parts so only the task name ever shortens to "…".
  * A treat shows the total ("Treat! +38 XP · Read"); the floats carry the breakdown.
+ * A find says so ("Found something! +25 XP · Read"); items are worth no XP.
  */
 export interface LoggedToast {
   lead: string
   name: string
 }
-export const loggedToast = (xp: number, taskName: string, treatBonus = 0): LoggedToast => ({
-  lead: treatBonus > 0 ? `Treat! +${xp + treatBonus} XP · ` : `+${xp} XP · `,
+export const loggedToast = (xp: number, taskName: string, treatBonus = 0, foundItem = false): LoggedToast => ({
+  lead: foundItem
+    ? `Found something! +${xp} XP · `
+    : treatBonus > 0
+      ? `Treat! +${xp + treatBonus} XP · `
+      : `+${xp} XP · `,
   name: taskName,
 })
 /** The whole toast as one string. */
-export const LOGGED = (xp: number, taskName: string, treatBonus = 0): string => {
-  const { lead, name } = loggedToast(xp, taskName, treatBonus)
+export const LOGGED = (xp: number, taskName: string, treatBonus = 0, foundItem = false): string => {
+  const { lead, name } = loggedToast(xp, taskName, treatBonus, foundItem)
   return lead + name
 }
 /** The second float on a treat, e.g. "+13 treat". */
 export const TREAT_FLOAT = (bonus: number) => `+${bonus} treat`
 export const UNDONE = 'Undone'
+/** Undoing a log that found something: the find goes back, gently. */
+export const UNDONE_ITEM = 'Undone. That find is hiding again for now.'
+export const undoneToast = (hadItem: boolean): string => (hadItem ? UNDONE_ITEM : UNDONE)
+
+/** The "found something" card: a little heading, the item's name, and a line from the dragon. */
+export const ITEM_FOUND = {
+  heading: 'Found something!',
+  lines: [
+    'Ooh, look what I found! Can we keep it?',
+    'Look what turned up! I love it.',
+    "I found this just for us. Isn't it lovely?",
+    'Ooh, treasure! This is going in my collection.',
+  ],
+  button: 'Lovely!',
+  /** Under the line: where it went. */
+  saved: 'Added to your collection',
+} as const
+
+/** The dragon's line for a find. Fixed per item, so the same find always reads the same. */
+export function itemFoundLine(itemId: string): string {
+  const lines = ITEM_FOUND.lines
+  let hash = 0
+  for (const ch of itemId) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0
+  return lines[hash % lines.length] ?? lines[0]
+}
+
+/** Words on the Collection screen. Unfound items are a plain "?", never named. */
+export const COLLECTION = {
+  title: 'Collection',
+  /** Before anything has been found. Warm, never a nudge. */
+  empty: 'Nothing yet, your dragon is keeping an eye out.',
+  /** Some found, more to come. */
+  some: 'Every find is a little surprise.',
+  /** Everything found. */
+  all: 'Every one found! Your dragon is delighted.',
+  unknown: '?',
+  unknownLabel: 'Not found yet',
+} as const
+
+/** "3 of 18 found". */
+export const collectionCount = (found: number, total: number): string => `${found} of ${total} found`
+
+/** The line under the count. */
+export function collectionLine(found: number, total: number): string {
+  if (found <= 0) return COLLECTION.empty
+  return found >= total ? COLLECTION.all : COLLECTION.some
+}
+
+/** A found tile's accessible name, e.g. "Tiny book, found 5 Oct" or "Tiny book, found today". */
+export function foundTileLabel(name: string, friendly: string): string {
+  const when = friendly === 'Today' || friendly === 'Yesterday' ? friendly.toLowerCase() : friendly
+  return `${name}, found ${when}`
+}
 
 type NoticeKind = Extract<LoadNotice, 'backupFailed' | 'newerVersion' | 'unavailable'> | 'saveFailed'
 

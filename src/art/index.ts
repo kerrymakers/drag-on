@@ -8,6 +8,7 @@ import { hatchlingSvg } from './hatchling'
 import { knownLook, type EvolutionLook } from './looks'
 
 export { EVOLVED_LOOKS, type EvolutionLook } from './looks'
+export { hasItemArt, itemSvg, unknownItemSvg } from './items'
 
 /** Visual only, not balancing: how far toward hatching the egg shows each crack. */
 export const CRACK_SMALL_AT = 0.5

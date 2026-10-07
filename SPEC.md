@@ -113,12 +113,15 @@ Each log rolls for a surprise. The result is decided at the moment of logging an
 - 20% chance: a treat (small bonus XP and a happy animation)
 - 3% chance: a rare item (a cosmetic or collectible: hats, scarves, a tiny book, a gem)
 - Items go into a collection screen and can be equipped on the dragon.
+- Bad-luck protection: if the last 30 logs (`ITEM_PITY_LOGS`) since the last item found, or since the start, brought no item, the next log brings one whatever the roll (instead of any treat). It's worked out from the event log, so undoing a log undoes its effect, and it does nothing once every item is found. Once every item is found, a roll in the rare band gives a treat instead.
+
+Added 2026-10-07 after simulation: at 3% with 12 items most users went 6 to 7 weeks without an item at some point; with 18 items and a 30-log rule the longest gap is about 3 weeks and the collection completes around day 204 for a typical user, about 6 weeks after Elder (around day 192 once first-time streak milestone items arrive in Milestone 5).
 
 ### Streaks
 
 - Show the current streak for each task and an overall "days with at least one log" streak.
 - I earn one streak freeze per 7-day streak (maximum 2 held). A freeze is used automatically to protect a streak when I miss a day.
-- Streak milestones (7, 30, 100 days) give a guaranteed rare item.
+- Streak milestones (7, 30, 100 days) give a guaranteed rare item, the first time each milestone is reached only.
 
 ## Data model
 
@@ -142,7 +145,7 @@ Settings include "Export data" (downloads a JSON file) and "Import data". Browse
 
 1. Home: the dragon front and centre with mood and stage, today's tasks as large tap targets underneath, and the XP bar to the next stage.
 2. Dragon: stats, stage history and equipped items.
-3. Collection: items found, with locked silhouettes for undiscovered ones.
+3. Collection: items found, with a plain "?" tile for each one not found yet (decided 2026-10-07: items stay a surprise, so no silhouettes).
 4. History: a simple calendar or list of what I logged each day, and streaks.
 5. Settings: edit tasks, wake-up schedule (per day), dragon name, export/import.
 

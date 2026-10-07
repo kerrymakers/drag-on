@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { EVOLVES_AT_STAGE } from '../config/evolution'
+import { ITEMS } from '../config/items'
 import { STAGES } from '../config/stages'
 import { STATS } from '../config/stats'
 import { adultSvg, elderSvg, juvenileSvg, whelpSvg } from './grown'
 import { hatchlingSvg } from './hatchling'
 import { CRACK_BIG_AT, CRACK_SMALL_AT, crackLevel, hasLookArt } from './index'
 import { eggSvg } from './egg'
+import { hasItemArt, itemSvg, unknownItemSvg } from './items'
 import { EVOLVED_LOOKS, knownLook } from './looks'
 import { mirror } from './parts'
 
@@ -155,5 +157,30 @@ describe('evolution looks', () => {
     expect(knownLook('neutral')).toBe('neutral')
     expect(knownLook('charisma')).toBe('neutral')
     expect(knownLook('wisdom')).toBe('wisdom')
+  })
+})
+
+describe('item art', () => {
+  it('has a drawing for every item in config, tagged with its id', () => {
+    for (const item of ITEMS) {
+      expect(hasItemArt(item.id), item.id).toBe(true)
+      const svg = itemSvg(item.id)
+      expect(svg, item.id).toContain(`data-item="${item.id}"`)
+      expect(svg, item.id).toContain('viewBox="0 0 64 64"')
+      expect(svg, item.id).toContain('aria-hidden="true"')
+    }
+  })
+
+  it('draws the soft "?" for an id it has no art for', () => {
+    for (const id of ['nope', '', 'toString', '__proto__', 'constructor']) {
+      expect(hasItemArt(id), id).toBe(false)
+      expect(itemSvg(id), id).toBe(unknownItemSvg())
+    }
+    expect(unknownItemSvg()).toContain('>?<')
+  })
+
+  it('draws each item differently', () => {
+    const bodies = ITEMS.map((i) => itemSvg(i.id).replace(/data-item="[^"]*"/, ''))
+    expect(new Set(bodies).size).toBe(ITEMS.length)
   })
 })

@@ -1,4 +1,4 @@
-// The bottom tab bar and hash routing (#/ and #/dragon, GitHub Pages friendly).
+// The bottom tab bar and hash routing (#/, #/dragon and #/collection, GitHub Pages friendly).
 //
 // History works like a phone app's tabs: going from Home to another tab pushes one
 // history entry, and moving between other tabs replaces it. So Android's back button
@@ -6,7 +6,7 @@
 
 import { ICONS, type IconName } from './icons'
 
-export type Route = 'home' | 'dragon'
+export type Route = 'home' | 'dragon' | 'collection'
 
 interface Tab {
   route: Route
@@ -19,6 +19,7 @@ interface Tab {
 export const TABS: readonly Tab[] = [
   { route: 'home', hash: '#/', label: 'Home', icon: 'home' },
   { route: 'dragon', hash: '#/dragon', label: 'Dragon', icon: 'dragon' },
+  { route: 'collection', hash: '#/collection', label: 'Collection', icon: 'collection' },
 ]
 
 /** The route for a location hash. Anything unknown (or empty) is Home. */

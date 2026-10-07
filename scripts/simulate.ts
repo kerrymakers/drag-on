@@ -18,13 +18,17 @@
 //     counted by the real totalXp/statTotals (logXp). Reward rolls use their own RNG
 //     stream, so each run is paired with a no-treat twin (same behaviour, treatChance 0)
 //     to measure exactly how much treats change stage days and looks.
+//   - rare items: the real rollReward() picks among the items not found yet (config/items.ts),
+//     and the real foundItems() counts them (checked at the end of every run). The days
+//     items are found and the day the collection is complete are reported. Once every item
+//     is found, a rare roll gives a treat (also real code).
 //
 // PROJECTED (the spec describes these but there is no code yet; numbers here
 // are this script's reading of SPEC.md, not the app's behaviour):
-//   - rare items (rolls landing in the real rare band are counted; items arrive in slice 2),
-//     overall streak, streak freezes (1 per 7-day streak, max 2), milestone items (7/30/100).
+//   - overall streak, streak freezes (1 per 7-day streak, max 2), milestone items (7/30/100).
+//     Milestone items are counted separately and don't come out of config/items.ts here.
 
-import { createLogEvent, dayKey, dragonStage, evolutionLook, lookChange, moodFor, statTotals, totalXp, weekdayOf } from '../src/game'
+import { createLogEvent, rollReward, dayKey, dragonStage, evolutionLook, foundItems, lookChange, moodFor, rewardItemId, statTotals, totalXp, weekdayOf } from '../src/game'
 import type { Evolution, GameEvent, LogEvent, MoodId, StatId, Task } from '../src/game'
 import { EVOLVES_AT_STAGE, LOOK_CHANGE_MARGIN } from '../src/config/evolution'
 import { MOODS } from '../src/config/mood'
@@ -47,6 +51,17 @@ const RUNS = Number(process.argv[3] ?? 300)
 //   --margin=N       look rule what-if: overrides LOOK_CHANGE_MARGIN with N% (in memory only)
 //   --profiles=a,b   only run profiles whose key is listed (see PROFILES)
 //   --variant=mood35  sleepy from 3 days, grumpy from 5 (instead of config/mood.ts)
+// Item pacing what-ifs (in memory only):
+//   --rare=N         rare chance N% (overrides config)
+//   --items=N        item pool of N (the real items, trimmed or padded with unnamed sim-only ids)
+//   Bad-luck protection is real code (rollReward, config ITEM_PITY_LOGS) and on by default.
+//   --pity=Nl        what-if: the real rule with N logs instead of the config value
+//   --pity=Nd        what-if (sim only): real rule off; if no item for N game days, the next log brings one
+//   --pity=off       real rule off
+//   --milestones=first|repeat  PROJECTION of M5: streak milestones (7/30/100) take a guaranteed
+//                    item from the same pool (via the real rollReward with a forced rare roll).
+//                    first = each milestone once ever; repeat = every time a streak reaches it.
+//   --no-twins       skip the no-treat twin runs (faster; treat comparison lines are skipped)
 const VARIANT = process.argv.find((a) => a.startsWith('--variant='))?.split('=')[1] ?? null
 const EXACT = process.argv.includes('--exact')
 const MARGIN_ARG = process.argv.find((a) => a.startsWith('--margin='))?.split('=')[1]
@@ -71,8 +86,25 @@ const REWARD_CFG: RewardConfig = {
   treatChance: TREAT_ARG === undefined ? REWARDS.treatChance : Number(TREAT_ARG) / 100,
   treatBonusShare: BONUS_ARG === undefined ? REWARDS.treatBonusShare : Number(BONUS_ARG) / 100,
 }
+const RARE_ARG = process.argv.find((a) => a.startsWith('--rare='))?.split('=')[1]
+const ITEMS_ARG = process.argv.find((a) => a.startsWith('--items='))?.split('=')[1]
+if (RARE_ARG !== undefined) REWARD_CFG.rareChance = Number(RARE_ARG) / 100
+if (ITEMS_ARG !== undefined) {
+  const n = Number(ITEMS_ARG)
+  const real = REWARDS.items.slice(0, n)
+  const pad = Array.from({ length: Math.max(0, n - real.length) }, (_, k) => ({ ...REWARDS.items[0]!, id: `sim-extra-${k}` }))
+  REWARD_CFG.items = [...real, ...pad]
+}
+const PITY_ARG = process.argv.find((a) => a.startsWith('--pity='))?.split('=')[1]
+// Only the days rule is simulated here; the logs rule is the real one, set on the config.
+const PITY_DAYS = PITY_ARG?.endsWith('d') ? Number(PITY_ARG.slice(0, -1)) : null
+if (PITY_ARG === 'off' || PITY_DAYS !== null) REWARD_CFG.itemPityLogs = 0
+else if (PITY_ARG?.endsWith('l')) REWARD_CFG.itemPityLogs = Number(PITY_ARG.slice(0, -1))
+else if (PITY_ARG !== undefined) throw new Error(`--pity=${PITY_ARG}: use Nl, Nd or off`)
+const MILESTONE_MODE = (process.argv.find((a) => a.startsWith('--milestones='))?.split('=')[1] ?? null) as 'first' | 'repeat' | null
+const NO_TWINS = process.argv.includes('--no-twins')
+if (EXACT && MILESTONE_MODE) throw new Error('--exact is not supported with --milestones')
 const NO_TREATS: RewardConfig = { ...REWARD_CFG, treatChance: 0 }
-const RARE_CHANCE = REWARD_CFG.rareChance
 // Stage thresholds what-if: --stages=100,500,1300,3500,7000
 const STAGES_ARG = process.argv.find((a) => a.startsWith('--stages='))?.split('=')[1]?.split(',').map(Number)
 const MILESTONES = [7, 30, 100]
@@ -265,7 +297,8 @@ interface RunResult {
   activeDays: number
   dailyLogDays: boolean[]
   rewards: { treats: number; rares: number; milestoneItems: number; milestoneFirsts: number }
-  rareDays: number[]
+  rareDays: number[] // game days (1-based) an item was found, one entry per item
+  collectionDay: number | null // game day the last item was found
   streak: { longest: number; freezesEarned: number; freezesUsed: number; breaks: number }
   mood: Record<MoodId, number> // moodFor at 12:00 each day (after the first log)
   firstOpenMood: Record<MoodId, number> // moodFor just before the first log of each log day
@@ -277,6 +310,8 @@ interface RunResult {
   treatDays: boolean[] // per day: at least one treat
   treatXp: number
   rareBandRolls: number
+  milestoneFinds: number // items taken from the pool by projected milestones
+  pityFinds: number // items brought by bad-luck protection
 }
 
 const TASK_LIST: readonly Task[] =
@@ -344,6 +379,14 @@ function simulate(profile: Profile, seed: number, rewardCfg: RewardConfig = REWA
   let id = 0
   const rewards = { treats: 0, rares: 0, milestoneItems: 0, milestoneFirsts: 0 }
   const rareDays: number[] = []
+  let collectionDay: number | null = null
+  // Fast path: the rare roll needs to know what's been found, so each find is carried
+  // forward as a 0-XP log (the last carried log holds the XP).
+  const carriedFinds: LogEvent[] = []
+  // Fast path: the real bad-luck protection counts the logs since the last find, so
+  // those are carried forward too, as 0-XP logs (only the count matters, up to the threshold).
+  const sinceFind: LogEvent[] = []
+  const sinceCap = Math.max(1, rewardCfg.itemPityLogs)
   const newThingDays: number[] = [0]
   const stageDays: number[] = [0]
   const milestonesSeen = new Set<number>()
@@ -355,24 +398,41 @@ function simulate(profile: Profile, seed: number, rewardCfg: RewardConfig = REWA
   const treatDays: boolean[] = []
   let treatXp = 0
   let rareBandRolls = 0
+  let milestoneFinds = 0
+  let pityFinds = 0
+  let lastFindDay = 0 // game day (1-based) of the last find; 0 = start
+  let logsSinceFind = 0
+  // Inline projected streak, only used for --milestones (mirrors the post-loop projection).
+  const ms = { streak: 0, freezes: 0, seen: new Set<number>() }
+  const itemsLeft = () => rewards.rares < rewardCfg.items.length
+  const recordFind = (itemId: string, day: number, ts: number) => {
+    rewards.rares++
+    rareDays.push(day)
+    newThingDays.push(day)
+    lastFindDay = day
+    logsSinceFind = 0
+    sinceFind.length = 0
+    if (rewards.rares === rewardCfg.items.length) collectionDay = day
+    carriedFinds.push({ id: `find-${itemId}`, type: 'log', taskId: '__find__', timestamp: ts, xpAwarded: 0, reward: { kind: 'item', itemId } })
+  }
 
   for (let i = 0; i < DAYS; i++) {
     const { y, m, d } = calendarDay(i)
     const plan = profile.plan(i, rng, ctx)
     // Fast path: the rules only look at today's logs, and the stage logic only needs total
     // XP and the highest recorded stage. So instead of the full log we pass one synthetic
-    // "carry" log from yesterday holding exactly those two values, plus today's logs.
+    // set of carried logs from earlier days holding exactly those two values (on the last
+    // one), the finds and the logs since the last find (for rollReward), plus today's logs.
     // --exact passes the full log instead, to check the two agree.
     const yKey = calendarDay(i - 1)
-    const carry: LogEvent = {
-      id: 'carry',
-      type: 'log',
-      taskId: '__carry__',
-      timestamp: londonInstant(yKey.y, yKey.m, yKey.d, 12, 0),
-      xpAwarded: totalXp(events),
-      stageReached: dragonStage(events, STAGE_LIST).id,
-    }
-    const todays: GameEvent[] = EXACT ? events : [carry]
+    const yNoon = londonInstant(yKey.y, yKey.m, yKey.d, 12, 0)
+    // The carried XP and highest stage ride on the last carried log, so the carried logs
+    // stay in append order (finds, then the logs since the last find) for the pity count.
+    const carried: GameEvent[] = [...carriedFinds, ...sinceFind]
+    const last = carried.at(-1) as LogEvent | undefined
+    if (last) carried[carried.length - 1] = { ...last, xpAwarded: totalXp(events), stageReached: dragonStage(events, STAGE_LIST).id }
+    else if (events.length > 0) throw new Error('carried nothing after a log')
+    const todays: GameEvent[] = EXACT ? events : carried
     const attempts: Array<{ taskId: string; ts: number }> = []
     if (plan) {
       const target = DEFAULT_SETTINGS.wakeSchedule[weekdayOf(dayKey(londonInstant(y, m, d, 12, 0)))]
@@ -413,6 +473,14 @@ function simulate(profile: Profile, seed: number, rewardCfg: RewardConfig = REWA
     for (const a of attempts) {
       const t = task(a.taskId)
       const roll = { chance: rewardRng(), pick: rewardRng() }
+      let forced = false
+      if (PITY_DAYS !== null && itemsLeft()) {
+        const due = i + 1 - lastFindDay > PITY_DAYS
+        if (due && roll.chance >= rewardCfg.rareChance) {
+          roll.chance = 0
+          forced = true
+        }
+      }
       const ev = createLogEvent(t, todays, DEFAULT_SETTINGS, a.ts, `e${id++}`, STAGE_LIST, roll, rewardCfg)
       if (!ev) {
         refused[a.taskId] = (refused[a.taskId] ?? 0) + 1
@@ -443,17 +511,41 @@ function simulate(profile: Profile, seed: number, rewardCfg: RewardConfig = REWA
       }
       logs++
       loggedToday = true
-      // Real reward on the event; rare band projected (no items yet).
+      // Real rewards on the event.
       if (ev.reward?.kind === 'treat') {
         rewards.treats++
         treatXp += ev.reward.bonusXp
         treatToday = true
       }
-      if (roll.chance < rewardCfg.rareChance) {
-        rareBandRolls++
-        rewards.rares++
-        rareDays.push(i + 1)
-        newThingDays.push(i + 1)
+      if (roll.chance < rewardCfg.rareChance && !forced) rareBandRolls++
+      logsSinceFind++
+      const itemId = rewardItemId(ev)
+      if (itemId !== null) {
+        // Forced by the days what-if, or brought by the real protection outside the rare band.
+        if (forced || !(roll.chance < rewardCfg.rareChance)) pityFinds++
+        recordFind(itemId, i + 1, yNoon)
+      } else {
+        sinceFind.push({ id: `since-${ev.id}`, type: 'log', taskId: '__since__', timestamp: ev.timestamp, xpAwarded: 0 })
+        if (sinceFind.length > sinceCap) sinceFind.shift()
+      }
+    }
+    if (MILESTONE_MODE) {
+      // PROJECTED M5: overall streak with freezes; a milestone takes an item from the pool.
+      if (loggedToday) {
+        ms.streak++
+        if (ms.streak % FREEZE_EVERY === 0 && ms.freezes < FREEZE_MAX) ms.freezes++
+        if (MILESTONES.includes(ms.streak) && (MILESTONE_MODE === 'repeat' || !ms.seen.has(ms.streak))) {
+          ms.seen.add(ms.streak)
+          newThingDays.push(i + 1)
+          const res = rollReward(task('walk'), carriedFinds, { chance: 0, pick: rewardRng() }, rewardCfg)
+          if (res?.kind === 'item') {
+            milestoneFinds++
+            recordFind(res.itemId, i + 1, yNoon)
+          }
+        }
+      } else if (ms.streak > 0) {
+        if (ms.freezes > 0) ms.freezes--
+        else ms.streak = 0
       }
     }
     dailyLogDays.push(loggedToday)
@@ -485,6 +577,10 @@ function simulate(profile: Profile, seed: number, rewardCfg: RewardConfig = REWA
   // Check the running totals against the real statTotals over the whole log.
   for (const st of statTotals(events, TASK_LIST, STATS))
     if (st.xp !== stats[st.stat.id]) throw new Error(`statTotals mismatch for ${st.stat.id}`)
+  if (foundItems(events, rewardCfg.items).length + milestoneFinds !== rewards.rares)
+    throw new Error('foundItems disagrees with the finds counted')
+  if (new Set(carriedFinds.map((f) => f.id)).size !== carriedFinds.length || rewards.rares > rewardCfg.items.length)
+    throw new Error('an item was found twice')
   if (juvenileDayByLook !== null && juvenileDayByLook !== stageDay['juvenile'])
     throw new Error('first look did not appear on the Juvenile day')
 
@@ -505,7 +601,7 @@ function simulate(profile: Profile, seed: number, rewardCfg: RewardConfig = REWA
       }
       if (MILESTONES.includes(streak)) {
         rewards.milestoneItems++
-        newThingDays.push(i + 1)
+        if (!MILESTONE_MODE) newThingDays.push(i + 1)
         if (!milestonesSeen.has(streak)) {
           milestonesSeen.add(streak)
           rewards.milestoneFirsts++
@@ -562,6 +658,7 @@ function simulate(profile: Profile, seed: number, rewardCfg: RewardConfig = REWA
     dailyLogDays,
     rewards,
     rareDays,
+    collectionDay,
     streak: { longest, freezesEarned, freezesUsed, breaks },
     mood,
     firstOpenMood,
@@ -573,6 +670,8 @@ function simulate(profile: Profile, seed: number, rewardCfg: RewardConfig = REWA
     treatDays,
     treatXp,
     rareBandRolls,
+    milestoneFinds,
+    pityFinds,
   }
 }
 
@@ -587,12 +686,17 @@ const r1 = (n: number) => Math.round(n * 10) / 10
 
 console.log(`Drag-on balance sim: ${DAYS} days x ${RUNS} runs per profile, base seed ${BASE_SEED}`)
 console.log(`Variant: ${VARIANT ?? 'none (real config)'}; look margin ${r1(MARGIN * 100)}%${MARGIN_ARG === undefined ? ' (config)' : ' (what-if)'}, evolves at ${EVOLVES_AT_STAGE}`)
+console.log(
+  `Rewards: rare ${r1(REWARD_CFG.rareChance * 100)}%, treat ${r1(REWARD_CFG.treatChance * 100)}%, ${REWARD_CFG.items.length} items, bad-luck protection ${
+    REWARD_CFG.itemPityLogs >= 1 ? `after ${REWARD_CFG.itemPityLogs} logs` : PITY_DAYS !== null ? `after ${PITY_DAYS} days (sim what-if)` : 'off'
+  }${MILESTONE_MODE ? `, milestone items ${MILESTONE_MODE} (projection)` : ''}`,
+)
 console.log(`Stages: ${STAGE_LIST.map((s) => `${s.name} ${s.xpFrom}`).join(', ')}`)
 console.log(`Tasks: ${TASK_LIST.map((t) => `${t.id} ${t.xp}xp/${t.stat}${t.rules.kind === 'maxPerDay' ? ` max${t.rules.max}` : ''}`).join(', ')}\n`)
 
 for (const p of PROFILES) {
   const runs = Array.from({ length: RUNS }, (_, k) => simulate(p, BASE_SEED + k * 7919))
-  const twins = Array.from({ length: RUNS }, (_, k) => simulate(p, BASE_SEED + k * 7919, NO_TREATS))
+  const twins = NO_TWINS ? runs : Array.from({ length: RUNS }, (_, k) => simulate(p, BASE_SEED + k * 7919, NO_TREATS))
   console.log(`=== ${p.name} ===`)
   const xp180 = runs.map((r) => r.xpByDay[179] ?? NaN)
   const xpEnd = runs.map((r) => r.xpByDay[DAYS - 1]!)
@@ -667,7 +771,7 @@ for (const p of PROFILES) {
     `Longest wait between two stage-ups (measured): median ${med(runs.map((r) => r.longestGapStagesOnly))} days`,
   )
   console.log('-- treats (measured, real rollReward) --')
-  {
+  if (!NO_TWINS) {
     console.log('Paired with no-treat twin (same logs, treatChance 0): stage day median no-treat -> treats, days saved p10/median/p90')
     for (const s of STAGE_LIST.slice(1)) {
       const pairs = runs
@@ -732,19 +836,73 @@ for (const p of PROFILES) {
     console.log(`  Sample seeds, stage days with treats (no-treat twin): ${STAGE_LIST.slice(1).map((s) => s.name).join(' ')}`)
     console.log(show.join('\n'))
   }
+  console.log(`-- rare items (measured, real rollReward + foundItems, ${REWARD_CFG.items.length} items) --`)
+  {
+    const total = REWARD_CFG.items.length
+    const dayOf = (r: RunResult, k: number) => r.rareDays[k] ?? null
+    const fmtDays = (ds: number[], n: number) =>
+      ds.length ? `${pct(ds, 10)} / ${med(ds)} / ${pct(ds, 90)} (${r1((ds.length / n) * 100)}% by day ${DAYS})` : `- (none by day ${DAYS})`
+    console.log('  Day the Nth item is found (p10 / median / p90):')
+    for (const k of [0, 1, 2, Math.floor(total / 2) - 1, total - 2, total - 1].filter((v, j, a) => v >= 0 && a.indexOf(v) === j)) {
+      const ds = runs.map((r) => dayOf(r, k)).filter((x): x is number => x != null)
+      console.log(`    #${String(k + 1).padEnd(3)} ${fmtDays(ds, RUNS)}`)
+    }
+    const complete = runs.map((r) => r.collectionDay).filter((x): x is number => x != null)
+    console.log(`  Collection complete: ${fmtDays(complete, RUNS)}`)
+    const by = (d: number) => runs.map((r) => r.rareDays.filter((x) => x <= d).length)
+    console.log(
+      `  Items found by day 30 / 90 / 180 / ${DAYS} (median): ${[30, 90, 180, DAYS].map((d) => med(by(Math.min(d, DAYS)))).join(' / ')} of ${total}`,
+    )
+    const gaps = runs.flatMap((r) => r.rareDays.map((d, k) => d - (k === 0 ? 0 : r.rareDays[k - 1]!)))
+    if (gaps.length)
+      console.log(`  Days between finds: p10 ${pct(gaps, 10)}, median ${med(gaps)}, p90 ${pct(gaps, 90)}, mean ${r1(mean(gaps))}`)
+    // Dry spells, as felt: within the first min(180, DAYS) days and before the collection is complete.
+    const H = Math.min(180, DAYS)
+    const itemDrought = (r: RunResult) => {
+      const end = Math.min(H, r.collectionDay ?? H)
+      const ds = [0, ...r.rareDays.filter((d) => d <= end), end]
+      let g = 0
+      for (let k = 1; k < ds.length; k++) g = Math.max(g, ds[k]! - ds[k - 1]!)
+      return g
+    }
+    const dr = runs.map(itemDrought)
+    console.log(`  Longest gap with no item, days 1-${H} (until complete): p10 ${pct(dr, 10)}, median ${med(dr)}, p90 ${pct(dr, 90)} | runs with a 30+ day gap ${r1((dr.filter((g) => g >= 30).length / RUNS) * 100)}%, 45+ ${r1((dr.filter((g) => g >= 45).length / RUNS) * 100)}%`)
+    // "Something new every week or so": share of 7-day weeks (days 1-H) with a stage-up or a find.
+    const weekly = (r: RunResult, withItems: boolean) => {
+      const days = new Set<number>([...Object.values(r.stageDay).filter((d): d is number => d != null && d > 0), ...(withItems ? r.rareDays : [])])
+      let n = 0
+      const W = Math.floor(H / 7)
+      for (let w = 0; w < W; w++) for (let d = w * 7 + 1; d <= w * 7 + 7; d++) if (days.has(d)) { n++; break }
+      return n / W
+    }
+    const fortnightMax = (r: RunResult) => {
+      const days = [0, ...new Set([...Object.values(r.stageDay).filter((d): d is number => d != null && d > 0), ...r.rareDays].filter((d) => d <= H))].sort((a, b) => a - b)
+      days.push(H)
+      let g = 0
+      for (let k = 1; k < days.length; k++) g = Math.max(g, days[k]! - days[k - 1]!)
+      return g
+    }
+    const fm = runs.map(fortnightMax)
+    console.log(`  Weeks (days 1-${H}) with a stage-up or item: ${r1(mean(runs.map((r) => weekly(r, true))) * 100)}% (stages alone ${r1(mean(runs.map((r) => weekly(r, false))) * 100)}%) | longest stretch with neither: median ${med(fm)}, p90 ${pct(fm, 90)}`)
+    const coll = runs.map((r) => r.collectionDay ?? DAYS + 1)
+    const elder = runs.map((r) => r.stageDay['elder'] ?? DAYS + 1)
+    const afterElder = runs.map((r, k) => coll[k]! - elder[k]!)
+    console.log(`  Collection complete minus Elder day: p10 ${pct(afterElder, 10)}, median ${med(afterElder)}, p90 ${pct(afterElder, 90)} (negative = complete before Elder)`)
+    if (MILESTONE_MODE || REWARD_CFG.itemPityLogs >= 1 || PITY_DAYS !== null)
+      console.log(`  Items per run from milestones ${r1(mean(runs.map((r) => r.milestoneFinds)))}, from bad-luck protection ${r1(mean(runs.map((r) => r.pityFinds)))}`)
+    const rareAfter = mean(runs.map((r) => r.rareBandRolls - (r.rewards.rares - r.milestoneFinds - r.pityFinds)))
+    console.log(`  Rare-band rolls after the collection was complete (became treats): ${r1(rareAfter)}/run`)
+    console.log('  Sample seeds, item days:')
+    console.log(runs.slice(0, 4).map((r, k) => `    seed#${k}: ${r.rareDays.join(', ') || '-'}${r.collectionDay ? ` (complete day ${r.collectionDay})` : ''}`).join('\n'))
+  }
   console.log('-- projections (spec only, no code yet) --')
   const per180 = (n: number) => r1((n / DAYS) * 180)
   console.log(
-    `Per 180 days: treats ${per180(mean(runs.map((r) => r.rewards.treats)))}, rare drops ${per180(
+    `Per 180 days: treats ${per180(mean(runs.map((r) => r.rewards.treats)))}, items found ${per180(
       mean(runs.map((r) => r.rewards.rares)),
     )}, milestone items ${per180(mean(runs.map((r) => r.rewards.milestoneItems)))} (first-time ${r1(
       mean(runs.map((r) => r.rewards.milestoneFirsts)),
     )} over ${DAYS}d)`,
-  )
-  console.log(
-    `First rare item day: median ${med(runs.map((r) => r.rareDays[0] ?? DAYS + 1))}; avg gap between rares ${r1(
-      DAYS / Math.max(1, mean(runs.map((r) => r.rewards.rares))),
-    )} days`,
   )
   console.log(
     `Longest overall streak: median ${med(runs.map((r) => r.streak.longest))}, p90 ${pct(

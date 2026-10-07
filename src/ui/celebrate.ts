@@ -6,6 +6,7 @@ import { react, renderDragon } from '../art'
 import type { LookId } from '../game/evolution'
 import type { Stage, StatId } from '../game/types'
 import { celebrationCopy } from './copy'
+import { openOverlay } from './overlay'
 
 /**
  * How each stage arrives. Built from shared pieces (the from/to layers, a glow and
@@ -24,9 +25,6 @@ const REVEALS: Record<string, RevealKind> = {
 
 const SPARKS = 10
 
-/** Ignore taps this soon after opening, so a quick double-tap on a task doesn't dismiss it unseen. */
-const CLOSE_GUARD_MS = 600
-
 export interface CelebrateOptions {
   /** The stage before and after. The same stage means a change of look only (a gentle shimmer). */
   from: Stage
@@ -39,8 +37,8 @@ export interface CelebrateOptions {
   reducedMotion: boolean
   /** Made inert while the dialog is open, so focus and taps can't reach it. */
   background?: HTMLElement | null
-  /** Where focus goes when the dialog closes. */
-  returnFocus?: () => HTMLElement | null
+  /** Where focus goes when the dialog closes. Leave out when another overlay follows. */
+  returnFocus?: (() => HTMLElement | null) | undefined
   onClose?: () => void
 }
 
@@ -109,16 +107,19 @@ export function celebrate(
 
   card.append(stageEl, message, ...(sub ? [sub] : []), button)
   overlay.append(card)
-  if (reducedMotion) overlay.classList.add('is-calm')
 
   // Growing up is a happy moment, whatever the mood was before.
   renderDragon(fromLayer, { stage: from.id, progress: 1, mood: 'happy', look: fromLook })
   renderDragon(toLayer, { stage: to.id, progress: 0, mood: 'happy', look: toLook })
-  doc.body.append(overlay)
-  if (background) background.inert = true
-  overlay.focus({ preventScroll: true })
 
   const timers: number[] = []
+  openOverlay(doc, overlay, {
+    reducedMotion,
+    background,
+    returnFocus,
+    onClosing: () => timers.forEach((t) => window.clearTimeout(t)),
+    onClose,
+  })
   const later = (ms: number, fn: () => void) => timers.push(window.setTimeout(fn, ms))
   const reveal = () => overlay.classList.add('is-revealed')
 
@@ -137,23 +138,4 @@ export function celebrate(
     later(520, () => overlay.classList.add('is-popping')) // …the old look fades…
     later(640, reveal) // …and the new one arrives in its own way
   }
-
-  const openedAt = performance.now()
-  let closed = false
-  function close() {
-    if (closed || performance.now() - openedAt < CLOSE_GUARD_MS) return
-    closed = true
-    timers.forEach((t) => window.clearTimeout(t))
-    doc.removeEventListener('keydown', onKey)
-    overlay.classList.add('is-closing')
-    window.setTimeout(() => overlay.remove(), reducedMotion ? 0 : 200)
-    if (background) background.inert = false
-    returnFocus?.()?.focus({ preventScroll: true })
-    onClose?.()
-  }
-  function onKey(e: KeyboardEvent) {
-    if (e.key === 'Escape') close()
-  }
-  overlay.addEventListener('click', close)
-  doc.addEventListener('keydown', onKey)
 }

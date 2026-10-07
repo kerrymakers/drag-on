@@ -34,3 +34,11 @@ export const treatLog = (
   bonusXp: number,
   id = `log-${++n}`,
 ): LogEvent => ({ ...log(task, timestamp, id), reward: { kind: 'treat', bonusXp } })
+
+/** A log that brought an item, as createLogEvent would make on a rare roll. */
+export const itemLog = (
+  task: Pick<Task, 'id' | 'xp'>,
+  timestamp: number,
+  itemId: string,
+  id = `log-${++n}`,
+): LogEvent => ({ ...log(task, timestamp, id), reward: { kind: 'item', itemId } })

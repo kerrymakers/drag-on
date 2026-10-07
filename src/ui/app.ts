@@ -1,4 +1,4 @@
-// The app shell: wires game logic, storage and art to the Home and Dragon screens.
+// The app shell: wires game logic, storage and art to the Home, Dragon and Collection screens.
 // This is the only layer that reads the clock (Date.now), generates ids and rolls dice.
 
 import { react, renderDragon, speechAnchor } from '../art'
@@ -11,7 +11,7 @@ import { TASKS } from '../config/tasks'
 import { dayKey, dayMinutesToClock } from '../game/day'
 import { evolutionLook, lookChange, type Evolution } from '../game/evolution'
 import { createLogEvent, createUndoEvent, undoableLog } from '../game/log'
-import { treatBonus } from '../game/rewards'
+import { itemFor, treatBonus } from '../game/rewards'
 import {
   nextRefreshAt,
   dragonProgress,
@@ -25,9 +25,11 @@ import {
 import type { GameEvent, RewardRoll, Settings, Task, TaskAvailability } from '../game/types'
 import { STORAGE_KEY, load, requestPersistence, save } from '../storage'
 import { celebrate } from './celebrate'
-import { MOOD_LABELS, TREAT_FLOAT, loggedToast, NOTICES, UNDONE, noticeFor, progressLabel, welcomeLine } from './copy'
+import { createCollectionScreen } from './collection-screen'
+import { MOOD_LABELS, TREAT_FLOAT, loggedToast, NOTICES, noticeFor, progressLabel, undoneToast, welcomeLine } from './copy'
 import { createDragonScreen } from './dragon-screen'
 import { newId } from './ids'
+import { showItemFound } from './item-found'
 import { createNav, type Route } from './nav'
 import { watchScrollFade } from './scroll-fade'
 import { placeSpeech } from './speech'
@@ -110,9 +112,10 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 }
 
-/** A short buzz on every log; a treat gets a happy double buzz. */
+/** A short buzz on every log; a treat gets a happy double buzz, a find a little trill. */
 const HAPTIC_LOG = 30
 const HAPTIC_TREAT = [30, 60, 45]
+const HAPTIC_ITEM = [25, 50, 25, 50, 60]
 
 function haptic(pattern: number | number[] = HAPTIC_LOG) {
   try {
@@ -175,8 +178,10 @@ export function startApp(doc: Document): App {
     undo: byId<HTMLButtonElement>(doc, 'undo'),
     home: byId(doc, 'home'),
     dragonScreen: byId(doc, 'dragon-screen'),
+    collectionScreen: byId(doc, 'collection-screen'),
   }
   const dragonScreen = createDragonScreen(doc, el.dragonScreen, { tasks: TASKS, stats: STATS, stages: STAGES })
+  const collectionScreen = createCollectionScreen(doc, el.collectionScreen, { items: REWARDS.items })
   const refreshTaskFade = watchScrollFade(byId(doc, 'tasks'))
   let route: Route = 'home'
   const toast = createToast(
@@ -309,6 +314,7 @@ export function startApp(doc: Document): App {
         now,
       })
     }
+    if (route === 'collection') collectionScreen.render({ events: data.events, now })
 
     scheduleRefresh(now)
   }
@@ -332,10 +338,11 @@ export function startApp(doc: Document): App {
 
   function undoLast() {
     const now = Date.now()
+    const target = undoableLog(data.events, now)
     const event = createUndoEvent(data.events, now, newId())
     if (event) {
       commit(event)
-      toast.show(UNDONE)
+      toast.show(undoneToast(target !== null && itemFor(target, REWARDS.items) !== null))
     }
     render(now)
   }
@@ -355,19 +362,44 @@ export function startApp(doc: Document): App {
     // Save first: everything after this is feedback.
     const rect = button.getBoundingClientRect()
     commit(event)
-    // A treat is always good news, on top of the usual feedback. A normal log is unchanged.
+    // A treat or a find is always good news, on top of the usual feedback. A normal log is unchanged.
     const bonus = treatBonus(event)
+    const item = itemFor(event, REWARDS.items)
     hush()
-    haptic(bonus > 0 ? HAPTIC_TREAT : HAPTIC_LOG)
+    haptic(item ? HAPTIC_ITEM : bonus > 0 ? HAPTIC_TREAT : HAPTIC_LOG)
     render(now)
 
     const fresh = el.list.querySelector<HTMLElement>(`button.task[data-task-id="${task.id}"]`)
     fresh?.classList.add('is-logged')
     floatXp(doc, rect, `+${event.xpAwarded} XP`)
     if (bonus > 0) floatXp(doc, rect, TREAT_FLOAT(bonus), true)
-    react(el.art, bonus > 0 ? 'treat' : 'log')
-    const logged = loggedToast(event.xpAwarded, task.name, bonus)
+    react(el.art, item ? 'perk' : bonus > 0 ? 'treat' : 'log')
+    const logged = loggedToast(event.xpAwarded, task.name, bonus, item !== null)
     toast.show(logged, undoLast)
+
+    // The tapped button if it can still take focus (a once-a-day task is now done
+    // and disabled), else the next task to log, else the dragon.
+    const returnFocus = () =>
+      el.list.querySelector<HTMLElement>(`button.task[data-task-id="${task.id}"]:not(:disabled)`) ??
+      el.list.querySelector<HTMLElement>('button.task:not(:disabled)') ??
+      el.art
+    const background = doc.getElementById('app')
+
+    // After every overlay has closed.
+    const done = () => {
+      updates.setBusy(false)
+      // The overlay hid the treat's floats (or the find) and outlasted its toast: say it
+      // again, with Undo while this log is still the one Undo would take back.
+      if (bonus > 0 || item) {
+        const stillLatest = undoableLog(data.events, Date.now())?.id === event.id
+        toast.show(logged, stillLatest ? undoLast : undefined)
+      }
+    }
+    // A find gets its own little card, after any stage-up or new-look moment.
+    const showFind = () => {
+      if (!item) return done()
+      showItemFound(doc, { item, reducedMotion: prefersReducedMotion(), background, returnFocus, onClose: done })
+    }
 
     // A stage-up gets the full moment. A look the dragon has never had gets a gentle
     // one; changing back to a look it has had before happens quietly (render did it).
@@ -385,23 +417,14 @@ export function startApp(doc: Document): App {
         toLook: lookAfter.look,
         newLook: newLook?.firstTime ? newLook.look : null,
         reducedMotion: prefersReducedMotion(),
-        background: doc.getElementById('app'),
-        // The tapped button if it can still take focus (a once-a-day task is now done
-        // and disabled), else the next task to log, else the dragon.
-        returnFocus: () =>
-          el.list.querySelector<HTMLElement>(`button.task[data-task-id="${task.id}"]:not(:disabled)`) ??
-          el.list.querySelector<HTMLElement>('button.task:not(:disabled)') ??
-          el.art,
-        onClose: () => {
-          updates.setBusy(false)
-          // The overlay hid the treat's floats and outlasted its toast: say it again,
-          // with Undo while this log is still the one Undo would take back.
-          if (bonus > 0) {
-            const stillLatest = undoableLog(data.events, Date.now())?.id === event.id
-            toast.show(logged, stillLatest ? undoLast : undefined)
-          }
-        },
+        background,
+        // With a find to show next, focus goes straight to its card instead.
+        returnFocus: item ? undefined : returnFocus,
+        onClose: showFind,
       })
+    } else if (item) {
+      updates.setBusy(true)
+      showFind()
     }
   })
 
@@ -433,6 +456,7 @@ export function startApp(doc: Document): App {
     route = next
     el.home.hidden = next !== 'home'
     el.dragonScreen.hidden = next !== 'dragon'
+    el.collectionScreen.hidden = next !== 'collection'
     if (from === null) return // the first render happens below
     if (next !== 'home') {
       hush()

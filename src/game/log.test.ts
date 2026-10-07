@@ -4,6 +4,7 @@ import { DEFAULT_SETTINGS } from '../config/settings'
 import { STAGES } from '../config/stages'
 import { TASKS } from '../config/tasks'
 import { createLogEvent, createUndoEvent, undoableLog } from './log'
+import { foundItems } from './rewards'
 import { dragonStage, stageFor, totalXp } from './state'
 import type { GameEvent, LogEvent, Stage, Task } from './types'
 import { at, NO_REWARD } from '../testing/helpers'
@@ -175,9 +176,22 @@ describe('createLogEvent rewards', () => {
     expect(e).not.toHaveProperty('reward')
   })
 
-  it('brings nothing in the rare band for now (items arrive in slice 2)', () => {
+  it('saves an item on the log in the rare band, with the base XP unchanged', () => {
     const e = createLogEvent(read, [], settings, MON('08:00'), 'a', STAGES, { chance: 0, pick: 0 }, REWARDS)
-    expect(e).not.toHaveProperty('reward')
+    expect(e).toMatchObject({ xpAwarded: read.xp, reward: { kind: 'item', itemId: REWARDS.items[0]!.id } })
+    expect(totalXp([e as GameEvent])).toBe(read.xp)
+  })
+
+  it('picks among the items not found yet, from the whole log', () => {
+    const RARE = { chance: 0, pick: 0 }
+    let events: GameEvent[] = [createLogEvent(gym, [], settings, MON('08:00'), 'a', STAGES, RARE, REWARDS)!]
+    events = [...events, createLogEvent(read, events, settings, MON('08:01'), 'b', STAGES, RARE, REWARDS)!]
+    expect(foundItems(events, REWARDS.items).map((f) => f.item.id)).toEqual(REWARDS.items.slice(0, 2).map((i) => i.id))
+    // Undo takes the second find away, so the next rare roll can bring it again.
+    events = [...events, createUndoEvent(events, MON('08:02'), 'u')!]
+    expect(foundItems(events, REWARDS.items)).toHaveLength(1)
+    const again = createLogEvent(read, events, settings, MON('08:03'), 'c', STAGES, RARE, REWARDS)
+    expect(again?.reward).toEqual({ kind: 'item', itemId: REWARDS.items[1]!.id })
   })
 
   it('gives no reward when the log is refused', () => {

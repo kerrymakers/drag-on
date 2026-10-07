@@ -5,6 +5,7 @@ describe('routeFromHash', () => {
   it('maps the tab hashes to their routes', () => {
     expect(routeFromHash('#/')).toBe('home')
     expect(routeFromHash('#/dragon')).toBe('dragon')
+    expect(routeFromHash('#/collection')).toBe('collection')
   })
 
   it('treats empty, unknown and sloppy hashes kindly', () => {
@@ -14,6 +15,7 @@ describe('routeFromHash', () => {
     expect(routeFromHash('#dragon')).toBe('dragon')
     expect(routeFromHash('#/dragon/')).toBe('dragon')
     expect(routeFromHash('#/Dragon')).toBe('dragon')
+    expect(routeFromHash('#collection/')).toBe('collection')
   })
 
   it('round-trips every tab', () => {
@@ -37,6 +39,23 @@ describe('navAction', () => {
 
   it('replaces when opened straight onto another tab (no Home entry to go back to)', () => {
     expect(navAction('dragon', 'home', false)).toBe('replace')
+  })
+
+  it('replaces between two non-Home tabs, so back still reaches Home', () => {
+    expect(navAction('home', 'collection', false)).toBe('push')
+    expect(navAction('dragon', 'collection', true)).toBe('replace')
+    expect(navAction('collection', 'dragon', true)).toBe('replace')
+    expect(navAction('collection', 'home', true)).toBe('back')
+  })
+})
+
+describe('TABS', () => {
+  it('has Home, Dragon and Collection, in that order', () => {
+    expect(TABS.map((t) => [t.route, t.hash, t.label])).toEqual([
+      ['home', '#/', 'Home'],
+      ['dragon', '#/dragon', 'Dragon'],
+      ['collection', '#/collection', 'Collection'],
+    ])
   })
 })
 

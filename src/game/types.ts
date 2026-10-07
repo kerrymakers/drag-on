@@ -52,9 +52,19 @@ export interface Settings {
 /**
  * A variable reward, rolled once at log time and saved on the log.
  * - treat: bonus XP on top of `xpAwarded`, counted toward the task's stat.
- * - item: a rare collectible, worth no XP. (Nothing produces items yet.)
+ * - item: a rare collectible from config/items.ts, worth no XP.
  */
 export type Reward = { kind: 'treat'; bonusXp: number } | { kind: 'item'; itemId: string }
+
+/** Where an item sits on the dragon once equipping arrives (Milestone 4 slice 3). */
+export type ItemSlot = 'head' | 'neck' | 'held'
+
+/** A rare collectible. Ids are stable: saved rewards refer to them, so never rename one. */
+export interface Item {
+  id: string
+  name: string
+  slot: ItemSlot
+}
 
 /**
  * A saved reward this version doesn't recognise (from a later version, or a malformed
