@@ -2,6 +2,8 @@
 // (see art.css), and each svg carries data-stage and data-evolution, so an evolution
 // look can recolour a stage and add features (looks.ts) without redrawing it.
 
+import { wornItemBox, wornItemSvg } from './items'
+
 /**
  * Mirrors a path drawn on the left across the centre line (x = 256).
  * Only absolute M, L, C, Q and Z are allowed, where every coordinate is an x y pair,
@@ -60,6 +62,26 @@ export interface Anchors {
    * features), before the stage scale. The UI keeps speech bubbles clear of it.
    */
   headBox: readonly [number, number, number, number]
+  /** Where a worn item sits in each spot (see items.ts for how each spot is pinned). */
+  wear: Record<WearSlot, WearSpot>
+}
+
+/** The spots an item can be worn in. Kept in the art's own words, not imported from game code. */
+export type WearSlot = 'head' | 'neck' | 'held'
+
+/** The item ids worn in each spot. A missing, null or unknown id draws nothing. */
+export type WearLook = Partial<Record<WearSlot, string | null | undefined>>
+
+/**
+ * Where an item is pinned, in the stage's own (unscaled) svg units: its pin point
+ * (items.ts, WEAR_PIN) goes at (x, y), it's drawn `size` units across, and turned by
+ * `rotate` degrees.
+ */
+export interface WearSpot {
+  x: number
+  y: number
+  size: number
+  rotate?: number
 }
 
 /**
@@ -156,24 +178,40 @@ export interface StageSvgOptions {
   evolution?: string
   /** Look features: `under` sits below the mood overlays, `over` on top of them (e.g. glasses). */
   features?: { under: string; over: string }
+  /** The items being worn, by spot. */
+  wearing?: WearLook | undefined
 }
 
 /**
  * Wraps a drawing so it sits on the ground line and grows by `scale` from there.
  * Structure: scale (attribute) > .dragon-pose (mood posture, hop) > .dragon-body
  * (breathing) > drawing + mood parts.
+ * Worn items ride inside .dragon-body, so they breathe, hop and curl up with the
+ * dragon. Neck and held items sit under the mood overlays (curled up tucks them under
+ * the blanket); a head item sits on top of everything. The speech bubble's keep-clear
+ * box grows to cover a head item, so bubbles stay clear of hats.
  */
 export function dragonSvg(
-  { stage, label, scale, anchors, bodyClass, evolution = 'neutral', features }: StageSvgOptions,
+  { stage, label, scale, anchors, bodyClass, evolution = 'neutral', features, wearing }: StageSvgOptions,
   body: string,
 ): string {
+  const neck = wornItemSvg(wearing?.neck, 'neck', anchors.wear.neck)
+  const held = wornItemSvg(wearing?.held, 'held', anchors.wear.held)
+  const head = wornItemSvg(wearing?.head, 'head', anchors.wear.head)
+  const headBox = head ? unionBox(anchors.headBox, wornItemBox('head', anchors.wear.head)) : anchors.headBox
   return `
 <svg class="dragon-svg dragon-${stage}" data-stage="${stage}" data-evolution="${evolution}" data-mood="content" viewBox="0 0 512 512" role="img" aria-label="${label}">
   <g transform="translate(256 492) scale(${scale}) translate(-256 -492)">
-    ${headBoxRect(anchors.headBox, true)}
+    ${headBoxRect(headBox, true)}
     <g class="dragon-pose">
-      <g class="${bodyClass ? `${bodyClass} ` : ''}dragon-body">${body}${features?.under ?? ''}${moodParts(anchors)}${features?.over ?? ''}</g>
+      <g class="${bodyClass ? `${bodyClass} ` : ''}dragon-body">${body}${features?.under ?? ''}${neck}${held}${moodParts(anchors)}${features?.over ?? ''}${head}</g>
     </g>
   </g>
 </svg>`
+}
+
+type Box = readonly [number, number, number, number]
+
+function unionBox(a: Box, b: Box): Box {
+  return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])]
 }

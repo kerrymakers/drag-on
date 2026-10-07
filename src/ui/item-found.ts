@@ -4,7 +4,7 @@
 
 import { itemSvg } from '../art'
 import type { Item } from '../game/types'
-import { ITEM_FOUND, itemFoundLine } from './copy'
+import { ITEM_FOUND, itemFoundLine, itemFoundSaved } from './copy'
 import { openOverlay } from './overlay'
 
 /** When the words and button arrive, after the item pops in. */
@@ -12,6 +12,10 @@ const REVEAL_MS = 220
 
 export interface ItemFoundOptions {
   item: Item
+  /** True if the find went straight on (its spot was free). */
+  wearing?: boolean
+  /** True before hatching: the egg wears nothing yet, so the card says it's kept for later. */
+  egg?: boolean
   reducedMotion: boolean
   /** Made inert while the card is open, so focus and taps can't reach it. */
   background?: HTMLElement | null
@@ -24,7 +28,7 @@ let cardCount = 0
 
 export function showItemFound(
   doc: Document,
-  { item, reducedMotion, background, returnFocus, onClose }: ItemFoundOptions,
+  { item, wearing = false, egg = false, reducedMotion, background, returnFocus, onClose }: ItemFoundOptions,
 ): void {
   const n = ++cardCount
   const nameId = `item-found-name-${n}`
@@ -62,7 +66,7 @@ export function showItemFound(
 
   const saved = doc.createElement('p')
   saved.className = 'item-found-saved'
-  saved.textContent = ITEM_FOUND.saved
+  saved.textContent = itemFoundSaved(wearing, egg)
 
   const button = doc.createElement('button')
   button.type = 'button'

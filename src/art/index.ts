@@ -5,10 +5,13 @@ import './art.css'
 import { eggSvg, type CrackLevel } from './egg'
 import { adultSvg, elderSvg, juvenileSvg, whelpSvg } from './grown'
 import { hatchlingSvg } from './hatchling'
+import { hasItemArt } from './items'
 import { knownLook, type EvolutionLook } from './looks'
+import type { WearLook, WearSlot } from './parts'
 
 export { EVOLVED_LOOKS, type EvolutionLook } from './looks'
 export { hasItemArt, itemSvg, unknownItemSvg } from './items'
+export type { WearLook, WearSlot } from './parts'
 
 /** Visual only, not balancing: how far toward hatching the egg shows each crack. */
 export const CRACK_SMALL_AT = 0.5
@@ -27,6 +30,12 @@ export interface DragonLook {
    * ids and stages without look art.
    */
   look?: string | undefined
+  /**
+   * The item ids being worn, by spot. The UI decides what's worn; the art just draws
+   * each id it has a drawing for at that spot, and nothing for an unknown id. The egg
+   * wears nothing (the choice is kept, and shows once it hatches).
+   */
+  wearing?: WearLook | undefined
 }
 
 export type MoodLook = 'happy' | 'content' | 'sleepy' | 'grumpy'
@@ -51,16 +60,31 @@ function art(look: DragonLook): { key: string; svg: string } {
   const stage = known ? look.stage : 'elder' // an id the art doesn't know (a stage added later): the most grown-up look
   const { draw, looks } = known ?? STAGE_ART.elder!
   const evolved = looks ? knownLook(look.look) : 'neutral'
-  return { key: evolved === 'neutral' ? stage : `${stage}-${evolved}`, svg: draw(evolved) }
+  const wearing = drawnWearing(look.wearing)
+  const base = evolved === 'neutral' ? stage : `${stage}-${evolved}`
+  const worn = WEAR_ORDER.map((slot) => wearing[slot] ?? '').join(',')
+  return { key: worn === ',,' ? base : `${base}+${worn}`, svg: draw(evolved, wearing) }
+}
+
+const WEAR_ORDER: readonly WearSlot[] = ['head', 'neck', 'held']
+
+/** Only the ids the art can draw, so an unknown id neither draws nor changes the key. */
+function drawnWearing(wearing: WearLook | undefined): WearLook {
+  const out: WearLook = {}
+  for (const slot of WEAR_ORDER) {
+    const id = wearing?.[slot]
+    if (typeof id === 'string' && hasItemArt(id)) out[slot] = id
+  }
+  return out
 }
 
 /**
  * Each stage's drawing, and whether it has art for the evolution looks. Which stage
  * the dragon first evolves at is game config (EVOLVES_AT_STAGE), not decided here.
  */
-const STAGE_ART: Record<string, { draw: (look: EvolutionLook) => string; looks: boolean }> = {
-  hatchling: { draw: hatchlingSvg, looks: false },
-  whelp: { draw: whelpSvg, looks: false },
+const STAGE_ART: Record<string, { draw: (look: EvolutionLook, wearing: WearLook) => string; looks: boolean }> = {
+  hatchling: { draw: (_look, wearing) => hatchlingSvg(wearing), looks: false },
+  whelp: { draw: (_look, wearing) => whelpSvg(wearing), looks: false },
   juvenile: { draw: juvenileSvg, looks: true },
   adult: { draw: adultSvg, looks: true },
   elder: { draw: elderSvg, looks: true },
@@ -73,7 +97,8 @@ export function hasLookArt(stage: string): boolean {
 
 /**
  * Draws the dragon into `container`. Calling it again with a look that draws the
- * same picture keeps the drawing, so idle animations don't restart on every render.
+ * same picture (same stage, look and outfit) keeps the drawing, so idle animations
+ * don't restart on every render.
  * A mood change only updates data-mood, so CSS can fade between moods smoothly.
  */
 export function renderDragon(container: HTMLElement, look: DragonLook): void {
@@ -109,6 +134,14 @@ export function speechAnchor(container: HTMLElement): DOMRect | null {
   const right = Math.max(...rects.map((r) => r.right))
   const bottom = Math.max(...rects.map((r) => r.bottom))
   return new DOMRect(left, top, right - left, bottom - top)
+}
+
+/**
+ * Other areas a speech bubble should keep clear of: anything worn at the neck or held
+ * (the head item is already inside speechAnchor's box). Empty if nothing is worn.
+ */
+export function speechKeepClear(container: HTMLElement): DOMRect[] {
+  return [...container.querySelectorAll('.worn-neck, .worn-held')].map((e) => e.getBoundingClientRect())
 }
 
 /**

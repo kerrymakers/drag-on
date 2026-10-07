@@ -1,14 +1,16 @@
 // The Dragon screen: the dragon, its four stats and how it has grown so far.
 // Upcoming stages stay a surprise: no names, no art, just "???" and a lock.
 
-import { react, renderDragon } from '../art'
+import { itemSvg, react, renderDragon } from '../art'
 import { dayKey } from '../game/day'
 import type { LookId } from '../game/evolution'
 import { stageHistory } from '../game/stage-history'
 import { statTotals } from '../game/stats'
 import type { GameEvent, MoodId, Settings, Stage, Stat, StatId, Task } from '../game/types'
+import { wornList, type WornItems } from '../game/wearing'
 import { DRAGON_SCREEN, MOOD_LABELS, dragonScreenLine, friendlyDay, lookLabel } from './copy'
 import { ICONS } from './icons'
+import { outfitOf } from './outfit'
 import { watchScrollFade } from './scroll-fade'
 
 export interface DragonScreenState {
@@ -20,6 +22,8 @@ export interface DragonScreenState {
   mood: MoodId
   /** The evolution look: 'neutral' (nothing shown) before Juvenile. */
   look: LookId
+  /** What's worn right now (derived: see wornItems). */
+  worn: WornItems
   now: number
 }
 
@@ -112,11 +116,43 @@ export function createDragonScreen(doc: Document, root: HTMLElement, config: Dra
   const historyList = el(doc, 'ol', 'stage-history')
   historyCard.append(historyTitle, historyList)
 
-  scroller.append(header, art, line, statsCard, historyCard)
+  // What's worn
+  const wearCard = el(doc, 'section', 'ds-card')
+  wearCard.setAttribute('aria-labelledby', 'ds-wear-title')
+  const wearTitle = el(doc, 'h2', 'ds-card-title', DRAGON_SCREEN.wearingTitle)
+  wearTitle.id = 'ds-wear-title'
+  const wearList = el(doc, 'ul', 'wear-list')
+  const wearEmpty = el(doc, 'p', 'ds-empty wear-empty', DRAGON_SCREEN.wearingEmpty)
+  const wearEgg = el(doc, 'p', 'ds-empty wear-egg', DRAGON_SCREEN.wearingEgg)
+  wearCard.append(wearTitle, wearList, wearEmpty, wearEgg)
+
+  scroller.append(header, art, line, statsCard, wearCard, historyCard)
   root.replaceChildren(scroller)
   const refreshFade = watchScrollFade(scroller)
 
   let historySignature = ''
+  let wearSignature = ''
+
+  function renderWearing(worn: WornItems, egg: boolean) {
+    const items = wornList(worn)
+    const signature = `${egg}|${items.map((i) => i.id).join(',')}`
+    if (signature === wearSignature) return
+    wearSignature = signature
+    wearList.replaceChildren(
+      ...items.map((item) => {
+        const li = el(doc, 'li', 'wear-item')
+        li.dataset.item = item.id
+        const icon = el(doc, 'span', 'wear-icon')
+        icon.setAttribute('aria-hidden', 'true')
+        icon.innerHTML = itemSvg(item.id)
+        li.append(icon, el(doc, 'span', 'wear-name', item.name))
+        return li
+      }),
+    )
+    wearList.hidden = items.length === 0
+    wearEmpty.hidden = items.length > 0
+    wearEgg.hidden = !egg || items.length === 0
+  }
 
   function renderHistory(events: readonly GameEvent[], today: string) {
     const reached = stageHistory(events, config.stages)
@@ -161,7 +197,14 @@ export function createDragonScreen(doc: Document, root: HTMLElement, config: Dra
       stageName.textContent = state.stage.name
       mood.textContent = MOOD_LABELS[state.mood]
       mood.dataset.mood = state.mood
-      renderDragon(art, { stage: state.stage.id, progress: state.progress, mood: state.mood, look: state.look })
+      renderDragon(art, {
+        stage: state.stage.id,
+        progress: state.progress,
+        mood: state.mood,
+        look: state.look,
+        wearing: outfitOf(state.worn),
+      })
+      renderWearing(state.worn, state.stage.id === 'egg')
       if (state.look === 'neutral') {
         lookChip.hidden = true
         delete lookChip.dataset.look

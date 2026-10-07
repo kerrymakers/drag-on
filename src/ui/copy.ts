@@ -150,7 +150,17 @@ export const ITEM_FOUND = {
   button: 'Lovely!',
   /** Under the line: where it went. */
   saved: 'Added to your collection',
+  /** …and it went straight on, because its spot was free. */
+  savedWearing: 'Added to your collection, and wearing it now',
+  /** …the same, before hatching: the egg wears nothing yet. */
+  savedWearingEgg: 'Added to your collection, ready to wear after hatching',
 } as const
+
+/** Where a find went: the collection, and whether it went straight on. */
+export function itemFoundSaved(wearing: boolean, egg: boolean): string {
+  if (!wearing) return ITEM_FOUND.saved
+  return egg ? ITEM_FOUND.savedWearingEgg : ITEM_FOUND.savedWearing
+}
 
 /** The dragon's line for a find. Fixed per item, so the same find always reads the same. */
 export function itemFoundLine(itemId: string): string {
@@ -171,7 +181,24 @@ export const COLLECTION = {
   all: 'Every one found! Your dragon is delighted.',
   unknown: '?',
   unknownLabel: 'Not found yet',
+  /** The little badge on a tile that's being worn. */
+  wearing: 'Wearing',
+  /** Once something's found: how to wear it. */
+  wearHint: 'Tap a find to try it on.',
+  /** Before hatching: the egg wears nothing, but choices are kept. */
+  eggLine: 'Your dragon will wear these once it hatches.',
+  /** After taking something off. */
+  takenOff: 'Taken off',
 } as const
+
+/** "ribbon bow" from "Ribbon bow", to sit mid-sentence. */
+const midSentence = (name: string) => name.charAt(0).toLowerCase() + name.slice(1)
+
+/** The toast after tapping a found tile. */
+export function wearToast(name: string, on: boolean, egg: boolean): string {
+  if (!on) return COLLECTION.takenOff
+  return egg ? `Saving the ${midSentence(name)} for hatching day` : `Wearing the ${midSentence(name)}`
+}
 
 /** "3 of 18 found". */
 export const collectionCount = (found: number, total: number): string => `${found} of ${total} found`
@@ -218,6 +245,11 @@ export const DRAGON_SCREEN = {
   /** An upcoming stage: never its name. */
   locked: '???',
   lockedLabel: 'A surprise for later',
+  wearingTitle: "What I'm wearing",
+  /** Nothing worn. Never a nudge. */
+  wearingEmpty: 'Nothing yet',
+  /** Before hatching, with something chosen. */
+  wearingEgg: "I'll put these on once I hatch!",
 } as const
 
 /** A short, cheerful line under the name, by how many stages have been reached. */

@@ -2,7 +2,7 @@
 // It appears after the log is already saved, so it's never part of the logging path.
 // Tap anywhere (or the button) to close.
 
-import { react, renderDragon } from '../art'
+import { react, renderDragon, type WearLook } from '../art'
 import type { LookId } from '../game/evolution'
 import type { Stage, StatId } from '../game/types'
 import { celebrationCopy } from './copy'
@@ -34,6 +34,8 @@ export interface CelebrateOptions {
   toLook?: LookId
   /** A look the dragon has never had before, to name in the message; otherwise null. */
   newLook?: StatId | null
+  /** What the dragon is wearing, on both layers (the egg layer draws nothing worn). */
+  wearing?: WearLook | undefined
   reducedMotion: boolean
   /** Made inert while the dialog is open, so focus and taps can't reach it. */
   background?: HTMLElement | null
@@ -46,7 +48,7 @@ let overlayCount = 0
 
 export function celebrate(
   doc: Document,
-  { from, to, fromLook, toLook, newLook = null, reducedMotion, background, returnFocus, onClose }: CelebrateOptions,
+  { from, to, fromLook, toLook, newLook = null, wearing, reducedMotion, background, returnFocus, onClose }: CelebrateOptions,
 ): void {
   const lookOnly = from.id === to.id
   const copy = celebrationCopy(lookOnly ? null : to.id, newLook)
@@ -109,8 +111,8 @@ export function celebrate(
   overlay.append(card)
 
   // Growing up is a happy moment, whatever the mood was before.
-  renderDragon(fromLayer, { stage: from.id, progress: 1, mood: 'happy', look: fromLook })
-  renderDragon(toLayer, { stage: to.id, progress: 0, mood: 'happy', look: toLook })
+  renderDragon(fromLayer, { stage: from.id, progress: 1, mood: 'happy', look: fromLook, wearing })
+  renderDragon(toLayer, { stage: to.id, progress: 0, mood: 'happy', look: toLook, wearing })
 
   const timers: number[] = []
   openOverlay(doc, overlay, {

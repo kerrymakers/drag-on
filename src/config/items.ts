@@ -1,8 +1,8 @@
 // Rare items: the collectibles a rare reward roll can bring (see config/rewards.ts).
 // Ids are stable: saved rewards refer to them, so never rename or reuse an id.
 // The order is the pick order (a rare roll picks among the items not found yet).
-// How each item looks lives in src/art/items.ts; `slot` is where it will sit once
-// equipping arrives (Milestone 4 slice 3).
+// How each item looks lives in src/art/items.ts; `slot` is the spot it's worn in
+// (one item per spot, see src/game/wearing.ts).
 
 import type { Item } from '../game/types'
 

@@ -226,6 +226,49 @@ describe('settings', () => {
     expect(loadSettings({ dragonName: 42 }).dragonName).toBeNull()
   })
 
+  it('loads a save from before wearing existed as nothing worn, and keeps the rest', () => {
+    const s = loadSettings({ wakeSchedule: { mon: '07:00' }, dragonName: 'Ember' })
+    expect(s.wearing).toEqual({ head: null, neck: null, held: null })
+    expect(s.dragonName).toBe('Ember')
+    expect(s.wakeSchedule.mon).toBe('07:00')
+  })
+
+  it('round-trips what the dragon is wearing', () => {
+    const store = new FakeStore()
+    const data = { ...defaultData(), settings: { ...defaultData().settings, wearing: { head: 'bow', neck: null, held: 'book' } } }
+    save(data, store)
+    expect(load(store).data.settings.wearing).toEqual({ head: 'bow', neck: null, held: 'book' })
+  })
+
+  it('turns malformed wearing into nothing worn, spot by spot', () => {
+    for (const bad of [null, 42, 'bow', ['bow'], true]) {
+      expect(loadSettings({ wearing: bad }).wearing, JSON.stringify(bad)).toEqual({ head: null, neck: null, held: null })
+    }
+    expect(loadSettings({ wearing: { head: 7, neck: '', held: { id: 'book' } } }).wearing).toEqual({
+      head: null,
+      neck: null,
+      held: null,
+    })
+    expect(loadSettings({ wearing: { head: 'bow', neck: false } }).wearing).toEqual({ head: 'bow', neck: null, held: null })
+  })
+
+  it('keeps an id it does not know (game logic decides what shows) and spots a later version adds', () => {
+    const store = withRaw(
+      JSON.stringify({ schemaVersion: 1, events: [], settings: { wearing: { head: 'from-later', tail: 'ribbon' } } }),
+    )
+    const loaded = load(store).data.settings.wearing
+    expect(loaded).toMatchObject({ head: 'from-later', neck: null, held: null, tail: 'ribbon' })
+    save(load(store).data, store)
+    expect(JSON.parse(store.map.get(STORAGE_KEY) as string).settings.wearing).toMatchObject({ tail: 'ribbon' })
+  })
+
+  it('never shares the default outfit object between loads', () => {
+    const a = load(new FakeStore()).data.settings
+    a.wearing.head = 'bow'
+    expect(load(new FakeStore()).data.settings.wearing.head).toBeNull()
+    expect(DEFAULT_SETTINGS.wearing.head).toBeNull()
+  })
+
   it('keeps unrecognised fields through a load and save', () => {
     const store = withRaw(
       JSON.stringify({ schemaVersion: 1, events: [], settings: { soundOn: false, theme: 'moss' } }),

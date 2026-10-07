@@ -1,22 +1,30 @@
 // The Hatchling: a round baby dragon. Placeholder art, charming rather than detailed.
 
-import { dragonSvg, type Anchors } from './parts'
+import { dragonSvg, type Anchors, type WearLook } from './parts'
 
-const HATCHLING: Anchors = {
+export const HATCHLING_SCALE = 0.84
+
+export const HATCHLING: Anchors = {
   eyes: { y: 214, dx: 44, rx: 25, ry: 31 },
   headTop: 108,
   body: { cy: 360, rx: 122, ry: 112 },
   headBox: [130, 58, 382, 322],
+  wear: {
+    head: { x: 262, y: 118, size: 110, rotate: 6 },
+    neck: { x: 256, y: 300, size: 160 },
+    held: { x: 172, y: 402, size: 100, rotate: -8 },
+  },
 }
 
-export function hatchlingSvg(): string {
+export function hatchlingSvg(wearing?: WearLook): string {
   return dragonSvg(
     {
       stage: 'hatchling',
       label: 'A round baby dragon with big eyes',
-      scale: 0.84,
+      scale: HATCHLING_SCALE,
       anchors: HATCHLING,
       bodyClass: 'hatchling-body',
+      wearing,
     },
     `
     <path class="hd-wing" d="M178 300 C120 240 60 262 66 330 C92 314 112 326 120 352 C138 330 160 334 176 344 Z" />

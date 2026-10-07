@@ -96,4 +96,55 @@ describe('placeSpeech', () => {
     expect(bubble.right).toBeLessThanOrEqual(area.right + 1)
     expect(bubble.top).toBeGreaterThanOrEqual(area.top)
   })
+
+  describe('keeping clear of worn items', () => {
+    // Real numbers from a 410px phone: the head box leaves about 106px each side, so
+    // with nothing worn the bubble goes below the head, over the neck.
+    const area = { left: 16, top: 77, right: 394, bottom: 418 }
+    const head = { left: 127, top: 113, right: 283, bottom: 253 }
+    const neck = { left: 179, top: 258, right: 231, bottom: 303 }
+    const held = { left: 139, top: 325, right: 181, bottom: 363 }
+
+    it('with nothing worn, goes below the head as before', () => {
+      expect(placeSpeech(area, head, measure).tail).toBe('up')
+    })
+
+    it('moves beside the head, narrower, rather than cover a neck or held item', () => {
+      const p = placeSpeech(area, head, measure, [neck, held])
+      const bubble = toPage(area, p)
+      expect(overlaps(bubble, neck)).toBe(false)
+      expect(overlaps(bubble, held)).toBe(false)
+      expect(overlaps(bubble, head)).toBe(false)
+      expect(inside(bubble, area)).toBe(true)
+      expect(['left', 'right']).toContain(p.tail)
+      expect(p.compact).toBe(false)
+    })
+
+    it('still goes below the head when that spot is clear of what is worn', () => {
+      const lowHeld = { left: 139, top: 395, right: 181, bottom: 418 }
+      const p = placeSpeech(area, head, measure, [lowHeld])
+      expect(p.tail).toBe('up')
+      expect(overlaps(toPage(area, p), lowHeld)).toBe(false)
+    })
+
+    it('keeps above the head first when there is room', () => {
+      const tall = { ...area, top: 0 }
+      const p = placeSpeech(tall, head, measure, [neck, held])
+      expect(p.tail).toBe('down')
+    })
+
+    it('fits on a 360px phone and a short 410px one, clear of head and worn items', () => {
+      const cases = [
+        { area: { left: 16, top: 77, right: 344, bottom: 299 }, head: { left: 124, top: 92, right: 236, bottom: 192 }, worn: [{ left: 162, top: 195, right: 198, bottom: 228 }, { left: 133, top: 244, right: 163, bottom: 271 }] },
+        { area: { left: 16, top: 77, right: 394, bottom: 344 }, head: { left: 132, top: 117, right: 278, bottom: 247 }, worn: [{ left: 181, top: 242, right: 229, bottom: 285 }, { left: 149, top: 277, right: 184, bottom: 309 }] },
+      ]
+      for (const c of cases) {
+        const p = placeSpeech(c.area, c.head, measure, c.worn)
+        const bubble = toPage(c.area, p)
+        expect(inside(bubble, c.area)).toBe(true)
+        expect(overlaps(bubble, c.head)).toBe(false)
+        for (const w of c.worn) expect(overlaps(bubble, w)).toBe(false)
+      }
+    })
+  })
 })

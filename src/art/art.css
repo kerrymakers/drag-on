@@ -484,6 +484,7 @@
 
 /* Posture: curled up snuggles down; happy has the odd little hop. */
 .dragon-svg {
+  /* art.test.ts checks worn items stay in the viewBox with these numbers: keep in step. */
   --curl-pose: translateY(12px) scale(1.05, 0.9);
 }
 .dragon-pose {

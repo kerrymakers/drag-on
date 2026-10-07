@@ -3,13 +3,13 @@ import { EVOLVES_AT_STAGE } from '../config/evolution'
 import { ITEMS } from '../config/items'
 import { STAGES } from '../config/stages'
 import { STATS } from '../config/stats'
-import { adultSvg, elderSvg, juvenileSvg, whelpSvg } from './grown'
-import { hatchlingSvg } from './hatchling'
+import { ADULT, ADULT_SCALE, ELDER, ELDER_SCALE, JUVENILE, JUVENILE_SCALE, WHELP, WHELP_SCALE, adultSvg, elderSvg, juvenileSvg, whelpSvg } from './grown'
+import { HATCHLING, HATCHLING_SCALE, hatchlingSvg } from './hatchling'
 import { CRACK_BIG_AT, CRACK_SMALL_AT, crackLevel, hasLookArt } from './index'
 import { eggSvg } from './egg'
-import { hasItemArt, itemSvg, unknownItemSvg } from './items'
-import { EVOLVED_LOOKS, knownLook } from './looks'
-import { mirror } from './parts'
+import { WEAR_PIN, hasItemArt, itemSvg, unknownItemSvg, wornItemBox, wornItemSvg } from './items'
+import { EVOLVED_LOOKS, knownLook, type EvolutionLook } from './looks'
+import { mirror, type Anchors, type WearLook, type WearSlot } from './parts'
 
 describe('crackLevel', () => {
   it('shows no crack below the small threshold', () => {
@@ -182,5 +182,131 @@ describe('item art', () => {
   it('draws each item differently', () => {
     const bodies = ITEMS.map((i) => itemSvg(i.id).replace(/data-item="[^"]*"/, ''))
     expect(new Set(bodies).size).toBe(ITEMS.length)
+  })
+})
+
+describe('worn items', () => {
+  const SLOTS: readonly WearSlot[] = ['head', 'neck', 'held']
+  const ALL_LOOKS: readonly EvolutionLook[] = ['neutral', ...EVOLVED_LOOKS]
+  const STAGES_ART: Record<string, { draw: (look: EvolutionLook, w?: WearLook) => string; anchors: Anchors; scale: number; looks: boolean }> = {
+    hatchling: { draw: (_l, w) => hatchlingSvg(w), anchors: HATCHLING, scale: HATCHLING_SCALE, looks: false },
+    whelp: { draw: (_l, w) => whelpSvg(w), anchors: WHELP, scale: WHELP_SCALE, looks: false },
+    juvenile: { draw: juvenileSvg, anchors: JUVENILE, scale: JUVENILE_SCALE, looks: true },
+    adult: { draw: adultSvg, anchors: ADULT, scale: ADULT_SCALE, looks: true },
+    elder: { draw: elderSvg, anchors: ELDER, scale: ELDER_SCALE, looks: true },
+  }
+  // The curled-up posture in art.css (--curl-pose); keep the two in step: translateY(12px) scale(1.05, 0.9) about (256, 492).
+  const CURL = { dy: 12, sx: 1.05, sy: 0.9 }
+  /** A stage-unit point on screen (viewBox units), at rest or curled up. */
+  const place = (x: number, y: number, scale: number, curled: boolean) => {
+    let px = 256 + (x - 256) * scale
+    let py = 492 + (y - 492) * scale
+    if (curled) {
+      px = 256 + (px - 256) * CURL.sx
+      py = 492 + (py - 492) * CURL.sy + CURL.dy
+    }
+    return [px, py] as const
+  }
+
+  it('draws every item in its spot on every stage and look, without errors', () => {
+    for (const [stage, art] of Object.entries(STAGES_ART)) {
+      for (const look of art.looks ? ALL_LOOKS : (['neutral'] as const)) {
+        for (const item of ITEMS) {
+          const svg = art.draw(look, { [item.slot]: item.id })
+          const name = `${stage} ${look} ${item.id}`
+          expect(svg, name).toContain(`data-worn="${item.id}"`)
+          expect(svg, name).toContain(`worn-${item.slot}`)
+          expect(svg, name).not.toContain('NaN')
+          expect(svg, name).not.toContain('undefined')
+          // Every mood still there, and the worn item rides in the pose and body groups.
+          for (const cls of ['mood-happy', 'mood-sleepy', 'mood-grumpy', 'mood-blanket']) expect(svg, `${name} ${cls}`).toContain(cls)
+          const pose = svg.indexOf('class="dragon-pose"')
+          expect(pose, name).toBeGreaterThan(-1)
+          expect(svg.indexOf('data-worn'), name).toBeGreaterThan(pose)
+        }
+      }
+    }
+  })
+
+  it('draws every worn item above every part of the stage drawing and its look', () => {
+    for (const [stage, art] of Object.entries(STAGES_ART)) {
+      for (const look of art.looks ? ALL_LOOKS : (['neutral'] as const)) {
+        const svg = art.draw(look, { head: 'crown', neck: 'scarf', held: 'book' })
+        // Everything the stage draws, and its look features; the glasses sit over the
+        // mood lids by design, on the face, so they're left out.
+        const glasses = svg.indexOf('look-glasses')
+        const beforeGlasses = glasses === -1 ? svg : svg.slice(0, glasses)
+        const lastStagePart = Math.max(beforeGlasses.lastIndexOf('class="hd-'), beforeGlasses.lastIndexOf('class="lk-'))
+        expect(svg.lastIndexOf('class="hd-'), `${stage} ${look}`).toBeLessThan(svg.indexOf('data-worn'))
+        for (const id of ['crown', 'scarf', 'book']) {
+          expect(svg.indexOf(`data-worn="${id}"`), `${stage} ${look} ${id}`).toBeGreaterThan(lastStagePart)
+        }
+      }
+    }
+  })
+
+  it('wears all three spots at once', () => {
+    const svg = adultSvg('wisdom', { head: 'crown', neck: 'scarf', held: 'book' })
+    for (const id of ['crown', 'scarf', 'book']) expect(svg).toContain(`data-worn="${id}"`)
+    // Neck and held tuck under the blanket; the hat sits on top of everything, glasses included.
+    expect(svg.indexOf('data-worn="scarf"')).toBeLessThan(svg.indexOf('mood-blanket'))
+    expect(svg.indexOf('data-worn="book"')).toBeLessThan(svg.indexOf('mood-blanket'))
+    expect(svg.indexOf('data-worn="crown"')).toBeGreaterThan(svg.indexOf('look-glasses'))
+  })
+
+  it('keeps every spot inside the viewBox on every stage, at rest and curled up', () => {
+    for (const [stage, art] of Object.entries(STAGES_ART)) {
+      for (const slot of SLOTS) {
+        const [x0, y0, x1, y1] = wornItemBox(slot, art.anchors.wear[slot])
+        for (const curled of [false, true]) {
+          for (const [x, y] of [[x0, y0], [x1, y1]] as const) {
+            const [px, py] = place(x, y, art.scale, curled)
+            const name = `${stage} ${slot}${curled ? ' curled' : ''}`
+            expect(px, name).toBeGreaterThanOrEqual(0)
+            expect(px, name).toBeLessThanOrEqual(512)
+            expect(py, name).toBeGreaterThanOrEqual(0)
+            expect(py, name).toBeLessThanOrEqual(512)
+          }
+        }
+      }
+    }
+  })
+
+  it('grows the speech bubble keep-clear box to cover a hat', () => {
+    for (const [stage, art] of Object.entries(STAGES_ART)) {
+      const svg = art.draw('neutral', { head: 'partyhat' })
+      const m = /class="dragon-head-box follows-pose" x="(-?[\d.]+)" y="(-?[\d.]+)" width="([\d.]+)" height="([\d.]+)"/.exec(svg)
+      expect(m, stage).not.toBeNull()
+      const [x, y, w, h] = m!.slice(1).map(Number) as [number, number, number, number]
+      const [hx0, hy0, hx1, hy1] = wornItemBox('head', art.anchors.wear.head)
+      expect(x, stage).toBeLessThanOrEqual(hx0)
+      expect(y, stage).toBeLessThanOrEqual(hy0)
+      expect(x + w, stage).toBeGreaterThanOrEqual(hx1)
+      expect(y + h, stage).toBeGreaterThanOrEqual(hy1)
+      // No hat, no change.
+      expect(art.draw('neutral', { neck: 'scarf' })).toContain(
+        `x="${art.anchors.headBox[0]}" y="${art.anchors.headBox[1]}"`,
+      )
+    }
+  })
+
+  it('draws nothing for an unknown, empty or missing id', () => {
+    for (const id of ['nope', '', 'toString', '__proto__', null, undefined]) {
+      expect(wornItemSvg(id, 'head', HATCHLING.wear.head), String(id)).toBe('')
+      expect(hatchlingSvg({ head: id, neck: id, held: id }), String(id)).toBe(hatchlingSvg())
+    }
+    expect(juvenileSvg('heart', { head: 'nope' })).toBe(juvenileSvg('heart'))
+  })
+
+  it('draws nothing worn without an outfit, so the plain drawings are unchanged', () => {
+    for (const [stage, art] of Object.entries(STAGES_ART)) expect(art.draw('neutral'), stage).not.toContain('data-worn')
+  })
+
+  it('pins each spot inside the 64 grid', () => {
+    for (const slot of SLOTS) {
+      const [x, y] = WEAR_PIN[slot]
+      expect(x).toBeGreaterThanOrEqual(0)
+      expect(y).toBeLessThanOrEqual(64)
+    }
   })
 })

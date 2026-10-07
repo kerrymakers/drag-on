@@ -2,7 +2,8 @@
 // Everything is kept under one key, so a save is a single atomic write.
 
 import { DEFAULT_SETTINGS } from '../config/settings'
-import type { GameEvent, Settings, WakeSchedule, Weekday } from '../game/types'
+import type { GameEvent, Settings, WakeSchedule, Wearing, Weekday } from '../game/types'
+import { WEAR_SLOTS } from '../game/wearing'
 
 export const STORAGE_KEY = 'drag-on:v1'
 export const CORRUPT_KEY_PREFIX = 'drag-on:corrupt-'
@@ -28,7 +29,11 @@ export function defaultData(): SaveData {
   return {
     schemaVersion: SCHEMA_VERSION,
     events: [],
-    settings: { ...DEFAULT_SETTINGS, wakeSchedule: { ...DEFAULT_SETTINGS.wakeSchedule } },
+    settings: {
+      ...DEFAULT_SETTINGS,
+      wakeSchedule: { ...DEFAULT_SETTINGS.wakeSchedule },
+      wearing: { ...DEFAULT_SETTINGS.wearing },
+    },
   }
 }
 
@@ -58,6 +63,23 @@ function isEvent(v: unknown): v is GameEvent {
   return false
 }
 
+/**
+ * The outfit, checked for shape: each spot is a non-empty string id or null. Saves
+ * from before wearing existed (no `wearing`) and anything malformed load as nothing
+ * worn. Whether an id is a real, found item in the right spot is decided later, by
+ * game logic (wornItems), so a bad id here can never show anything. Spots a later
+ * version adds are kept, so they survive a round trip.
+ */
+function readWearing(v: unknown, defaults: Wearing): Wearing {
+  if (!isObject(v)) return { ...defaults }
+  const wearing: Wearing = { ...v, ...defaults }
+  for (const slot of WEAR_SLOTS) {
+    const id = v[slot]
+    wearing[slot] = typeof id === 'string' && id !== '' ? id : null
+  }
+  return wearing
+}
+
 const WEEKDAYS: readonly Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 const WAKE_TIME = /^([01]\d|2[0-3]):[0-5]\d$/
 
@@ -81,6 +103,7 @@ function readSettings(v: unknown): Settings {
     ...v,
     wakeSchedule: schedule,
     dragonName: typeof v.dragonName === 'string' ? v.dragonName : defaults.dragonName,
+    wearing: readWearing(v.wearing, defaults.wearing),
   }
 }
 

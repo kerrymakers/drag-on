@@ -1,12 +1,17 @@
-// How each rare item looks, for the Collection and the "found something" card.
-// Keyed by item id (config/items.ts). Game logic never imports this, so the art can
-// be replaced wholesale. An id with no drawing gets the soft "?" instead.
+// How each rare item looks, for the Collection, the "found something" card and on
+// the dragon itself. Keyed by item id (config/items.ts). Game logic never imports
+// this, so the art can be replaced wholesale. An id with no drawing gets the soft "?"
+// in a tile, and nothing at all on the dragon.
 //
 // Every drawing is on a 64×64 grid with soft, rounded shapes. Outlines and the
 // shine use CSS custom properties (see art.css), so they suit light and dark mode.
 
+import type { WearSlot, WearSpot } from './parts'
+
+const ATTRS = `stroke="var(--item-line)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"`
+
 const wrap = (id: string, body: string) =>
-  `<svg class="item-svg" data-item="${id}" viewBox="0 0 64 64" aria-hidden="true" focusable="false" stroke="var(--item-line)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`
+  `<svg class="item-svg" data-item="${id}" viewBox="0 0 64 64" aria-hidden="true" focusable="false" ${ATTRS}>${body}</svg>`
 
 const DRAWINGS: Record<string, string> = {
   bow: `
@@ -38,8 +43,8 @@ const DRAWINGS: Record<string, string> = {
     <circle cx="32" cy="27" r="7" fill="#ffd36b" />
     <circle cx="30" cy="25" r="2" fill="var(--item-shine)" stroke="none" />`,
   scarf: `
-    <path d="M10 22 C20 30 44 30 54 22 L54 32 C44 40 20 40 10 32 Z" fill="#f4a46a" />
-    <path d="M38 34 L44 56 L34 56 L30 36 Z" fill="#f4a46a" />
+    <path d="M10 22 C20 30 44 30 54 22 L54 32 C44 40 20 40 10 32 Z" fill="#e2566e" />
+    <path d="M38 34 L44 56 L34 56 L30 36 Z" fill="#e2566e" />
     <path d="M22 27 L22 37 M32 29 L32 39 M43 27 L43 37" fill="none" stroke="#fff3e2" stroke-width="4" />
     <path d="M36 44 L43 44 M38 51 L44 51" fill="none" stroke="#fff3e2" stroke-width="4" />
     <path d="M34 56 L33 61 M39 56 L39 61 M44 56 L45 61" fill="none" />`,
@@ -153,4 +158,49 @@ export function hasItemArt(id: string): boolean {
 export function itemSvg(id: string): string {
   const body = Object.hasOwn(DRAWINGS, id) ? DRAWINGS[id] : undefined
   return body === undefined ? unknownItemSvg() : wrap(id, body)
+}
+
+/**
+ * The point on the 64×64 grid that's pinned to a spot's anchor: the bottom of the brim
+ * for a hat (it sits on the head), the collar line for a neck item, and the middle
+ * for something held.
+ */
+export const WEAR_PIN: Record<WearSlot, readonly [number, number]> = {
+  head: [32, 50],
+  neck: [32, 22],
+  held: [32, 32],
+}
+
+const r2 = (n: number) => Math.round(n * 100) / 100
+
+/** An item drawn on the dragon at a spot, or '' for no item or an id with no drawing. */
+export function wornItemSvg(id: string | null | undefined, slot: WearSlot, spot: WearSpot): string {
+  if (typeof id !== 'string' || !Object.hasOwn(DRAWINGS, id)) return ''
+  const [px, py] = WEAR_PIN[slot]
+  const k = r2(spot.size / 64)
+  const turn = spot.rotate ? ` rotate(${spot.rotate})` : ''
+  return `<g class="worn-item worn-${slot}" data-worn="${id}" transform="translate(${spot.x} ${spot.y})${turn} scale(${k}) translate(${-px} ${-py})" ${ATTRS}>${DRAWINGS[id]}</g>`
+}
+
+/**
+ * The box [x0, y0, x1, y1] a worn item can cover at a spot, in the stage's own units:
+ * the whole 64×64 grid, turned and scaled, so it's never smaller than the drawing.
+ */
+export function wornItemBox(slot: WearSlot, spot: WearSpot): readonly [number, number, number, number] {
+  const [px, py] = WEAR_PIN[slot]
+  const k = spot.size / 64
+  const a = ((spot.rotate ?? 0) * Math.PI) / 180
+  const corners = [
+    [0, 0],
+    [64, 0],
+    [0, 64],
+    [64, 64],
+  ].map(([gx, gy]) => {
+    const dx = (gx! - px) * k
+    const dy = (gy! - py) * k
+    return [spot.x + dx * Math.cos(a) - dy * Math.sin(a), spot.y + dx * Math.sin(a) + dy * Math.cos(a)] as const
+  })
+  const xs = corners.map((c) => c[0])
+  const ys = corners.map((c) => c[1])
+  return [Math.floor(Math.min(...xs)), Math.floor(Math.min(...ys)), Math.ceil(Math.max(...xs)), Math.ceil(Math.max(...ys))]
 }

@@ -47,7 +47,16 @@ export interface Settings {
   wakeSchedule: WakeSchedule
   /** null means the UI says "your dragon". */
   dragonName: string | null
+  /**
+   * What the dragon has chosen to wear: one item id (or null) per spot. A preference,
+   * not a game event. What's actually worn is derived from it (see wornItems), so an
+   * id that isn't found right now, isn't known, or is in the wrong spot shows nothing.
+   */
+  wearing: Wearing
 }
+
+/** One item id, or null for nothing, per spot on the dragon. */
+export type Wearing = Record<ItemSlot, string | null>
 
 /**
  * A variable reward, rolled once at log time and saved on the log.
@@ -56,7 +65,7 @@ export interface Settings {
  */
 export type Reward = { kind: 'treat'; bonusXp: number } | { kind: 'item'; itemId: string }
 
-/** Where an item sits on the dragon once equipping arrives (Milestone 4 slice 3). */
+/** Where an item sits on the dragon. One item per spot. */
 export type ItemSlot = 'head' | 'neck' | 'held'
 
 /** A rare collectible. Ids are stable: saved rewards refer to them, so never rename one. */

@@ -113,6 +113,7 @@ Each log rolls for a surprise. The result is decided at the moment of logging an
 - 20% chance: a treat (small bonus XP and a happy animation)
 - 3% chance: a rare item (a cosmetic or collectible: hats, scarves, a tiny book, a gem)
 - Items go into a collection screen and can be equipped on the dragon.
+- Wearing items (decided 2026-10-07): each item has a spot (head, neck or held), and the dragon wears one item per spot. Tap a found item in the Collection to wear it, and tap it again to take it off. A new find goes on by itself only if its spot is free; it never replaces something I chose. What's worn is a setting, not an event, and it's worked out from what's found right now, so undoing a find takes the item off. Choices made while it's still an egg are kept and show once it hatches.
 - Bad-luck protection: if the last 30 logs (`ITEM_PITY_LOGS`) since the last item found, or since the start, brought no item, the next log brings one whatever the roll (instead of any treat). It's worked out from the event log, so undoing a log undoes its effect, and it does nothing once every item is found. Once every item is found, a roll in the rare band gives a treat instead.
 
 Added 2026-10-07 after simulation: at 3% with 12 items most users went 6 to 7 weeks without an item at some point; with 18 items and a 30-log rule the longest gap is about 3 weeks and the collection completes around day 204 for a typical user, about 6 weeks after Elder (around day 192 once first-time streak milestone items arrive in Milestone 5).

@@ -3,7 +3,7 @@ import { STAGES } from '../config/stages'
 import { STATS } from '../config/stats'
 import { dragonProgress } from '../game/state'
 import type { GameEvent, Stage } from '../game/types'
-import { COLLECTION, ITEM_FOUND, UNDONE, UNDONE_ITEM, collectionCount, collectionLine, foundTileLabel, friendlyDay, itemFoundLine, undoneToast } from './copy'
+import { COLLECTION, DRAGON_SCREEN, ITEM_FOUND, UNDONE, UNDONE_ITEM, collectionCount, collectionLine, foundTileLabel, friendlyDay, itemFoundLine, itemFoundSaved, undoneToast, wearToast } from './copy'
 import { ITEMS } from '../config/items'
 import { LOGGED, LOOK_CHANGE, TREAT_FLOAT, loggedToast, LOOK_NAMES, LOOK_REVEAL, STAGE_UP, STAGE_UP_FALLBACK, celebrationCopy, lookLabel, progressLabel } from './copy'
 
@@ -156,5 +156,48 @@ describe('collection copy', () => {
     expect(foundTileLabel('Tiny thing', friendlyDay('2026-10-06', today))).toBe('Tiny thing, found yesterday')
     expect(foundTileLabel('Tiny thing', friendlyDay('2026-10-01', today))).toBe('Tiny thing, found 1 Oct')
     expect(foundTileLabel('Tiny thing', friendlyDay('2025-12-25', today))).toBe('Tiny thing, found 25 Dec 2025')
+  })
+})
+
+describe('wearing copy', () => {
+  it('says what went on, mid-sentence, or that it came off', () => {
+    expect(wearToast('Ribbon bow', true, false)).toBe('Wearing the ribbon bow')
+    expect(wearToast('Tiny book', false, false)).toBe(COLLECTION.takenOff)
+    expect(wearToast('Tiny book', false, true)).toBe('Taken off')
+  })
+
+  it('before hatching, keeps the choice for hatching day', () => {
+    expect(wearToast('Paper crown', true, true)).toBe('Saving the paper crown for hatching day')
+  })
+
+  it('reads well for every item', () => {
+    for (const item of ITEMS) {
+      const t = wearToast(item.name, true, false)
+      expect(t, item.id).toMatch(/^Wearing the [a-z]/)
+      expect(t.length, item.id).toBeLessThanOrEqual(32) // fits a toast at 360px
+      expect(wearToast(item.name, true, true).length, item.id).toBeLessThanOrEqual(44)
+    }
+  })
+
+  it('says where a find went, and whether it went straight on', () => {
+    expect(itemFoundSaved(false, false)).toBe(ITEM_FOUND.saved)
+    expect(itemFoundSaved(false, true)).toBe(ITEM_FOUND.saved)
+    expect(itemFoundSaved(true, false)).toBe(ITEM_FOUND.savedWearing)
+    expect(itemFoundSaved(true, true)).toBe(ITEM_FOUND.savedWearingEgg)
+  })
+
+  it('never guilt-trips', () => {
+    const all = [
+      ITEM_FOUND.savedWearing,
+      ITEM_FOUND.savedWearingEgg,
+      COLLECTION.wearing,
+      COLLECTION.wearHint,
+      COLLECTION.eggLine,
+      COLLECTION.takenOff,
+      DRAGON_SCREEN.wearingTitle,
+      DRAGON_SCREEN.wearingEmpty,
+      DRAGON_SCREEN.wearingEgg,
+    ]
+    for (const text of all) expect(text, text).not.toMatch(/\b(missed|failed|lost|only|should|never|yet to|must)\b/i)
   })
 })

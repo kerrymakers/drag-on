@@ -1,7 +1,7 @@
 // The app shell: wires game logic, storage and art to the Home, Dragon and Collection screens.
 // This is the only layer that reads the clock (Date.now), generates ids and rolls dice.
 
-import { react, renderDragon, speechAnchor } from '../art'
+import { react, renderDragon, speechAnchor, speechKeepClear, type WearLook } from '../art'
 import { EVOLVES_AT_STAGE, LOOK_CHANGE_MARGIN } from '../config/evolution'
 import { REWARDS } from '../config/rewards'
 import { MOODS } from '../config/mood'
@@ -11,7 +11,7 @@ import { TASKS } from '../config/tasks'
 import { dayKey, dayMinutesToClock } from '../game/day'
 import { evolutionLook, lookChange, type Evolution } from '../game/evolution'
 import { createLogEvent, createUndoEvent, undoableLog } from '../game/log'
-import { itemFor, treatBonus } from '../game/rewards'
+import { foundItems, itemFor, treatBonus } from '../game/rewards'
 import {
   nextRefreshAt,
   dragonProgress,
@@ -22,7 +22,8 @@ import {
   totalXp,
   wakeDeadline,
 } from '../game/state'
-import type { GameEvent, RewardRoll, Settings, Task, TaskAvailability } from '../game/types'
+import type { GameEvent, Item, RewardRoll, Settings, Task, TaskAvailability, Wearing } from '../game/types'
+import { isWorn, toggleWear, wearOnFind, wornItems, type WornItems } from '../game/wearing'
 import { STORAGE_KEY, load, requestPersistence, save } from '../storage'
 import { celebrate } from './celebrate'
 import { createCollectionScreen } from './collection-screen'
@@ -31,6 +32,7 @@ import { createDragonScreen } from './dragon-screen'
 import { newId } from './ids'
 import { showItemFound } from './item-found'
 import { createNav, type Route } from './nav'
+import { outfitOf } from './outfit'
 import { watchScrollFade } from './scroll-fade'
 import { placeSpeech } from './speech'
 import { createToast } from './toast'
@@ -44,6 +46,11 @@ const EVOLUTION_RULES = { evolvesAt: EVOLVES_AT_STAGE, margin: LOOK_CHANGE_MARGI
 /** The dragon's evolution look and every look it has had, derived from the log. */
 function evolution(events: readonly GameEvent[]): Evolution {
   return evolutionLook(events, TASKS, STATS, STAGES, EVOLUTION_RULES)
+}
+
+/** What's worn right now: only found, known items in their own spot (see wornItems). */
+function wornNow(events: readonly GameEvent[], wearing: Wearing): WornItems {
+  return wornItems(wearing, foundItems(events, REWARDS.items), REWARDS.items)
 }
 
 const TICK_MS = 60_000
@@ -181,7 +188,7 @@ export function startApp(doc: Document): App {
     collectionScreen: byId(doc, 'collection-screen'),
   }
   const dragonScreen = createDragonScreen(doc, el.dragonScreen, { tasks: TASKS, stats: STATS, stages: STAGES })
-  const collectionScreen = createCollectionScreen(doc, el.collectionScreen, { items: REWARDS.items })
+  const collectionScreen = createCollectionScreen(doc, el.collectionScreen, { items: REWARDS.items, onWear: wear })
   const refreshTaskFade = watchScrollFade(byId(doc, 'tasks'))
   let route: Route = 'home'
   const toast = createToast(
@@ -203,11 +210,16 @@ export function startApp(doc: Document): App {
     const area = bubble.parentElement?.getBoundingClientRect()
     const avoid = speechAnchor(el.art)
     if (area && avoid) {
-      const p = placeSpeech(area, avoid, (maxWidth, compact) => {
-        bubble.style.maxWidth = `${maxWidth}px`
-        bubble.classList.toggle('is-compact', compact)
-        return { width: bubble.offsetWidth, height: bubble.offsetHeight }
-      })
+      const p = placeSpeech(
+        area,
+        avoid,
+        (maxWidth, compact) => {
+          bubble.style.maxWidth = `${maxWidth}px`
+          bubble.classList.toggle('is-compact', compact)
+          return { width: bubble.offsetWidth, height: bubble.offsetHeight }
+        },
+        speechKeepClear(el.art),
+      )
       bubble.style.maxWidth = `${p.maxWidth}px`
       bubble.classList.toggle('is-compact', p.compact)
       bubble.style.left = `${Math.round(p.left)}px`
@@ -254,6 +266,13 @@ export function startApp(doc: Document): App {
   if (readOnly) console.warn(`Not saving on this device (${notice}), so nothing stored is overwritten.`)
   if (loadNotice) showNotice(loadNotice)
 
+  /**
+   * While a find's card is pending (and any stage-up before it), Home keeps the outfit
+   * from before the find, so the card is where the item first appears. The real
+   * outfit is already saved; it shows once the card closes.
+   */
+  let homeOutfitHold: WearLook | null = null
+
   let refreshTimer: number | undefined
   let taskSignature = ''
   function scheduleRefresh(now: number) {
@@ -269,9 +288,11 @@ export function startApp(doc: Document): App {
     el.stage.textContent = progress.stage.name
     const { mood } = moodFor(data.events, now, MOODS)
     const { look } = evolution(data.events)
+    const worn = wornNow(data.events, data.settings.wearing)
+    const wearing = outfitOf(worn)
     el.mood.textContent = MOOD_LABELS[mood]
     el.mood.dataset.mood = mood
-    renderDragon(el.art, { stage: progress.stage.id, progress: progress.fraction, mood, look })
+    renderDragon(el.art, { stage: progress.stage.id, progress: progress.fraction, mood, look, wearing: homeOutfitHold ?? wearing })
 
     const label = progressLabel(progress.stage.id, progress.xpToNext, progress.next?.name ?? null)
     el.label.textContent = label
@@ -311,10 +332,18 @@ export function startApp(doc: Document): App {
         progress: progress.fraction,
         mood,
         look,
+        worn,
         now,
       })
     }
-    if (route === 'collection') collectionScreen.render({ events: data.events, now })
+    if (route === 'collection') {
+      collectionScreen.render({
+        events: data.events,
+        now,
+        worn,
+        dragon: { stage: progress.stage.id, progress: progress.fraction, mood, look, wearing },
+      })
+    }
 
     scheduleRefresh(now)
   }
@@ -327,6 +356,10 @@ export function startApp(doc: Document): App {
   function commit(event: GameEvent) {
     data = { ...data, events: [...data.events, event] }
     updates.noteActivity()
+    persist()
+  }
+
+  function persist() {
     if (readOnly) return
     try {
       save(data)
@@ -334,6 +367,19 @@ export function startApp(doc: Document): App {
       console.warn('Could not save to this device', err)
       showNotice(NOTICES.saveFailed)
     }
+  }
+
+  /** The outfit is a setting: saved straight away, never part of the event log. */
+  function setWearing(wearing: Wearing) {
+    data = { ...data, settings: { ...data.settings, wearing } }
+    persist()
+  }
+
+  /** A found tile in Collection was tapped: put it on, or take it off. */
+  function wear(item: Item): boolean {
+    setWearing(toggleWear(data.settings.wearing, item))
+    render()
+    return isWorn(wornNow(data.events, data.settings.wearing), item)
   }
 
   function undoLast() {
@@ -353,6 +399,8 @@ export function startApp(doc: Document): App {
     if (!button || !task) return
     const now = Date.now()
     const before = data.events
+    // The outfit before this log, for any stage-up moment: a find stays a surprise until its card.
+    const outfitBefore: WearLook = outfitOf(wornNow(before, data.settings.wearing))
     const event = createLogEvent(task, data.events, data.settings, now, newId(), STAGES, rewardRoll(), REWARDS)
     if (!event) {
       render(now) // the screen was stale (e.g. the wake window just closed)
@@ -365,6 +413,13 @@ export function startApp(doc: Document): App {
     // A treat or a find is always good news, on top of the usual feedback. A normal log is unchanged.
     const bonus = treatBonus(event)
     const item = itemFor(event, REWARDS.items)
+    // After the save: a find goes straight on if its spot is free. Never replaces a choice.
+    if (item) {
+      const next = wearOnFind(data.settings.wearing, item, foundItems(data.events, REWARDS.items), REWARDS.items)
+      if (next !== data.settings.wearing) setWearing(next)
+    }
+    const wearingFind = item !== null && isWorn(wornNow(data.events, data.settings.wearing), item)
+    if (item) homeOutfitHold = outfitBefore
     hush()
     haptic(item ? HAPTIC_ITEM : bonus > 0 ? HAPTIC_TREAT : HAPTIC_LOG)
     render(now)
@@ -388,6 +443,12 @@ export function startApp(doc: Document): App {
     // After every overlay has closed.
     const done = () => {
       updates.setBusy(false)
+      // The find's card has been seen: now Home wears it (if it went on), with a little hop.
+      if (homeOutfitHold) {
+        homeOutfitHold = null
+        render()
+        if (wearingFind) react(el.art, 'perk')
+      }
       // The overlay hid the treat's floats (or the find) and outlasted its toast: say it
       // again, with Undo while this log is still the one Undo would take back.
       if (bonus > 0 || item) {
@@ -398,7 +459,15 @@ export function startApp(doc: Document): App {
     // A find gets its own little card, after any stage-up or new-look moment.
     const showFind = () => {
       if (!item) return done()
-      showItemFound(doc, { item, reducedMotion: prefersReducedMotion(), background, returnFocus, onClose: done })
+      showItemFound(doc, {
+        item,
+        wearing: wearingFind,
+        egg: dragonStage(data.events, STAGES).id === 'egg',
+        reducedMotion: prefersReducedMotion(),
+        background,
+        returnFocus,
+        onClose: done,
+      })
     }
 
     // A stage-up gets the full moment. A look the dragon has never had gets a gentle
@@ -416,6 +485,7 @@ export function startApp(doc: Document): App {
         fromLook: lookBefore.look,
         toLook: lookAfter.look,
         newLook: newLook?.firstTime ? newLook.look : null,
+        wearing: outfitBefore,
         reducedMotion: prefersReducedMotion(),
         background,
         // With a find to show next, focus goes straight to its card instead.
