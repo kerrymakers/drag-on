@@ -1,4 +1,4 @@
-// The app shell: wires game logic, storage and art to the Home, Dragon and Collection screens.
+// The app shell: wires game logic, storage and art to the Home, Dragon, Collection and History screens.
 // This is the only layer that reads the clock (Date.now), generates ids and rolls dice.
 
 import { react, renderDragon, speechAnchor, speechKeepClear, type WearLook } from '../art'
@@ -7,6 +7,7 @@ import { REWARDS } from '../config/rewards'
 import { MOODS } from '../config/mood'
 import { STAGES } from '../config/stages'
 import { STATS } from '../config/stats'
+import { STREAK_CHIP_FROM, STREAKS } from '../config/streaks'
 import { TASKS } from '../config/tasks'
 import { dayKey, dayMinutesToClock } from '../game/day'
 import { evolutionLook, lookChange, type Evolution } from '../game/evolution'
@@ -22,13 +23,26 @@ import {
   totalXp,
   wakeDeadline,
 } from '../game/state'
+import { overallStreak } from '../game/streaks'
 import type { GameEvent, Item, RewardRoll, Settings, Task, TaskAvailability, Wearing } from '../game/types'
 import { isWorn, toggleWear, wearOnFind, wornItems, type WornItems } from '../game/wearing'
 import { STORAGE_KEY, load, requestPersistence, save } from '../storage'
 import { celebrate } from './celebrate'
 import { createCollectionScreen } from './collection-screen'
-import { MOOD_LABELS, TREAT_FLOAT, loggedToast, NOTICES, noticeFor, progressLabel, undoneToast, welcomeLine } from './copy'
+import {
+  MOOD_LABELS,
+  TREAT_FLOAT,
+  loggedToast,
+  NOTICES,
+  noticeFor,
+  progressLabel,
+  streakChip,
+  streakChipLabel,
+  undoneToast,
+  welcomeLine,
+} from './copy'
 import { createDragonScreen } from './dragon-screen'
+import { createHistoryScreen } from './history-screen'
 import { newId } from './ids'
 import { showItemFound } from './item-found'
 import { createNav, type Route } from './nav'
@@ -186,9 +200,12 @@ export function startApp(doc: Document): App {
     home: byId(doc, 'home'),
     dragonScreen: byId(doc, 'dragon-screen'),
     collectionScreen: byId(doc, 'collection-screen'),
+    historyScreen: byId(doc, 'history-screen'),
+    streakChip: byId<HTMLButtonElement>(doc, 'streak-chip'),
   }
   const dragonScreen = createDragonScreen(doc, el.dragonScreen, { tasks: TASKS, stats: STATS, stages: STAGES })
   const collectionScreen = createCollectionScreen(doc, el.collectionScreen, { items: REWARDS.items, onWear: wear })
+  const historyScreen = createHistoryScreen(doc, el.historyScreen, { tasks: TASKS, items: REWARDS.items, streaks: STREAKS })
   const refreshTaskFade = watchScrollFade(byId(doc, 'tasks'))
   let route: Route = 'home'
   const toast = createToast(
@@ -302,6 +319,15 @@ export function startApp(doc: Document): App {
     el.bar.setAttribute('aria-valuenow', String(percent))
     el.bar.setAttribute('aria-valuetext', label)
 
+    // A small, quiet streak chip: only from 2 days, and never a warning.
+    const streak = overallStreak(data.events, now, STREAKS).current
+    const showChip = streak >= STREAK_CHIP_FROM
+    el.streakChip.hidden = !showChip
+    if (showChip) {
+      el.streakChip.textContent = streakChip(streak)
+      el.streakChip.setAttribute('aria-label', streakChipLabel(streak))
+    }
+
     // Only rebuild the buttons when something about them changed, so a tick never
     // swaps a button out from under a finger or drops keyboard focus.
     const visible = TASKS.map((task) => ({
@@ -344,6 +370,8 @@ export function startApp(doc: Document): App {
         dragon: { stage: progress.stage.id, progress: progress.fraction, mood, look, wearing },
       })
     }
+
+    if (route === 'history') historyScreen.render({ events: data.events, settings: data.settings, now })
 
     scheduleRefresh(now)
   }
@@ -500,6 +528,9 @@ export function startApp(doc: Document): App {
 
   el.undo.addEventListener('click', undoLast)
 
+  // The streak chip opens History, the same way its tab would.
+  el.streakChip.addEventListener('click', () => nav.go('history'))
+
   // Decorative: a little bounce. Never logs anything.
   el.art.addEventListener('click', () => react(el.art, 'tap'))
 
@@ -522,11 +553,14 @@ export function startApp(doc: Document): App {
 
   // Screens. Switching never logs or undoes anything, and Home keeps its state
   // (toast, task buttons) while hidden.
-  createNav(doc, byId(doc, 'tabbar'), (next, from) => {
+  const nav = createNav(doc, byId(doc, 'tabbar'), (next, from) => {
     route = next
     el.home.hidden = next !== 'home'
     el.dragonScreen.hidden = next !== 'dragon'
     el.collectionScreen.hidden = next !== 'collection'
+    el.historyScreen.hidden = next !== 'history'
+    // History opens on this month with today selected.
+    if (next === 'history') historyScreen.reset()
     if (from === null) return // the first render happens below
     if (next !== 'home') {
       hush()

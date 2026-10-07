@@ -145,6 +145,12 @@ export function nextDayKey(key: string): string {
   return shiftDate(y ?? 1970, m ?? 1, d ?? 1, 1)
 }
 
+/** The game day `delta` days after `key` (before it, if negative). Calendar arithmetic only. */
+export function shiftDayKey(key: string, delta: number): string {
+  const [y, m, d] = key.split('-').map(Number)
+  return shiftDate(y ?? 1970, m ?? 1, d ?? 1, delta)
+}
+
 /** The next 04:00 day start strictly after `now`. */
 export function nextDayStart(now: number): number {
   return instantInDay(nextDayKey(dayKey(now)), 0)

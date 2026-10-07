@@ -1,6 +1,7 @@
 // Words the app says. Warm, never guilt-tripping. Not game logic, not balancing.
 
 import { daysBetween } from '../game/day'
+import type { DayStatus } from '../game/streaks'
 import type { MoodId, StatId } from '../game/types'
 import type { LoadNotice } from '../storage'
 
@@ -273,3 +274,94 @@ export function friendlyDay(dayKey: string, todayKey: string): string {
   const label = `${Number(m[3])} ${MONTHS[Number(m[2]) - 1] ?? ''}`.trim()
   return m[1] === todayKey.slice(0, 4) ? label : `${label} ${m[1]}`
 }
+
+/** "1 day", "12 days". */
+export const dayCount = (n: number): string => `${n} ${n === 1 ? 'day' : 'days'}`
+
+/** Words on the History screen. A streak that's ended is a fresh start, never a loss. */
+export const HISTORY = {
+  title: 'History',
+  /** Under the big streak number. */
+  streakLabel: 'in a row',
+  /** The streak is 0 but there have been logs before. */
+  freshStart: 'A fresh start today',
+  /** Nothing logged ever. */
+  noLogs: 'Your first log starts a streak',
+  /** A screen reader's version of the snowflakes. */
+  freezesNone: 'No streak freezes yet',
+  wakeTitle: 'Up on time',
+  /** Under the wake-up streak: weekends (or any day with no target) never count against it. */
+  wakeNote: "Days with no wake-up time don't count",
+  weekTitle: 'This week',
+  /** A task not logged this week yet. */
+  weekNone: 'Not yet',
+  prevMonth: 'Previous month',
+  nextMonth: 'Next month',
+  /** Day detail, nothing logged. */
+  quietDay: 'A quiet day.',
+  /** Day detail, today with nothing logged yet. */
+  todayEmpty: 'Nothing logged yet today.',
+  /** Day detail, a day a freeze covered. */
+  frozenDay: 'A quiet day. A streak freeze kept things cosy.',
+  /** A task id that's no longer in config. */
+  unknownTask: 'A task',
+} as const
+
+/** "Best: 15 days". */
+export const bestStreak = (n: number): string => `Best: ${dayCount(n)}`
+
+/** "2 streak freezes ready" (or how one is earned, before any). */
+export function freezesLine(held: number, everyDays: number): string {
+  if (held <= 0) return `A streak freeze arrives every ${dayCount(everyDays)} in a row`
+  return held === 1 ? '1 streak freeze ready' : `${held} streak freezes ready`
+}
+
+/** A task's line in "This week": "3 days · best 5". */
+export function weekLine(thisWeek: number, bestWeek: number): string {
+  const now = thisWeek > 0 ? dayCount(thisWeek) : HISTORY.weekNone
+  return bestWeek > thisWeek ? `${now} · best ${bestWeek}` : now
+}
+
+/** The streak chip on Home, e.g. "12 days". */
+export const streakChip = (n: number): string => dayCount(n)
+/** Its accessible name. */
+export const streakChipLabel = (n: number): string => `${dayCount(n)} in a row. Open History`
+
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+]
+
+/** "October 2026" from "2026-10". */
+export function monthTitle(month: string): string {
+  const [y, m] = month.split('-').map(Number)
+  return `${MONTH_NAMES[(m ?? 1) - 1] ?? ''} ${y ?? ''}`.trim()
+}
+
+/** A calendar day's accessible name, e.g. "5 October, logged". Quiet days just say the date. */
+export function calendarDayLabel(key: string, status: DayStatus | null, today: boolean): string {
+  const [, m, d] = key.split('-').map(Number)
+  const parts = [`${d ?? ''} ${MONTH_NAMES[(m ?? 1) - 1] ?? ''}`]
+  if (today) parts.push('today')
+  if (status === 'logged') parts.push('logged')
+  if (status === 'frozen') parts.push('kept cosy by a streak freeze')
+  return parts.join(', ')
+}
+
+/** A log in the day detail: "+38 XP", with any treat called out. */
+export function historyLogXp(xp: number, treat: number): string {
+  return treat > 0 ? `+${xp} XP (with a +${treat} treat)` : `+${xp} XP`
+}
+
+/** "Found the tiny book". */
+export const historyFound = (name: string): string => `Found the ${midSentence(name)}`

@@ -1,4 +1,4 @@
-// The bottom tab bar and hash routing (#/, #/dragon and #/collection, GitHub Pages friendly).
+// The bottom tab bar and hash routing (#/, #/dragon, #/collection and #/history, GitHub Pages friendly).
 //
 // History works like a phone app's tabs: going from Home to another tab pushes one
 // history entry, and moving between other tabs replaces it. So Android's back button
@@ -6,7 +6,7 @@
 
 import { ICONS, type IconName } from './icons'
 
-export type Route = 'home' | 'dragon' | 'collection'
+export type Route = 'home' | 'dragon' | 'collection' | 'history'
 
 interface Tab {
   route: Route
@@ -20,6 +20,7 @@ export const TABS: readonly Tab[] = [
   { route: 'home', hash: '#/', label: 'Home', icon: 'home' },
   { route: 'dragon', hash: '#/dragon', label: 'Dragon', icon: 'dragon' },
   { route: 'collection', hash: '#/collection', label: 'Collection', icon: 'collection' },
+  { route: 'history', hash: '#/history', label: 'History', icon: 'calendar' },
 ]
 
 /** The route for a location hash. Anything unknown (or empty) is Home. */
@@ -104,6 +105,8 @@ export function goingBackGuard(host: GuardHost): GoingBackGuard {
 
 export interface Nav {
   readonly route: Route
+  /** Goes to a tab exactly as tapping it would (for links inside a screen, like the streak chip). */
+  go(to: Route): void
 }
 
 /**
@@ -146,7 +149,10 @@ export function createNav(doc: Document, bar: HTMLElement, onRoute: (route: Rout
     const a = (e.target as Element).closest<HTMLAnchorElement>('a.tab')
     if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
     e.preventDefault()
-    const to = (a.dataset.route as Route | undefined) ?? 'home'
+    go((a.dataset.route as Route | undefined) ?? 'home')
+  })
+
+  function go(to: Route) {
     const tab = TABS.find((t) => t.route === to)
     const from = route ?? 'home'
     if (!tab) return
@@ -166,7 +172,7 @@ export function createNav(doc: Document, bar: HTMLElement, onRoute: (route: Rout
         break
     }
     apply(to)
-  })
+  }
 
   const fromLocation = () => apply(routeFromHash(win.location.hash))
   // The guard clears itself on popstate and pageshow (any back() in flight is long gone).
@@ -181,5 +187,6 @@ export function createNav(doc: Document, bar: HTMLElement, onRoute: (route: Rout
     get route() {
       return route ?? 'home'
     },
+    go,
   }
 }

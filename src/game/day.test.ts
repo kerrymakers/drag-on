@@ -8,6 +8,7 @@ import {
   nextDayKey,
   minutesSinceDayStart,
   nextDayStart,
+  shiftDayKey,
   weekdayOf,
 } from './day'
 import { at } from '../testing/helpers'
@@ -152,6 +153,16 @@ describe('nextDayKey', () => {
     expect(nextDayKey('2026-10-05')).toBe('2026-10-06')
     expect(nextDayKey('2026-02-28')).toBe('2026-03-01')
     expect(nextDayKey('2026-12-31')).toBe('2027-01-01')
+  })
+})
+
+describe('shiftDayKey', () => {
+  it('steps whole calendar days either way, across months, years and clock changes', () => {
+    expect(shiftDayKey('2026-10-05', 0)).toBe('2026-10-05')
+    expect(shiftDayKey('2026-10-05', -5)).toBe('2026-09-30')
+    expect(shiftDayKey('2026-01-01', -1)).toBe('2025-12-31')
+    expect(shiftDayKey('2026-10-24', 3)).toBe('2026-10-27') // over the clocks going back
+    expect(shiftDayKey('2028-03-01', -1)).toBe('2028-02-29')
   })
 })
 

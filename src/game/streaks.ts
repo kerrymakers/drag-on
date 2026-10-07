@@ -1,0 +1,201 @@
+// Streaks, streak freezes and weekly counts, all worked out from the event log by
+// walking game days from the first log to `now`. Nothing here is stored, so undoing a
+// log (or changing the wake schedule) recalculates everything.
+//
+// Agreed 2026-10-07: only two daily streaks (the overall "any log" one and wake-up),
+// and freezes protect the overall streak only. Other tasks get weekly counts instead,
+// so a rest day never resets anything.
+
+import type { StreakConfig } from '../config/streaks'
+import { activeLogs } from './active'
+import { clockToDayMinutes, dayKey, nextDayKey, shiftDayKey, weekdayOf } from './day'
+import type { GameEvent, Settings, Task, Weekday } from './types'
+
+/**
+ * How a game day looks on the History calendar.
+ * - logged: at least one active log.
+ * - frozen: a finished day with no log, covered by a held freeze. The streak carried on.
+ * - missed: a finished day with no log and nothing to cover it. Never shown as a failure.
+ * - pending: today, with no log yet. Never "missed" while it's still going.
+ */
+export type DayStatus = 'logged' | 'frozen' | 'missed' | 'pending'
+
+export interface OverallStreak {
+  /**
+   * Days with a log in the current run. Frozen days keep the run going but don't add
+   * to it. An unlogged today doesn't count yet, so this shows the run through yesterday.
+   */
+  current: number
+  /** The longest run ever, counted the same way. */
+  best: number
+  /** Freezes held right now (0 to freezeMaxHeld). */
+  freezesHeld: number
+  /** Whether today has a log yet. */
+  todayLogged: boolean
+  /** Every game day from the first log's day to today. Days outside that range have no entry. */
+  days: ReadonlyMap<string, DayStatus>
+}
+
+/** The distinct game days with an active log, up to and including `today`. */
+function loggedDays(events: readonly GameEvent[], today: string, taskIds?: ReadonlySet<string>): Set<string> {
+  const days = new Set<string>()
+  for (const log of activeLogs(events)) {
+    if (taskIds && !taskIds.has(log.taskId)) continue
+    const key = dayKey(log.timestamp)
+    if (key <= today) days.add(key) // a log from the future (clock skew) waits until its day
+  }
+  return days
+}
+
+/** The earliest day key in a set, or null if it's empty. */
+function earliest(days: ReadonlySet<string>): string | null {
+  let first: string | null = null
+  for (const d of days) if (first === null || d < first) first = d
+  return first
+}
+
+/**
+ * The overall "any log" streak. Walking day by day from the first log:
+ * - A day with a log adds one. Each time the count reaches a multiple of
+ *   `freezeEveryDays`, a freeze is earned (up to `freezeMaxHeld`).
+ * - A finished day with no log, during a run, uses a held freeze if there is one: the
+ *   run carries on and the day doesn't add to the count. With no freeze, the run ends
+ *   quietly and the count goes back to 0.
+ * - Nothing else changes the freezes held. A run only ends once none are left, so a
+ *   new run always starts from 0 and earns its own.
+ * - Today, unlogged, is pending: it never ends a run or uses a freeze.
+ * A freeze is spent on the first quiet day even if the next day ends the run anyway,
+ * because at the time nobody knows whether the next day will be logged.
+ */
+export function overallStreak(events: readonly GameEvent[], now: number, config: StreakConfig): OverallStreak {
+  const today = dayKey(now)
+  const logged = loggedDays(events, today)
+  const days = new Map<string, DayStatus>()
+  const first = earliest(logged)
+  let current = 0
+  let best = 0
+  let held = 0
+  if (first !== null) {
+    for (let d = first; d <= today; d = nextDayKey(d)) {
+      if (logged.has(d)) {
+        current++
+        best = Math.max(best, current)
+        if (config.freezeEveryDays >= 1 && current % config.freezeEveryDays === 0) {
+          held = Math.min(config.freezeMaxHeld, held + 1)
+        }
+        days.set(d, 'logged')
+      } else if (d === today) {
+        days.set(d, 'pending')
+      } else if (held > 0) {
+        // Only possible during a run: held is always 0 while current is 0.
+        held--
+        days.set(d, 'frozen')
+      } else {
+        current = 0
+        days.set(d, 'missed')
+      }
+    }
+  }
+  return { current, best, freezesHeld: Math.max(0, held), todayLogged: logged.has(today), days }
+}
+
+export interface WakeStreak {
+  /** Target days in a row with a wake-up log. An unlogged today doesn't count yet. */
+  current: number
+  /** The longest run ever. */
+  best: number
+  /** Whether the current schedule has a target on any day of the week. */
+  hasTargets: boolean
+}
+
+/** Whether `weekday` has a usable wake target in the schedule (a malformed time counts as none). */
+function hasTarget(settings: Settings, weekday: Weekday): boolean {
+  const target = settings.wakeSchedule[weekday]
+  return target != null && clockToDayMinutes(target) !== null
+}
+
+/**
+ * The wake-up streak: days in a row on which a wake-up task (rules.kind 'wakeUp') was
+ * logged. Logs only exist when they were in time (see createLogEvent), so every
+ * active one counts. Days are judged by the current `settings.wakeSchedule`:
+ * - a day with a target and a log adds one;
+ * - a finished day with a target and no log ends the run quietly;
+ * - a day with no target is skipped, neither adding nor ending anything (but a log
+ *   on it still counts, since it must have had a target when it was logged);
+ * - today, unlogged, is pending.
+ * Not protected by freezes. A schedule with no targets at all skips every unlogged
+ * day, so the streak simply rests where it was.
+ * Past days are judged by the schedule as it is now (the spec's intent): adding a
+ * target to a day can end a run on an earlier unlogged day of that weekday.
+ */
+export function wakeStreak(
+  events: readonly GameEvent[],
+  tasks: readonly Task[],
+  settings: Settings,
+  now: number,
+): WakeStreak {
+  const today = dayKey(now)
+  const wakeIds = new Set(tasks.filter((t) => t.rules.kind === 'wakeUp').map((t) => t.id))
+  const weekdays: readonly Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+  const hasTargets = weekdays.some((w) => hasTarget(settings, w))
+  const logged = loggedDays(events, today, wakeIds)
+  const first = earliest(logged)
+  let current = 0
+  let best = 0
+  if (first !== null) {
+    for (let d = first; d <= today; d = nextDayKey(d)) {
+      if (logged.has(d)) {
+        current++
+        best = Math.max(best, current)
+      } else if (d !== today && hasTarget(settings, weekdayOf(d))) {
+        current = 0
+      }
+    }
+  }
+  return { current, best, hasTargets }
+}
+
+/** The first day of the week (starting on `weekStart`) that game day `key` falls in. */
+export function weekStartKey(key: string, weekStart: Weekday): string {
+  const order: readonly Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+  const back = (order.indexOf(weekdayOf(key)) - order.indexOf(weekStart) + 7) % 7
+  return shiftDayKey(key, -back)
+}
+
+export interface WeeklyCount {
+  taskId: string
+  /** Distinct game days with a log of this task in the current week (so far). */
+  thisWeek: number
+  /** The most distinct days in any one week, this one included. */
+  bestWeek: number
+}
+
+/**
+ * For each task, in the order given: how many distinct game days it was logged on in
+ * the current week (weeks start on `config.weekStart`), and its best week ever. A task
+ * logged twice in a day counts that day once. Logs dated after today are ignored.
+ */
+export function weeklyCounts(
+  events: readonly GameEvent[],
+  tasks: readonly Task[],
+  now: number,
+  config: StreakConfig,
+): WeeklyCount[] {
+  const today = dayKey(now)
+  const thisWeek = weekStartKey(today, config.weekStart)
+  return tasks.map((task) => {
+    const perWeek = new Map<string, number>()
+    for (const d of loggedDays(events, today, new Set([task.id]))) {
+      const week = weekStartKey(d, config.weekStart)
+      perWeek.set(week, (perWeek.get(week) ?? 0) + 1)
+    }
+    let bestWeek = 0
+    for (const n of perWeek.values()) bestWeek = Math.max(bestWeek, n)
+    return { taskId: task.id, thisWeek: perWeek.get(thisWeek) ?? 0, bestWeek }
+  })
+}
+
+/** The game day of the first active log (ignoring any dated after today), or null before any log. */
+export function firstLogDay(events: readonly GameEvent[], now: number): string | null {
+  return earliest(loggedDays(events, dayKey(now)))
+}

@@ -40,7 +40,10 @@
           </div>
           <div class="growth-row">
             <span class="growth-label" id="growth-label">100 XP to hatch</span>
-            <span class="growth-total"><span id="xp-total">0</span> XP</span>
+            <span class="growth-side">
+              <button type="button" class="streak-chip" id="streak-chip" hidden></button>
+              <span class="growth-total"><span id="xp-total">0</span> XP</span>
+            </span>
           </div>
           <div
             class="xp-bar"
@@ -64,6 +67,8 @@
       <main class="screen dragon-screen" id="dragon-screen" aria-labelledby="ds-title" hidden></main>
 
       <main class="screen collection-screen" id="collection-screen" aria-labelledby="cs-title" hidden></main>
+
+      <main class="screen history-screen" id="history-screen" aria-labelledby="hs-title" hidden></main>
 
       <nav class="tabbar" id="tabbar" aria-label="Screens"></nav>
     </div>

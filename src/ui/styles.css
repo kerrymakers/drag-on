@@ -1803,3 +1803,365 @@ button.item-tile:focus-visible {
 .wear-empty:not([hidden]) {
   margin-top: 0;
 }
+
+/* Home: the streak chip beside the XP total. Small and soft, never an alarm. Its tap
+   area reaches 44px tall without making the row any taller. It grows down and
+   sideways only (over the XP bar, which isn't tappable), never up, so it can't reach
+   the toast's Undo button or the dragon above. */
+.growth-label {
+  min-width: 0;
+}
+.growth-side {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.streak-chip {
+  position: relative;
+  align-self: center;
+  /* Negative margins so the chip never makes the row taller and nudges the tasks down. */
+  margin: -4px 0;
+  padding: 1px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--streak-bg);
+  color: var(--streak-text);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1.5;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 160ms var(--bounce);
+}
+.streak-chip::before {
+  content: '';
+  position: absolute;
+  inset: 0 -6px -23px;
+}
+.streak-chip:active {
+  transform: scale(0.94);
+}
+.streak-chip:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+:root {
+  --streak-bg: #e3eef8;
+  --streak-text: #3d5f80;
+  --cal-dot: #ee8f5a;
+  --cal-frost: #3f6a96;
+  --cal-selected: #ffe2c2;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --streak-bg: #2f4256;
+    --streak-text: #cfe2f5;
+    --cal-dot: #f3b98f;
+    --cal-frost: #bcdcff;
+    --cal-selected: #5a3a24;
+  }
+}
+
+/* History screen */
+.history-screen {
+  display: flex;
+  flex-direction: column;
+}
+
+.hs-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px var(--space) 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* A tapped day's card scrolls clear of the faded edges. */
+  scroll-padding: 28px 0 36px;
+}
+
+.hs-title {
+  margin: 4px 0 0;
+  text-align: center;
+  font-size: 1.6rem;
+  font-weight: 800;
+}
+
+.hs-streak {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.hs-streak-number {
+  margin: 0;
+  min-width: 64px;
+  height: 64px;
+  padding: 0 12px;
+  display: grid;
+  place-items: center;
+  border-radius: 32px;
+  background: #ffe2c2;
+  color: #9a4c1c;
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1;
+}
+.hs-streak-label {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+.hs-best {
+  margin: 2px 0 0;
+  color: var(--text-soft);
+  font-weight: 600;
+}
+
+.hs-freezes {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 0;
+  color: var(--text-soft);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.hs-flakes {
+  display: flex;
+  gap: 2px;
+  color: var(--cal-frost);
+}
+.hs-flakes .icon {
+  width: 20px;
+  height: 20px;
+}
+
+.hs-wake {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 2px solid var(--track);
+}
+.hs-note {
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+  color: var(--text-soft);
+  font-size: 0.82rem;
+}
+
+.hs-subtitle {
+  margin: 14px 0 6px;
+  padding-top: 12px;
+  border-top: 2px solid var(--track);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.hs-week {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.hs-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.hs-row-name {
+  min-width: 0;
+  font-weight: 600;
+}
+.hs-row-value {
+  flex-shrink: 0;
+  color: var(--text-soft);
+  font-size: 0.92rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Calendar: seven columns of at least 44px, which still fits at 360px wide. */
+.hs-calendar {
+  padding: 10px 6px 10px;
+}
+.hs-month-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.hs-month {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  text-align: center;
+}
+.hs-month-btn {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 22px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.hs-month-btn:active:not(:disabled) {
+  background: var(--surface-done);
+}
+.hs-month-btn:disabled {
+  color: var(--track);
+  cursor: default;
+}
+.hs-month-btn:focus-visible,
+.hs-cell:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.hs-weekdays,
+.hs-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(44px, 1fr));
+}
+.hs-weekday {
+  padding: 2px 0 4px;
+  text-align: center;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.hs-cell {
+  position: relative;
+  min-width: 44px;
+  min-height: 48px;
+  margin: 0;
+  padding: 4px 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  touch-action: manipulation;
+}
+button.hs-cell {
+  cursor: pointer;
+}
+.hs-cell.is-future,
+.hs-cell.is-before {
+  color: var(--text-soft);
+  opacity: 0.5;
+}
+.hs-cell-num {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 15px;
+}
+.hs-cell.is-today .hs-cell-num {
+  box-shadow: inset 0 0 0 2px var(--accent-strong);
+  font-weight: 800;
+}
+.hs-cell.is-selected {
+  background: var(--cal-selected);
+}
+.hs-cell-mark {
+  display: grid;
+  place-items: center;
+  height: 14px;
+}
+.hs-cell[data-status='logged'] .hs-cell-mark::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cal-dot);
+}
+.hs-cell[data-status='frozen'] .hs-cell-mark {
+  color: var(--cal-frost);
+}
+.hs-cell-mark .icon {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2.6;
+}
+
+/* The tapped day's logs. */
+.hs-day-title {
+  margin-bottom: 8px;
+}
+.hs-day-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.hs-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hs-entry-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.hs-entry-name {
+  min-width: 0;
+  font-weight: 600;
+}
+.hs-entry-xp {
+  flex-shrink: 0;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.hs-entry-item {
+  color: var(--treat);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+.hs-day-empty {
+  margin: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .hs-streak-number {
+    background: #5a3a24;
+    color: #ffd2a8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .streak-chip {
+    transition: none;
+  }
+  .streak-chip:active {
+    transform: none;
+  }
+}

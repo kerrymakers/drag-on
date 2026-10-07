@@ -120,9 +120,13 @@ Added 2026-10-07 after simulation: at 3% with 12 items most users went 6 to 7 we
 
 ### Streaks
 
-- Show the current streak for each task and an overall "days with at least one log" streak.
-- I earn one streak freeze per 7-day streak (maximum 2 held). A freeze is used automatically to protect a streak when I miss a day.
+- Show an overall "days with at least one log" streak, plus the best one ever.
+- Wake-up gets its own daily streak. Days with no wake-up target (per the current schedule) are skipped, not missed.
+- Every other task shows a weekly count instead of a streak: the number of days it was logged this week (Monday to Sunday), and its best week.
+- I earn one streak freeze each time the overall streak reaches a multiple of 7 days (maximum 2 held). A freeze is used automatically when a day ends with no log: the streak carries on, but the frozen day doesn't add to it. With no freeze held, the streak ends quietly. Today never counts as missed while it's still going.
 - Streak milestones (7, 30, 100 days) give a guaranteed rare item, the first time each milestone is reached only.
+
+Decided 2026-10-07: per-task streaks became weekly counts, and freezes protect the overall streak only. A daily gym streak would reset on every rest day, which reads as a telling-off and goes against the no-guilt principle. Weekly counts reward showing up without punishing rest. A streak that ends reads as a fresh start, never a loss.
 
 ## Data model
 
@@ -147,7 +151,7 @@ Settings include "Export data" (downloads a JSON file) and "Import data". Browse
 1. Home: the dragon front and centre with mood and stage, today's tasks as large tap targets underneath, and the XP bar to the next stage.
 2. Dragon: stats, stage history and equipped items.
 3. Collection: items found, with a plain "?" tile for each one not found yet (decided 2026-10-07: items stay a surprise, so no silhouettes).
-4. History: a simple calendar or list of what I logged each day, and streaks.
+4. History: streaks (overall, best, freezes held, wake-up and this week's count per task) and a month calendar. Tap a day to see what I logged that day. It's a tab in the bottom bar, and a small streak chip on Home (shown from 2 days) opens it.
 5. Settings: edit tasks, wake-up schedule (per day), dragon name, export/import.
 
 ## Art and feel

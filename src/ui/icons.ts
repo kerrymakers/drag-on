@@ -23,6 +23,14 @@ export const ICONS = {
   ),
   lock: svg('<rect x="5.5" y="10.5" width="13" height="9.5" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>'),
   check: svg('<path d="m6 12.5 4 4 8-9"/>'),
+  calendar: svg(
+    '<rect x="4" y="5.5" width="16" height="14.5" rx="3"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/><circle cx="9" cy="14.5" r=".9" fill="currentColor" stroke="none"/><circle cx="15" cy="14.5" r=".9" fill="currentColor" stroke="none"/>',
+  ),
+  snowflake: svg(
+    '<path d="M12 3.5v17M4.6 7.75l14.8 8.5M4.6 16.25l14.8-8.5"/><path d="m9.8 4.8 2.2 2 2.2-2M9.8 19.2l2.2-2 2.2 2"/>',
+  ),
+  chevronLeft: svg('<path d="m14.5 6-6 6 6 6"/>'),
+  chevronRight: svg('<path d="m9.5 6 6 6-6 6"/>'),
   star: svg('<path d="m12 4.5 2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5-3.6-3.5 5-.7Z"/>'),
 } as const
 
