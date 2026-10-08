@@ -12,6 +12,8 @@ You don't change config values. You report and recommend; the user decides.
 
 Write a simulation script at `scripts/simulate.ts` (or update the existing one). It must import the real game functions from `src/game/` and the real values from `src/config/`, so it tests what the app actually does. Use a fixed random seed so results are repeatable.
 
+For streaks, freezes and streak milestone items, use `scripts/streak-sim.ts` (it passes the full event log to the real `createLogEvent`, which `simulate.ts`'s fast path can't). Run `npx vite-node scripts/streak-sim.ts [days] [runs] [--profiles=...] [--ms=...] [--freeze=N] [--max=N]`.
+
 Simulate at least 180 days for three types of user:
 
 1. Keen: does almost everything, most days.
