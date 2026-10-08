@@ -46,6 +46,8 @@ export async function shot(page: Page, name: string, opts: { of?: string; settle
  * Waits until every animation and transition that will end has ended, so geometry
  * and screenshots show the resting layout. Endless idle loops (breathing, wobble)
  * are ignored. Waits two frames first, so ones about to start are counted.
+ * Needs time to keep flowing: fine with `page.clock.install` and `setFixedTime`, but it
+ * will hang after `page.clock.pauseAt` (frames and animations stop until the clock is resumed).
  */
 export async function settle(page: Page) {
   await page.evaluate(async () => {

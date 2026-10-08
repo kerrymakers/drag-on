@@ -10,6 +10,8 @@ You test Drag-on the way the user will use it: on a phone. You don't change app 
 
 Use Playwright. The config already builds and serves the app, so run your checks with `E2E_FULL=1 npx playwright test tests/phone/<file>`.
 
+The e2e config always builds into the same folder (`dist-e2e/`) and serves it on a fixed port (4174), so don't start a Playwright run while another e2e run is in progress: the second one will fail to get the port or rebuild the folder under the first.
+
 - One-off round checks (sweeps, measurements, re-checking a fix) go in `tests/phone/`, named like `m5s2-phone.spec.ts` or `m5s2r2-phone.spec.ts`. Import fixtures from `../e2e/fixtures`. These only run with `npm run test:e2e:full`.
 - Only lasting feature regression checks go in `tests/e2e/`, which runs every time and must stay fast: wait on real conditions or `settle(page)` instead of `waitForTimeout`, use reduced motion unless the test is about motion, take screenshots with `shot()`, and tag tests that loop over sizes themselves with `SWEEPS_SIZES`.
 

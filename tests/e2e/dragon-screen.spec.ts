@@ -376,7 +376,7 @@ test('pt welcome: opened straight on #/dragon after a 3-day gap, bubble waits fo
   await page.getByRole('link', { name: 'Home' }).click()
   await expect(page.locator('#speech')).toHaveClass(/is-showing/)
   console.log('pt welcome text', await page.locator('#speech').textContent(), 'chip', await page.locator('#mood-chip').textContent())
-  await shot(page, `m3-welcome-home`)
+  await shot(page, `m3-welcome-home-${test.info().project.name}`)
   await page.getByRole('link', { name: 'Dragon' }).click()
   await page.getByRole('link', { name: 'Home' }).click()
   await settle(page)
@@ -401,7 +401,7 @@ for (const variant of ['quick', 'slow'] as const) {
       const r = t.getBoundingClientRect()
       return { showing: t.classList.contains('is-showing'), visible: r.width > 0 && (t as HTMLElement).offsetParent !== null }
     })
-    await shot(page, `m3-toast-on-dragon-${variant}`)
+    await shot(page, `m3-toast-on-dragon-${variant}-${test.info().project.name}`)
     if (variant === 'slow') await page.clock.runFor(6000) // past the toast's 5s
     await page.getByRole('link', { name: 'Home' }).click()
     const back = await page.evaluate(() => ({
@@ -409,7 +409,7 @@ for (const variant of ['quick', 'slow'] as const) {
       undoDisabled: (document.querySelector('#toast-undo') as HTMLButtonElement).disabled,
     }))
     console.log(`pt toast ${variant}`, JSON.stringify({ onDragon, back }))
-    await shot(page, `m3-toast-back-${variant}`)
+    await shot(page, `m3-toast-back-${variant}-${test.info().project.name}`)
     if (back.showing && !back.undoDisabled) {
       await page.locator('#toast-undo').click()
       await expect(page.locator('#xp-total')).toHaveText('0')
@@ -461,7 +461,7 @@ test('pt offline: log on Home, see it on Dragon, reload offline straight into #/
   await expect(page.locator('.stat[data-stat="heart"] .stat-value')).toHaveText(String(XP('selfcare')))
   await page.getByRole('link', { name: 'Home' }).click()
   await expect(page.locator('button.task[data-task-id="selfcare"]')).toBeDisabled()
-  await shot(page, `m3-offline-home`)
+  await shot(page, `m3-offline-home-${test.info().project.name}`)
   await context.setOffline(false)
   const relevant = msgs.filter((m) => !m.includes('ERR_INTERNET_DISCONNECTED'))
   expect(relevant, relevant.join('\n')).toEqual([])

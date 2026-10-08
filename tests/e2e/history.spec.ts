@@ -1,10 +1,9 @@
-// M5 slice 1: streaks, the History screen and the Home streak chip, on the phone.
-// Screenshots: tests/screenshots/m5s1-*
-import { test, expect, type Page, type Browser, type TestInfo } from './fixtures'
+// Streaks, the History screen and the Home streak chip, on the phone (from M5 slice 1).
+// Screenshots (with SCREENSHOTS=1): tests/screenshots/m5s1-*
+import { test, expect, settle, shot, type Page, type Browser, type TestInfo } from './fixtures'
 import { TASKS } from '../../src/config/tasks'
 
 test.use({ timezoneId: 'Europe/London', locale: 'en-GB' })
-const dir = 'tests/screenshots'
 // Wednesday 7 October 2026, 10:00 BST. Nothing logged yet today.
 const NOW = new Date('2026-10-07T10:00:00+01:00')
 const XP = (id: string) => TASKS.find((t) => t.id === id)!.xp
@@ -52,13 +51,14 @@ function collectConsole(page: Page) {
 async function fresh(
   browser: Browser,
   info: TestInfo,
+  // Reduced motion unless a test is about motion (pass `reduced: false`).
   opts: { scheme?: 'light' | 'dark'; reduced?: boolean; data?: object | null; url?: string; size?: [number, number] } = {},
 ) {
   const context = await browser.newContext({
     ...info.project.use,
     ...(opts.size ? { viewport: { width: opts.size[0], height: opts.size[1] } } : {}),
     colorScheme: opts.scheme ?? 'light',
-    reducedMotion: opts.reduced ? 'reduce' : 'no-preference',
+    reducedMotion: opts.reduced === false ? 'no-preference' : 'reduce',
     timezoneId: 'Europe/London',
     locale: 'en-GB',
   })
@@ -107,7 +107,7 @@ test('screens: Home chip and History, light and dark, plus layout and tap target
     const { page, context, msgs } = await fresh(browser, info, { scheme })
     await expect(page.locator('#streak-chip')).toBeVisible()
     await expect(page.locator('#streak-chip')).toHaveText('26 days')
-    await page.screenshot({ path: `${dir}/m5s1-home-${tag(info)}-${scheme}.png` })
+    await shot(page, `m5s1-home-${tag(info)}-${scheme}`)
 
     // Chip: visible box and effective tap area.
     const chip = await box(page, '#streak-chip')
@@ -147,7 +147,7 @@ test('screens: Home chip and History, light and dark, plus layout and tap target
     await expect(page.locator('#history-screen')).toBeVisible()
     await expect(page.locator('.hs-streak-number')).toHaveText('26')
     await expect(page.locator('.hs-month')).toHaveText('October 2026')
-    await page.screenshot({ path: `${dir}/m5s1-history-${tag(info)}-${scheme}-top.png` })
+    await shot(page, `m5s1-history-${tag(info)}-${scheme}-top`)
     const ov = await overflow(page)
     console.log(`[${tag(info)} ${scheme}] overflow`, ov)
     expect(ov.docW).toBeLessThanOrEqual(ov.vw)
@@ -175,11 +175,11 @@ test('screens: Home chip and History, light and dark, plus layout and tap target
 
     // Scroll to the calendar and the day card, screenshot.
     await page.locator('.hs-calendar').scrollIntoViewIfNeeded()
-    await page.screenshot({ path: `${dir}/m5s1-history-${tag(info)}-${scheme}-calendar.png` })
+    await shot(page, `m5s1-history-${tag(info)}-${scheme}-calendar`)
     await page.locator('button.hs-cell[data-day="2026-10-05"]').tap()
     await page.locator('.hs-day').scrollIntoViewIfNeeded()
     await expect(page.locator('.hs-day-title')).not.toBeEmpty()
-    await page.screenshot({ path: `${dir}/m5s1-history-${tag(info)}-${scheme}-day.png` })
+    await shot(page, `m5s1-history-${tag(info)}-${scheme}-day`)
 
     // September with the frozen day.
     await page.locator('.hs-month-btn').first().tap()
@@ -187,7 +187,7 @@ test('screens: Home chip and History, light and dark, plus layout and tap target
     await page.locator('button.hs-cell[data-day="2026-09-20"]').tap()
     await expect(page.locator('.hs-day-empty')).toContainText('streak freeze')
     await page.locator('.hs-calendar').scrollIntoViewIfNeeded()
-    await page.screenshot({ path: `${dir}/m5s1-history-${tag(info)}-${scheme}-september.png` })
+    await shot(page, `m5s1-history-${tag(info)}-${scheme}-september`)
     expect(await page.locator('button.hs-cell[data-day="2026-09-20"]').getAttribute('data-status')).toBe('frozen')
 
     expect(msgs, msgs.join('\n')).toEqual([])
@@ -235,7 +235,7 @@ test('a long streak with a big XP label still fits at this width', async ({ brow
     return { row: { l: row.left, r: row.right, h: row.height }, els }
   })
   console.log(`[${tag(info)}] long streak row`, JSON.stringify(r))
-  await page.screenshot({ path: `${dir}/m5s1-home-${tag(info)}-long-streak.png` })
+  await shot(page, `m5s1-home-${tag(info)}-long-streak`)
   for (const e of r.els) {
     expect(e.r).toBeLessThanOrEqual(Math.ceil(r.row.r))
     // The chip's ::before tap area makes scrollWidth > clientWidth; that isn't clipping.
@@ -255,8 +255,8 @@ test('logging is one tap, the chip and calendar update, and undo puts them back'
   await gym.tap()
   await expect(page.locator('#toast-text')).toContainText('Gym')
   await expect(chip).toHaveText('27 days')
-  await page.screenshot({ path: `${dir}/m5s1-home-${tag(info)}-logged-toast.png` })
-  await page.waitForTimeout(600) // let the toast finish rising
+  await settle(page) // let the toast finish rising
+  await shot(page, `m5s1-home-${tag(info)}-logged-toast`)
 
   // Does the chip's invisible tap area reach any part of the toast Undo or other controls?
   const steal = await page.evaluate(() => {
@@ -309,7 +309,8 @@ test('logging is one tap, the chip and calendar update, and undo puts them back'
 })
 
 test('day tap shows logs, focus and month bounds', async ({ browser }, info) => {
-  const { page, context, msgs } = await fresh(browser, info, { url: './#/history' })
+  // With motion on: the day card may scroll in smoothly (the reduced-motion case is below).
+  const { page, context, msgs } = await fresh(browser, info, { reduced: false, url: './#/history' })
   await expect(page.locator('.hs-month')).toHaveText('October 2026')
   const prev = page.locator('.hs-month-btn').nth(0)
   const next = page.locator('.hs-month-btn').nth(1)
@@ -356,7 +357,7 @@ test('day tap shows logs, focus and month bounds', async ({ browser }, info) => 
   expect(await page.locator('button.hs-cell[data-day="2026-08-24"]').count()).toBe(0)
   await expect(page.locator('#history-screen .hs-cell.is-before')).toHaveCount(24)
   await page.locator('.hs-calendar').scrollIntoViewIfNeeded()
-  await page.screenshot({ path: `${dir}/m5s1-history-${tag(info)}-august-bound.png` })
+  await shot(page, `m5s1-history-${tag(info)}-august-bound`)
   // Tapping prev while disabled does nothing.
   await prev.tap({ force: true })
   await expect(page.locator('.hs-month')).toHaveText('August 2026')
@@ -398,7 +399,7 @@ test('offline: log, reload, chip and calendar still show it', async ({ browser }
   await page.locator('#streak-chip').tap()
   await expect(page.locator('button.hs-cell[data-day="2026-10-07"]')).toHaveAttribute('data-status', 'logged')
   await expect(page.locator('.hs-day-list')).toContainText('Read')
-  await page.screenshot({ path: `${dir}/m5s1-history-${tag(info)}-offline.png` })
+  await shot(page, `m5s1-history-${tag(info)}-offline`)
   await page.goto(new URL('./#/history', info.project.use.baseURL!).toString())
   await expect(page.locator('.hs-streak-number')).toHaveText('27')
   await context.setOffline(false)
@@ -423,7 +424,7 @@ test('reduced motion: no transitions or animations on chip and History', async (
       .slice(0, 10),
   )
   console.log(`[${tag(info)}] reduced: chip transition`, chipT, 'anims', anims, 'history transitions', hsTransitions)
-  await page.screenshot({ path: `${dir}/m5s1-history-${tag(info)}-reduced-dark.png` })
+  await shot(page, `m5s1-history-${tag(info)}-reduced-dark`)
   expect(anims).toEqual([])
   expect(msgs).toEqual([])
   await context.close()
@@ -434,7 +435,7 @@ test('empty state: no logs ever, History and Home', async ({ browser }, info) =>
   await expect(page.locator('#history-screen')).toBeVisible()
   await expect(page.locator('.hs-month-btn').nth(0)).toBeDisabled()
   await expect(page.locator('.hs-month-btn').nth(1)).toBeDisabled()
-  await page.screenshot({ path: `${dir}/m5s1-history-${tag(info)}-empty.png` })
+  await shot(page, `m5s1-history-${tag(info)}-empty`)
   const text = await page.locator('.hs-summary').innerText()
   console.log(`[${tag(info)}] empty summary`, JSON.stringify(text))
   expect(msgs).toEqual([])
@@ -446,12 +447,12 @@ test('tapping the bottom corner of the toast Undo undoes, and never opens Histor
   const gym = page.locator('button.task[data-task-id="gym"]')
   await gym.tap()
   await expect(page.locator('#streak-chip')).toHaveText('27 days')
-  await page.waitForTimeout(800) // let the toast finish rising
+  await settle(page) // let the toast finish rising
   const u = await box(page, '#toast-undo')
   // Just outside the pill's rounded corner (where the chip's tap area used to reach):
   // whatever is there, it must not open History.
   await page.touchscreen.tap(u.x + u.width - 4, u.y + u.height - 2)
-  await page.waitForTimeout(300)
+  await settle(page) // a couple of frames for any navigation the tap set off
   await expect(page).not.toHaveURL(/history/)
   await expect(page.locator('#home')).toBeVisible()
   // Inside the bottom-right of the visible pill (clear of its rounded edge): undoes.
