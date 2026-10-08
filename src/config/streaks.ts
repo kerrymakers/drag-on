@@ -15,7 +15,8 @@ export interface StreakConfig {
 
 export const FREEZE_EVERY_DAYS = 7
 export const FREEZE_MAX_HELD = 2
-export const STREAK_MILESTONES: readonly number[] = [7, 30, 100]
+/** 60 added 2026-10-08 after simulation: 100 alone was reached by only 10–19% of typical users in a year. */
+export const STREAK_MILESTONES: readonly number[] = [7, 30, 60, 100]
 export const WEEK_START: Weekday = 'mon'
 
 export const STREAKS: StreakConfig = {

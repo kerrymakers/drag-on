@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { KeyValueStore } from '../storage'
-import { MOOD_LABELS, WELCOME_BACK, welcomeLine } from './copy'
+import { FREEZE_USED, MOOD_LABELS, WELCOME_BACK, freezeUsedLine, welcomeLine } from './copy'
 import { UI_KEY, createWelcome } from './welcome'
 
 class FakeStore implements KeyValueStore {
@@ -123,6 +123,53 @@ describe('welcome copy', () => {
       .join(' ')
       .toLowerCase()
     for (const word of ['grumpy', 'where were you', 'abandon', 'sad', 'lonely', 'forgot', 'finally', 'days', 'neglect']) {
+      expect(all).not.toContain(word)
+    }
+  })
+})
+
+describe('streak freeze line ("kept our streak cosy")', () => {
+  const DAY = '2026-10-08'
+
+  it('is said once per frozen day, and never for null', () => {
+    const w = createWelcome(() => new FakeStore())
+    expect(w.shouldSayCosy(null)).toBe(false)
+    expect(w.shouldSayCosy(DAY)).toBe(true)
+    w.markCosy(DAY)
+    expect(w.shouldSayCosy(DAY)).toBe(false)
+    expect(w.shouldSayCosy('2026-10-07')).toBe(false) // an earlier day never comes back
+    expect(w.shouldSayCosy('2026-10-09')).toBe(true) // a later quiet day is new
+  })
+
+  it('is remembered across reloads, beside the welcome fields', () => {
+    const store = new FakeStore()
+    const w = createWelcome(() => store)
+    w.markWelcomed('sleepy', '2026-10-05')
+    w.markCosy(DAY)
+    expect(JSON.parse(store.map.get(UI_KEY) as string)).toEqual({ gapFrom: '2026-10-05', shown: ['sleepy'], cosyDay: DAY })
+    const later = createWelcome(() => store)
+    expect(later.shouldSayCosy(DAY)).toBe(false)
+    expect(later.shouldWelcome('sleepy', '2026-10-05')).toBe(false)
+    later.markWelcomed('grumpy', '2026-10-05')
+    expect(JSON.parse(store.map.get(UI_KEY) as string)).toMatchObject({ cosyDay: DAY })
+  })
+
+  it('stays in memory when storage is unavailable or failing', () => {
+    const w = createWelcome(() => undefined)
+    w.markCosy(DAY)
+    expect(w.shouldSayCosy(DAY)).toBe(false)
+    const failing = new FakeStore()
+    failing.fail = true
+    const f = createWelcome(() => failing)
+    f.markCosy(DAY)
+    expect(f.shouldSayCosy(DAY)).toBe(false)
+  })
+
+  it('has warm lines, the same one for a given day, with no guilt', () => {
+    expect(freezeUsedLine(DAY)).toBe(freezeUsedLine(DAY))
+    expect(FREEZE_USED).toContain(freezeUsedLine(DAY))
+    const all = FREEZE_USED.join(' ').toLowerCase()
+    for (const word of ['missed', 'lost', 'broke', 'forgot', 'where were you', 'finally', 'almost', 'nearly']) {
       expect(all).not.toContain(word)
     }
   })

@@ -4,7 +4,7 @@
 
 import { itemSvg } from '../art'
 import type { Item } from '../game/types'
-import { ITEM_FOUND, itemFoundLine, itemFoundSaved } from './copy'
+import { ITEM_FOUND, itemFoundLine, itemFoundSaved, milestoneFound } from './copy'
 import { openOverlay } from './overlay'
 
 /** When the words and button arrive, after the item pops in. */
@@ -16,6 +16,8 @@ export interface ItemFoundOptions {
   wearing?: boolean
   /** True before hatching: the egg wears nothing yet, so the card says it's kept for later. */
   egg?: boolean
+  /** The streak milestone (e.g. 7) this find celebrates, or null for a lucky find. */
+  milestone?: number | null
   reducedMotion: boolean
   /** Made inert while the card is open, so focus and taps can't reach it. */
   background?: HTMLElement | null
@@ -28,7 +30,7 @@ let cardCount = 0
 
 export function showItemFound(
   doc: Document,
-  { item, wearing = false, egg = false, reducedMotion, background, returnFocus, onClose }: ItemFoundOptions,
+  { item, wearing = false, egg = false, milestone = null, reducedMotion, background, returnFocus, onClose }: ItemFoundOptions,
 ): void {
   const n = ++cardCount
   const nameId = `item-found-name-${n}`
@@ -42,13 +44,15 @@ export function showItemFound(
   overlay.setAttribute('aria-labelledby', nameId)
   overlay.setAttribute('aria-describedby', lineId)
   overlay.dataset.item = item.id
+  const celebrating = milestone !== null ? milestoneFound(milestone) : null
+  if (milestone !== null) overlay.dataset.milestone = String(milestone)
 
   const card = doc.createElement('div')
   card.className = 'item-card'
 
   const heading = doc.createElement('p')
   heading.className = 'item-found-heading'
-  heading.textContent = ITEM_FOUND.heading
+  heading.textContent = celebrating?.heading ?? ITEM_FOUND.heading
 
   const art = doc.createElement('div')
   art.className = 'item-found-art'
@@ -62,7 +66,7 @@ export function showItemFound(
   const line = doc.createElement('p')
   line.className = 'overlay-sub item-found-line'
   line.id = lineId
-  line.textContent = itemFoundLine(item.id)
+  line.textContent = celebrating?.line ?? itemFoundLine(item.id)
 
   const saved = doc.createElement('p')
   saved.className = 'item-found-saved'

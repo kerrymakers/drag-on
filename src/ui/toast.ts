@@ -6,8 +6,11 @@ const SHOW_MS = 5000
 /** The separator at the end of a log toast's lead, e.g. the " · " in "+40 XP · ". */
 const SEPARATOR = / · $/
 
-/** A plain message, or a lead that always shows plus a name that may wrap, then shorten to "…". */
-export type ToastMessage = string | { lead: string; name: string }
+/**
+ * A plain message, or a lead that always shows plus a name that may wrap, then
+ * shorten to "…", and an optional note on a line of its own underneath.
+ */
+export type ToastMessage = string | { lead: string; name: string; note?: string }
 
 export interface Toast {
   show(message: ToastMessage, onUndo?: () => void): void
@@ -55,6 +58,13 @@ export function createToast(root: HTMLElement, text: HTMLElement, undo: HTMLButt
       name.className = 'toast-name'
       name.textContent = message.name
       text.replaceChildren(lead, name)
+      if (message.note) {
+        const note = doc.createElement('span')
+        note.className = 'toast-note'
+        // A space first, so a screen reader doesn't run the name into the note.
+        note.textContent = ` ${message.note}`
+        text.append(note)
+      }
       wrapCheck = () => name.offsetTop > lead.offsetTop
     }
     undoHandler = onUndo

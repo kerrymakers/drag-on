@@ -238,7 +238,7 @@ test('stage-up button closes and undo back down shows nothing sad', async ({ pag
 })
 
 // 4. Held stage
-test('held stage: stageReached whelp below its threshold shows Whelp, counting to Juvenile', async ({ page }, info) => {
+test('held stage: stageReached whelp below its threshold shows Whelp, counting to grow', async ({ page }, info) => {
   const msgs = collectConsole(page)
   const total = 450
   await seed(page, [log(350, { stageReached: 'hatchling' }, 'a'), log(100, { stageReached: 'whelp' }, 'b')])
@@ -246,7 +246,7 @@ test('held stage: stageReached whelp below its threshold shows Whelp, counting t
   await page.goto('./')
   await expect(page.locator('#stage-name')).toHaveText('Whelp')
   expect(await xpTotal(page)).toBe(total)
-  await expect(page.locator('#growth-label')).toHaveText(`${from('juvenile') - total} XP to Juvenile`)
+  await expect(page.locator('#growth-label')).toHaveText(`${from('juvenile') - total} XP to grow`)
   const bar = await page.locator('#xp-bar').evaluate((e) => ({ now: e.getAttribute('aria-valuenow'), text: e.getAttribute('aria-valuetext'), fill: (e.firstElementChild as HTMLElement).style.width }))
   console.log('held bar', bar)
   expect(Number(bar.now)).toBe(0) // below the held stage's own threshold: progress shows from the start
@@ -267,7 +267,7 @@ test('existing hatchling data without stageReached loads and one log does not ce
   await page.clock.setFixedTime(TUE_1000)
   await page.goto('./')
   await expect(page.locator('#stage-name')).toHaveText('Hatchling')
-  await expect(page.locator('#growth-label')).toHaveText(`${from('whelp') - 130} XP to Whelp`)
+  await expect(page.locator('#growth-label')).toHaveText(`${from('whelp') - 130} XP to grow`)
   await page.locator('button.task[data-task-id="walk"]').click()
   await expect(page.locator('#toast-text')).toHaveText(`+${XP('walk')} XP · Went for a walk`)
   await settle(page)

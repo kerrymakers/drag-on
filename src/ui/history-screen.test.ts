@@ -15,7 +15,7 @@ import {
   streakChipLabel,
   weekLine,
 } from './copy'
-import { dayEntries, monthBounds, monthCells, monthOf, shiftMonth, weekColumns } from './history-screen'
+import { dayEntries, monthBounds, monthCells, monthOf, shiftMonth, weekColumns, weeklyTasks } from './history-screen'
 
 const gym = TASKS.find((t) => t.id === 'gym')!
 const read = TASKS.find((t) => t.id === 'read')!
@@ -98,6 +98,16 @@ describe('dayEntries', () => {
   it('names an unknown task gently, and ignores an item id not in config', () => {
     const odd = itemLog({ id: 'gone', xp: 5 }, noon, 'from-the-future')
     expect(dayEntries([odd], day, TASKS, ITEMS)[0]).toMatchObject({ taskName: HISTORY.unknownTask, itemName: null })
+  })
+})
+
+describe('weeklyTasks', () => {
+  it('leaves out wake-up (it has its own streak) and archived tasks, keeping the order', () => {
+    const shown = weeklyTasks(TASKS)
+    expect(shown.some((t) => t.rules.kind === 'wakeUp')).toBe(false)
+    expect(shown.map((t) => t.id)).toEqual(TASKS.filter((t) => !t.archived && t.rules.kind !== 'wakeUp').map((t) => t.id))
+    expect(shown.map((t) => t.id)).toContain('gym')
+    expect(weeklyTasks([{ ...gym, archived: true }])).toEqual([])
   })
 })
 

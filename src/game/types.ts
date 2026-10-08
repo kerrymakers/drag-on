@@ -61,9 +61,11 @@ export type Wearing = Record<ItemSlot, string | null>
 /**
  * A variable reward, rolled once at log time and saved on the log.
  * - treat: bonus XP on top of `xpAwarded`, counted toward the task's stat.
- * - item: a rare collectible from config/items.ts, worth no XP.
+ * - item: a rare collectible from config/items.ts, worth no XP. `milestone` is set
+ *   when it was the guaranteed find for reaching an overall streak milestone for the
+ *   first time (e.g. 7), rather than a lucky roll.
  */
-export type Reward = { kind: 'treat'; bonusXp: number } | { kind: 'item'; itemId: string }
+export type Reward = { kind: 'treat'; bonusXp: number } | { kind: 'item'; itemId: string; milestone?: number }
 
 /** Where an item sits on the dragon. One item per spot. */
 export type ItemSlot = 'head' | 'neck' | 'held'

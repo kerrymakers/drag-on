@@ -590,6 +590,13 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* "…and a streak freeze!": its own line under the XP and name. */
+.toast-note {
+  flex-basis: 100%;
+  margin-top: 2px;
+  font-weight: 500;
+  white-space: normal;
+}
 
 .toast:not(:has(.toast-undo:not([hidden]))) {
   padding-right: 16px;
@@ -1920,6 +1927,11 @@ button.item-tile:focus-visible {
   margin: 2px 0 0;
   color: var(--text-soft);
   font-weight: 600;
+}
+.hs-next {
+  margin: 2px 0 0;
+  color: var(--text-soft);
+  font-size: 0.9rem;
 }
 
 .hs-freezes {

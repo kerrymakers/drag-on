@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { REWARDS } from '../config/rewards'
+import { STREAKS } from '../config/streaks'
 import { LOOK_CHANGE_MARGIN } from '../config/evolution'
 import { DEFAULT_SETTINGS } from '../config/settings'
 import { STATS } from '../config/stats'
@@ -38,7 +39,7 @@ let clock = at('2026-10-05T12:00:00+01:00')
 /** Logs through createLogEvent, so stageReached is recorded as in the app. */
 function add(events: GameEvent[], stat: StatId | 'gone', xp: number, stages: readonly Stage[] = STAGES_A): GameEvent[] {
   const task: Task = stat === 'gone' ? { ...taskFor('heart'), id: 'gone' } : taskFor(stat)
-  const e = createLogEvent({ ...task, xp }, events, DEFAULT_SETTINGS, (clock += 1000), `e${++n}`, stages, NO_REWARD, REWARDS)
+  const e = createLogEvent({ ...task, xp }, events, DEFAULT_SETTINGS, (clock += 1000), `e${++n}`, NO_REWARD, { stages, rewards: REWARDS, streaks: STREAKS })
   if (!e) throw new Error('refused')
   return [...events, e]
 }
@@ -291,9 +292,8 @@ describe('evolutionLook with treats', () => {
       DEFAULT_SETTINGS,
       (clock += 1000),
       `e${++n}`,
-      STAGES_A,
       { chance: REWARDS.rareChance, pick: 0 },
-      { ...REWARDS, treatBonusShare: 10 / 45 },
+      { stages: STAGES_A, rewards: { ...REWARDS, treatBonusShare: 10 / 45 }, streaks: STREAKS },
     ) as LogEvent
     expect(treat.reward).toEqual({ kind: 'treat', bonusXp: 10 })
     expect(treat.stageReached).toBe('juvenile')

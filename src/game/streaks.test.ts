@@ -4,11 +4,21 @@ import type { StreakConfig } from '../config/streaks'
 import { TASKS } from '../config/tasks'
 import { at, log, undo } from '../testing/helpers'
 import { instantInDay, shiftDayKey } from './day'
-import { firstLogDay, overallStreak, wakeStreak, weekStartKey, weeklyCounts } from './streaks'
+import {
+  firstLogDay,
+  latestFrozenDay,
+  logEarnsFreeze,
+  nextMilestone,
+  overallStreak,
+  streakMilestoneReached,
+  wakeStreak,
+  weekStartKey,
+  weeklyCounts,
+} from './streaks'
 import type { GameEvent, Settings, Task } from './types'
 
 /** Fixed numbers, so these tests don't move when the real config is rebalanced. */
-const CONFIG: StreakConfig = { freezeEveryDays: 7, freezeMaxHeld: 2, milestones: [7, 30, 100], weekStart: 'mon' }
+const CONFIG: StreakConfig = { freezeEveryDays: 7, freezeMaxHeld: 2, milestones: [7, 30, 60, 100], weekStart: 'mon' }
 
 const task = (id: string): Task => {
   const t = TASKS.find((x) => x.id === id)
@@ -312,5 +322,107 @@ describe('firstLogDay', () => {
     const first = log(gym, at('2026-10-02T02:00:00+01:00')) // game day 1 Oct
     expect(firstLogDay([log(gym, noon(3)), first], noon(3))).toBe('2026-10-01')
     expect(firstLogDay([first, undo(first, noon(3))], noon(3))).toBeNull()
+  })
+})
+
+describe('streakMilestoneReached', () => {
+  const reach = (events: GameEvent[], day: number, config = CONFIG) => streakMilestoneReached(events, log(gym, noon(day)), config)
+
+  it('is the milestone a log first takes the count to, and null otherwise', () => {
+    expect(reach([], 1)).toBeNull()
+    expect(reach(logsOn(...range(1, 5)), 6)).toBeNull()
+    expect(reach(logsOn(...range(1, 6)), 7)).toBe(7)
+    expect(reach(logsOn(...range(1, 7)), 8)).toBeNull()
+    expect(reach(logsOn(...range(1, 29)), 30)).toBe(30)
+  })
+
+  it('never fires for a second log on a day already logged', () => {
+    const events = logsOn(...range(1, 7))
+    expect(streakMilestoneReached(events, log(read, noon(7) + 60_000), CONFIG)).toBeNull()
+  })
+
+  it('only counts the first time ever: not after a break, and not if the best was already past it', () => {
+    // 1-7, freeze covers 8, 9 ends the run, then 11-16: the new run reaches 7 on day 17.
+    const events = logsOn(...range(1, 7), ...range(11, 16))
+    expect(reach(events, 17)).toBeNull()
+  })
+
+  it('comes back when the log that reached it is undone', () => {
+    const six = logsOn(...range(1, 6))
+    const seventh = log(gym, noon(7))
+    const undone = [...six, seventh, undo(seventh, noon(7) + 1000)]
+    expect(streakMilestoneReached(undone, log(read, noon(7) + 2000), CONFIG)).toBe(7)
+  })
+
+  it("doesn't count frozen days", () => {
+    const config: StreakConfig = { ...CONFIG, freezeEveryDays: 3 }
+    expect(reach(logsOn(1, 2, 3, 5, 6), 7, config)).toBeNull() // day 4 frozen: 6 days
+    expect(reach(logsOn(1, 2, 3, 5, 6, 7), 8, config)).toBe(7)
+  })
+
+  it('is null with no milestones configured', () => {
+    expect(reach(logsOn(...range(1, 6)), 7, { ...CONFIG, milestones: [] })).toBeNull()
+  })
+})
+
+describe('logEarnsFreeze', () => {
+  const earns = (events: GameEvent[], day: number) => logEarnsFreeze(events, log(gym, noon(day)), CONFIG)
+
+  it('is true for the log that takes the count to a multiple of 7, below the cap', () => {
+    expect(earns(logsOn(...range(1, 5)), 6)).toBe(false)
+    expect(earns(logsOn(...range(1, 6)), 7)).toBe(true)
+    expect(earns(logsOn(...range(1, 7)), 8)).toBe(false)
+    expect(earns(logsOn(...range(1, 13)), 14)).toBe(true)
+  })
+
+  it('is false at the cap, and for a second log the same day', () => {
+    expect(earns(logsOn(...range(1, 20)), 21)).toBe(false) // already holding 2
+    const seven = logsOn(...range(1, 7))
+    expect(logEarnsFreeze(seven, log(read, noon(7) + 60_000), CONFIG)).toBe(false)
+  })
+})
+
+describe('latestFrozenDay', () => {
+  const frozen = (events: GameEvent[], now: number) => latestFrozenDay(events, now, CONFIG)
+
+  it('is the day a freeze covered since the last log, while the run goes on', () => {
+    const events = logsOn(...range(1, 7))
+    expect(frozen(events, noon(8))).toBeNull() // today is still pending
+    expect(frozen(events, noon(9))).toBe(dayN(8))
+    expect(frozen(events, at('2026-10-10T03:59:00+01:00'))).toBe(dayN(8)) // still day 9
+  })
+
+  it('is the latest of two frozen days in a row', () => {
+    const events = logsOn(...range(1, 14)) // two freezes held
+    expect(frozen(events, noon(17))).toBe(dayN(16))
+  })
+
+  it('is null once the run has ended anyway', () => {
+    const events = logsOn(...range(1, 7))
+    expect(frozen(events, noon(10))).toBeNull() // 8 frozen, 9 ended it
+  })
+
+  it('is null once there has been a log since', () => {
+    const events = logsOn(...range(1, 7), 9)
+    expect(frozen(events, noon(9))).toBeNull()
+    expect(frozen(events, noon(10))).toBeNull()
+  })
+
+  it('is null with no logs, or no freeze used', () => {
+    expect(frozen([], noon(3))).toBeNull()
+    expect(frozen(logsOn(1, 2), noon(3))).toBeNull()
+  })
+})
+
+describe('nextMilestone', () => {
+  it('is the smallest milestone above the best streak, then null', () => {
+    expect(nextMilestone(0, [7, 30, 100])).toBe(7)
+    expect(nextMilestone(6, [7, 30, 100])).toBe(7)
+    expect(nextMilestone(7, [7, 30, 100])).toBe(30)
+    expect(nextMilestone(30, [7, 30, 60, 100])).toBe(60)
+    expect(nextMilestone(60, [7, 30, 60, 100])).toBe(100)
+    expect(nextMilestone(99, [100, 7, 30])).toBe(100)
+    expect(nextMilestone(100, [7, 30, 100])).toBeNull()
+    expect(nextMilestone(3, [])).toBeNull()
   })
 })

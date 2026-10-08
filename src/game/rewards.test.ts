@@ -3,7 +3,17 @@ import { ITEMS } from '../config/items'
 import { REWARDS, type RewardConfig } from '../config/rewards'
 import { TASKS } from '../config/tasks'
 import { at, itemLog, log, treatLog, undo } from '../testing/helpers'
-import { foundItems, itemFor, logXp, logsSinceFind, rewardItemId, rollReward, treatBonus } from './rewards'
+import {
+  foundItems,
+  itemFor,
+  logXp,
+  logsSinceFind,
+  milestoneReward,
+  rewardItemId,
+  rewardMilestone,
+  rollReward,
+  treatBonus,
+} from './rewards'
 import type { GameEvent, Item, LogEvent, Reward, Task } from './types'
 
 const task = (id: string): Task => {
@@ -358,5 +368,42 @@ describe('bad-luck protection', () => {
     const real = (k: number) => rollReward(withXp(25), plain(k), NOTHING, REWARDS)
     expect(real(REWARDS.itemPityLogs - 1)).toBeUndefined()
     expect(real(REWARDS.itemPityLogs)).toEqual({ kind: 'item', itemId: ITEMS[0]!.id })
+  })
+})
+
+describe('milestoneReward and rewardMilestone', () => {
+  const NOTHING = { chance: 0.9999, pick: 0 }
+
+  it('picks an item not found yet with roll.pick, whatever the chance, and saves the milestone', () => {
+    expect(milestoneReward([], NOTHING, ODDS, 7)).toEqual({ kind: 'item', itemId: 'a', milestone: 7 })
+    expect(milestoneReward([], { chance: 0.5, pick: 0.9999 }, ODDS, 30)).toEqual({ kind: 'item', itemId: 'd', milestone: 30 })
+    const found = [itemLog(withXp(25), NOON, 'a'), itemLog(withXp(25), NOON + 1, 'b')]
+    expect(milestoneReward(found, NOTHING, ODDS, 7)).toEqual({ kind: 'item', itemId: 'c', milestone: 7 })
+  })
+
+  it('is undefined once every item is found', () => {
+    const all = POOL.map((item, i) => itemLog(withXp(25), NOON + i, item.id))
+    expect(milestoneReward(all, NOTHING, ODDS, 7)).toBeUndefined()
+  })
+
+  it('reads the milestone back, and the item still counts as found like any other', () => {
+    const milestoneLog: LogEvent = { ...log(withXp(25), NOON), reward: { kind: 'item', itemId: 'b', milestone: 7 } }
+    expect(rewardMilestone(milestoneLog)).toBe(7)
+    expect(rewardItemId(milestoneLog)).toBe('b')
+    expect(itemFor(milestoneLog, POOL)?.id).toBe('b')
+    expect(foundItems([milestoneLog], POOL).map((f) => f.item.id)).toEqual(['b'])
+    expect(logsSinceFind([milestoneLog], POOL)).toBe(0)
+  })
+
+  it('is null for a lucky find, a treat, no reward or a malformed milestone', () => {
+    expect(rewardMilestone(itemLog(withXp(25), NOON, 'a'))).toBeNull()
+    expect(rewardMilestone(treatLog(withXp(25), NOON, 5))).toBeNull()
+    expect(rewardMilestone(log(withXp(25), NOON))).toBeNull()
+    const odd = (milestone: unknown): LogEvent =>
+      ({ ...log(withXp(25), NOON), reward: { kind: 'item', itemId: 'a', milestone } }) as unknown as LogEvent
+    for (const bad of ['7', 0, -7, 7.5, Number.NaN, null]) expect(rewardMilestone(odd(bad))).toBeNull()
+    // A milestone on a reward that isn't a well-formed item doesn't count either.
+    const notItem = { ...log(withXp(25), NOON), reward: { kind: 'treat', bonusXp: 3, milestone: 7 } } as unknown as LogEvent
+    expect(rewardMilestone(notItem)).toBeNull()
   })
 })

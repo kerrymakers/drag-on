@@ -27,14 +27,30 @@ export const WELCOME_BACK: Partial<Record<MoodId, readonly string[]>> = {
   ],
 }
 
-/** The same line all day for a given mood, so it never flickers between renders. */
-export function welcomeLine(mood: MoodId, dayKey: string): string | null {
-  const lines = WELCOME_BACK[mood]
-  if (!lines || lines.length === 0) return null
+/** One of `lines`, fixed for a given key, so it never flickers between renders. */
+function lineFor(lines: readonly string[], key: string): string | null {
+  if (lines.length === 0) return null
   let hash = 0
-  for (const ch of dayKey) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0
+  for (const ch of key) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0
   return lines[hash % lines.length] ?? null
 }
+
+/** The same line all day for a given mood, so it never flickers between renders. */
+export function welcomeLine(mood: MoodId, dayKey: string): string | null {
+  return lineFor(WELCOME_BACK[mood] ?? [], dayKey)
+}
+
+/**
+ * What the dragon says, once, after a streak freeze kept the streak going over a
+ * quiet day. Glad, never a telling-off; it doubles as the hello.
+ */
+export const FREEZE_USED: readonly string[] = [
+  'Hello! I kept our streak cosy while you were away.',
+  "You're here! I tucked our streak in with a freeze. All snug!",
+]
+
+/** The freeze line for the frozen day `dayKey`: the same one every time for that day. */
+export const freezeUsedLine = (dayKey: string): string => lineFor(FREEZE_USED, dayKey) ?? FREEZE_USED[0]!
 
 export interface StageUpCopy {
   message: string
@@ -103,11 +119,14 @@ export function celebrationCopy(stageUpTo: string | null, newLook: StatId | null
   return { message: look.message, sub: null, button: look.button }
 }
 
-/** The label above the XP bar. */
-export function progressLabel(stageId: string, xpToNext: number, nextName: string | null): string {
-  if (nextName == null) return 'Fully grown'
+/**
+ * The label above the XP bar. It never names the next stage: stages stay a surprise
+ * until they're reached (decided 2026-10-08), so it says "to grow".
+ */
+export function progressLabel(stageId: string, xpToNext: number, hasNext: boolean): string {
+  if (!hasNext) return 'Fully grown'
   if (stageId === 'egg') return `${xpToNext} XP to hatch`
-  return `${xpToNext} XP to ${nextName}`
+  return `${xpToNext} XP to grow`
 }
 
 /**
@@ -118,19 +137,30 @@ export function progressLabel(stageId: string, xpToNext: number, nextName: strin
 export interface LoggedToast {
   lead: string
   name: string
+  /** A line of its own under them, e.g. when the log also earned a streak freeze. */
+  note?: string
 }
-export const loggedToast = (xp: number, taskName: string, treatBonus = 0, foundItem = false): LoggedToast => ({
+/** Under the log toast when the log earned a streak freeze. */
+export const FREEZE_EARNED = '…and a streak freeze!'
+export const loggedToast = (
+  xp: number,
+  taskName: string,
+  treatBonus = 0,
+  foundItem = false,
+  earnedFreeze = false,
+): LoggedToast => ({
   lead: foundItem
     ? `Found something! +${xp} XP · `
     : treatBonus > 0
       ? `Treat! +${xp + treatBonus} XP · `
       : `+${xp} XP · `,
   name: taskName,
+  ...(earnedFreeze ? { note: FREEZE_EARNED } : {}),
 })
 /** The whole toast as one string. */
-export const LOGGED = (xp: number, taskName: string, treatBonus = 0, foundItem = false): string => {
-  const { lead, name } = loggedToast(xp, taskName, treatBonus, foundItem)
-  return lead + name
+export const LOGGED = (xp: number, taskName: string, treatBonus = 0, foundItem = false, earnedFreeze = false): string => {
+  const { lead, name, note } = loggedToast(xp, taskName, treatBonus, foundItem, earnedFreeze)
+  return note ? `${lead}${name} ${note}` : lead + name
 }
 /** The second float on a treat, e.g. "+13 treat". */
 export const TREAT_FLOAT = (bonus: number) => `+${bonus} treat`
@@ -165,10 +195,15 @@ export function itemFoundSaved(wearing: boolean, egg: boolean): string {
 
 /** The dragon's line for a find. Fixed per item, so the same find always reads the same. */
 export function itemFoundLine(itemId: string): string {
-  const lines = ITEM_FOUND.lines
-  let hash = 0
-  for (const ch of itemId) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0
-  return lines[hash % lines.length] ?? lines[0]
+  return lineFor(ITEM_FOUND.lines, itemId) ?? ITEM_FOUND.lines[0]
+}
+
+/**
+ * The find card's heading and line when the find was the guaranteed one for a streak
+ * milestone, e.g. "7 days together!". Never hints at what's next.
+ */
+export function milestoneFound(days: number): { heading: string; line: string } {
+  return { heading: `${dayCount(days)} together!`, line: 'I found you something to celebrate.' }
 }
 
 /** Words on the Collection screen. Unfound items are a plain "?", never named. */
@@ -306,6 +341,9 @@ export const HISTORY = {
   /** A task id that's no longer in config. */
   unknownTask: 'A task',
 } as const
+
+/** Under the streak on History, until the last milestone: "Next surprise at 30 days". */
+export const nextSurprise = (days: number): string => `Next surprise at ${dayCount(days)}`
 
 /** "Best: 15 days". */
 export const bestStreak = (n: number): string => `Best: ${dayCount(n)}`

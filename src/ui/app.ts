@@ -12,7 +12,7 @@ import { TASKS } from '../config/tasks'
 import { dayKey, dayMinutesToClock } from '../game/day'
 import { evolutionLook, lookChange, type Evolution } from '../game/evolution'
 import { createLogEvent, createUndoEvent, undoableLog } from '../game/log'
-import { foundItems, itemFor, treatBonus } from '../game/rewards'
+import { foundItems, itemFor, rewardMilestone, treatBonus } from '../game/rewards'
 import {
   nextRefreshAt,
   dragonProgress,
@@ -23,7 +23,7 @@ import {
   totalXp,
   wakeDeadline,
 } from '../game/state'
-import { overallStreak } from '../game/streaks'
+import { latestFrozenDay, logEarnsFreeze, overallStreak } from '../game/streaks'
 import type { GameEvent, Item, RewardRoll, Settings, Task, TaskAvailability, Wearing } from '../game/types'
 import { isWorn, toggleWear, wearOnFind, wornItems, type WornItems } from '../game/wearing'
 import { STORAGE_KEY, load, requestPersistence, save } from '../storage'
@@ -32,6 +32,7 @@ import { createCollectionScreen } from './collection-screen'
 import {
   MOOD_LABELS,
   TREAT_FLOAT,
+  freezeUsedLine,
   loggedToast,
   NOTICES,
   noticeFor,
@@ -256,10 +257,22 @@ export function startApp(doc: Document): App {
    * On opening (or coming back to) the app after a gap: a pleased hello, at most once
    * per gap per mood level (sleepy, then curled up). Only while the page is visible,
    * so a PWA restored in the background doesn't use it up.
+   *
+   * If a streak freeze covered a quiet day since the last log (and the run is still
+   * going), the dragon says so instead, once per frozen day. Only one bubble per
+   * opening: the cosy line is the hello, so it also uses up a welcome that was due.
    */
   function maybeWelcome(now = Date.now()) {
     if (doc.visibilityState !== 'visible' || route !== 'home') return
     const { mood, lastLogDay } = moodFor(data.events, now, MOODS)
+    const frozen = latestFrozenDay(data.events, now, STREAKS)
+    if (frozen !== null && welcome.shouldSayCosy(frozen)) {
+      welcome.markCosy(frozen)
+      if (welcome.shouldWelcome(mood, lastLogDay)) welcome.markWelcomed(mood, lastLogDay)
+      say(freezeUsedLine(frozen))
+      react(el.art, 'perk')
+      return
+    }
     if (!welcome.shouldWelcome(mood, lastLogDay)) return
     const line = welcomeLine(mood, dayKey(now))
     if (!line) return
@@ -311,7 +324,7 @@ export function startApp(doc: Document): App {
     el.mood.dataset.mood = mood
     renderDragon(el.art, { stage: progress.stage.id, progress: progress.fraction, mood, look, wearing: homeOutfitHold ?? wearing })
 
-    const label = progressLabel(progress.stage.id, progress.xpToNext, progress.next?.name ?? null)
+    const label = progressLabel(progress.stage.id, progress.xpToNext, progress.next !== null)
     el.label.textContent = label
     el.xp.textContent = String(xp)
     const percent = Math.round(progress.fraction * 100)
@@ -429,7 +442,7 @@ export function startApp(doc: Document): App {
     const before = data.events
     // The outfit before this log, for any stage-up moment: a find stays a surprise until its card.
     const outfitBefore: WearLook = outfitOf(wornNow(before, data.settings.wearing))
-    const event = createLogEvent(task, data.events, data.settings, now, newId(), STAGES, rewardRoll(), REWARDS)
+    const event = createLogEvent(task, data.events, data.settings, now, newId(), rewardRoll(), { stages: STAGES, rewards: REWARDS, streaks: STREAKS })
     if (!event) {
       render(now) // the screen was stale (e.g. the wake window just closed)
       return
@@ -457,8 +470,11 @@ export function startApp(doc: Document): App {
     floatXp(doc, rect, `+${event.xpAwarded} XP`)
     if (bonus > 0) floatXp(doc, rect, TREAT_FLOAT(bonus), true)
     react(el.art, item ? 'perk' : bonus > 0 ? 'treat' : 'log')
-    const logged = loggedToast(event.xpAwarded, task.name, bonus, item !== null)
+    const earnedFreeze = logEarnsFreeze(before, event, STREAKS)
+    const logged = loggedToast(event.xpAwarded, task.name, bonus, item !== null, earnedFreeze)
     toast.show(logged, undoLast)
+    // After a find's card the card has already celebrated it, so the toast is just the log.
+    const afterCard = item ? loggedToast(event.xpAwarded, task.name, 0, false, earnedFreeze) : logged
 
     // The tapped button if it can still take focus (a once-a-day task is now done
     // and disabled), else the next task to log, else the dragon.
@@ -478,10 +494,11 @@ export function startApp(doc: Document): App {
         if (wearingFind) react(el.art, 'perk')
       }
       // The overlay hid the treat's floats (or the find) and outlasted its toast: say it
-      // again, with Undo while this log is still the one Undo would take back.
+      // again, with Undo while this log is still the one Undo would take back. After a
+      // find it drops "Found something!", which the card has just said.
       if (bonus > 0 || item) {
         const stillLatest = undoableLog(data.events, Date.now())?.id === event.id
-        toast.show(logged, stillLatest ? undoLast : undefined)
+        toast.show(afterCard, stillLatest ? undoLast : undefined)
       }
     }
     // A find gets its own little card, after any stage-up or new-look moment.
@@ -491,6 +508,7 @@ export function startApp(doc: Document): App {
         item,
         wearing: wearingFind,
         egg: dragonStage(data.events, STAGES).id === 'egg',
+        milestone: rewardMilestone(event),
         reducedMotion: prefersReducedMotion(),
         background,
         returnFocus,

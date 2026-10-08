@@ -40,6 +40,22 @@ export function rollReward(
 }
 
 /**
+ * The guaranteed find for a log that reaches overall streak `milestone` for the first
+ * time (see streakMilestoneReached): an item not found yet, picked by `roll.pick` the
+ * same way as a rare roll, saved with the milestone. Undefined once every item is
+ * found, so the caller falls back to the normal roll.
+ */
+export function milestoneReward(
+  events: readonly GameEvent[],
+  roll: RewardRoll,
+  config: RewardConfig,
+  milestone: number,
+): Reward | undefined {
+  const item = pickItem(events, config.items, roll.pick)
+  return item ? { kind: 'item', itemId: item.id, milestone } : undefined
+}
+
+/**
  * How many active logs in a row, most recent last, have brought no item: those after
  * the last active log with a configured item (or all of them, before the first find).
  * Undone logs don't count, and undoing a find brings back the logs before it.
@@ -104,6 +120,16 @@ export function rewardItemId(log: LogEvent): string | null {
   const r = reward as { kind?: unknown; itemId?: unknown }
   if (r.kind !== 'item') return null
   return typeof r.itemId === 'string' && r.itemId !== '' ? r.itemId : null
+}
+
+/**
+ * The streak milestone a log's item was the guaranteed find for (e.g. 7), or null for
+ * a lucky find, any other reward, or a malformed one. Checks the shape at run time.
+ */
+export function rewardMilestone(log: LogEvent): number | null {
+  if (rewardItemId(log) === null) return null
+  const m = (log.reward as { milestone?: unknown }).milestone
+  return typeof m === 'number' && Number.isInteger(m) && m > 0 ? m : null
 }
 
 /** The configured item a log brought, or null (no item, a malformed reward, or an id not in `items`). */

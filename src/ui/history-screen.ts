@@ -8,7 +8,7 @@ import type { StreakConfig } from '../config/streaks'
 import { dayKey, nextDayKey, weekdayOf } from '../game/day'
 import { itemFor, logXp, treatBonus } from '../game/rewards'
 import { activeLogs } from '../game/active'
-import { firstLogDay, overallStreak, wakeStreak, weeklyCounts, type DayStatus } from '../game/streaks'
+import { firstLogDay, nextMilestone, overallStreak, wakeStreak, weeklyCounts, type DayStatus } from '../game/streaks'
 import type { GameEvent, Item, Settings, Task, Weekday } from '../game/types'
 import {
   HISTORY,
@@ -20,6 +20,7 @@ import {
   historyFound,
   historyLogXp,
   monthTitle,
+  nextSurprise,
   weekLine,
 } from './copy'
 import { ICONS } from './icons'
@@ -91,6 +92,15 @@ export function monthBounds(firstDay: string | null, today: string): { min: stri
   return { min, max }
 }
 
+/**
+ * The tasks with a line under "This week": not archived, and not wake-up. Wake-up has
+ * a schedule, so a weekly count would be ambiguous; it has its own streak instead
+ * (decided 2026-10-08).
+ */
+export function weeklyTasks(tasks: readonly Task[]): Task[] {
+  return tasks.filter((t) => !t.archived && t.rules.kind !== 'wakeUp')
+}
+
 export interface DayEntry {
   logId: string
   taskName: string
@@ -140,7 +150,8 @@ export function createHistoryScreen(doc: Document, root: HTMLElement, config: Hi
   const streakText = el(doc, 'div', 'hs-streak-text')
   const streakLabel = el(doc, 'p', 'hs-streak-label')
   const best = el(doc, 'p', 'hs-best')
-  streakText.append(streakLabel, best)
+  const nextUp = el(doc, 'p', 'hs-next')
+  streakText.append(streakLabel, best, nextUp)
   streakRow.append(streakNumber, streakText)
   const freezes = el(doc, 'p', 'hs-freezes')
   const flakes = el(doc, 'span', 'hs-flakes')
@@ -258,6 +269,10 @@ export function createHistoryScreen(doc: Document, root: HTMLElement, config: Hi
           : HISTORY.noLogs
     best.textContent = bestStreak(streak.best)
     best.hidden = streak.best === 0
+    // A gentle "Next surprise at 30 days", until the last milestone has been reached.
+    const upcoming = nextMilestone(streak.best, config.streaks.milestones)
+    nextUp.textContent = upcoming !== null ? nextSurprise(upcoming) : ''
+    nextUp.hidden = upcoming === null
     flakes.innerHTML = ICONS.snowflake.repeat(streak.freezesHeld)
     flakes.hidden = streak.freezesHeld === 0
     freezesText.textContent = freezesLine(streak.freezesHeld, config.streaks.freezeEveryDays)
@@ -268,7 +283,7 @@ export function createHistoryScreen(doc: Document, root: HTMLElement, config: Hi
     wakeValue.textContent = w.current > 0 ? dayCount(w.current) : HISTORY.weekNone
     if (w.best > w.current) wakeValue.textContent += ` · best ${w.best}`
 
-    const shown = config.tasks.filter((t) => !t.archived)
+    const shown = weeklyTasks(config.tasks)
     const counts = weeklyCounts(events, shown, now, config.streaks)
     weekList.replaceChildren(
       ...counts.map((c, i) => {

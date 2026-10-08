@@ -116,7 +116,7 @@ Each log rolls for a surprise. The result is decided at the moment of logging an
 - Wearing items (decided 2026-10-07): each item has a spot (head, neck or held), and the dragon wears one item per spot. Tap a found item in the Collection to wear it, and tap it again to take it off. A new find goes on by itself only if its spot is free; it never replaces something I chose. What's worn is a setting, not an event, and it's worked out from what's found right now, so undoing a find takes the item off. Choices made while it's still an egg are kept and show once it hatches.
 - Bad-luck protection: if the last 30 logs (`ITEM_PITY_LOGS`) since the last item found, or since the start, brought no item, the next log brings one whatever the roll (instead of any treat). It's worked out from the event log, so undoing a log undoes its effect, and it does nothing once every item is found. Once every item is found, a roll in the rare band gives a treat instead.
 
-Added 2026-10-07 after simulation: at 3% with 12 items most users went 6 to 7 weeks without an item at some point; with 18 items and a 30-log rule the longest gap is about 3 weeks and the collection completes around day 204 for a typical user, about 6 weeks after Elder (around day 192 once first-time streak milestone items arrive in Milestone 5).
+Added 2026-10-07 after simulation: at 3% with 12 items most users went 6 to 7 weeks without an item at some point; with 18 items and a 30-log rule the longest gap is about 3 weeks and the collection completes around day 204 for a typical user, about 6 weeks after Elder. With streak milestone items (Milestone 5, simulated 2026-10-08) it completes around day 180.
 
 ### Streaks
 
@@ -124,9 +124,12 @@ Added 2026-10-07 after simulation: at 3% with 12 items most users went 6 to 7 we
 - Wake-up gets its own daily streak. Days with no wake-up target (per the current schedule) are skipped, not missed.
 - Every other task shows a weekly count instead of a streak: the number of days it was logged this week (Monday to Sunday), and its best week.
 - I earn one streak freeze each time the overall streak reaches a multiple of 7 days (maximum 2 held). A freeze is used automatically when a day ends with no log: the streak carries on, but the frozen day doesn't add to it. With no freeze held, the streak ends quietly. Today never counts as missed while it's still going.
-- Streak milestones (7, 30, 100 days) give a guaranteed rare item, the first time each milestone is reached only.
+- Streak milestones (7, 30, 60, 100 days) give a guaranteed rare item, the first time each milestone is reached only. Changed 2026-10-08 after simulation: 100 days was reached by only 10–19% of typical users in a year; 60 gives a reachable step (about half of typical users, ~day 170). Collection completes ~day 180 for a typical user.
 
 Decided 2026-10-07: per-task streaks became weekly counts, and freezes protect the overall streak only. A daily gym streak would reset on every rest day, which reads as a telling-off and goes against the no-guilt principle. Weekly counts reward showing up without punishing rest. A streak that ends reads as a fresh start, never a loss.
+
+Decided 2026-10-08: wake-up isn't in History's weekly counts, only in its own "Up on time" streak. It has a schedule, so a weekly count would be ambiguous, and it already has a fair streak.
+Decided 2026-10-08: with one freeze held and two quiet days in a row, the freeze covers the first day and stays spent even though the second day ends the streak. Past days don't change after the fact.
 
 ## Data model
 
@@ -151,7 +154,7 @@ Settings include "Export data" (downloads a JSON file) and "Import data". Browse
 1. Home: the dragon front and centre with mood and stage, today's tasks as large tap targets underneath, and the XP bar to the next stage.
 2. Dragon: stats, stage history and equipped items.
 3. Collection: items found, with a plain "?" tile for each one not found yet (decided 2026-10-07: items stay a surprise, so no silhouettes).
-4. History: streaks (overall, best, freezes held, wake-up and this week's count per task) and a month calendar. Tap a day to see what I logged that day. It's a tab in the bottom bar, and a small streak chip on Home (shown from 2 days) opens it.
+4. History: streaks (overall, best, freezes held, wake-up and this week's count for each other task) and a month calendar. Tap a day to see what I logged that day. It's a tab in the bottom bar, and a small streak chip on Home (shown from 2 days) opens it.
 5. Settings: edit tasks, wake-up schedule (per day), dragon name, export/import.
 
 ## Art and feel

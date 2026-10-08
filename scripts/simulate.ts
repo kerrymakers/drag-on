@@ -25,7 +25,7 @@
 //
 // PROJECTED (the spec describes these but there is no code yet; numbers here
 // are this script's reading of SPEC.md, not the app's behaviour):
-//   - overall streak, streak freezes (1 per 7-day streak, max 2), milestone items (7/30/100).
+//   - overall streak, streak freezes (1 per 7-day streak, max 2), milestone items (STREAK_MILESTONES).
 //     Milestone items are counted separately and don't come out of config/items.ts here.
 
 import { createLogEvent, rollReward, dayKey, dragonStage, evolutionLook, foundItems, lookChange, moodFor, rewardItemId, statTotals, totalXp, weekdayOf } from '../src/game'
@@ -39,6 +39,11 @@ import { DEFAULT_SETTINGS } from '../src/config/settings'
 import { TIME_ZONE } from '../src/config/time'
 import { REWARDS } from '../src/config/rewards'
 import type { RewardConfig } from '../src/config/rewards'
+import { STREAKS, STREAK_MILESTONES } from '../src/config/streaks'
+// The fast path can't see the whole log, so the real streak milestones are off here
+// (milestones: []); --milestones=first projects them. For measured streaks, freezes and
+// milestone items on the full log, a slower full-log sim is needed (M5 balance check).
+const SIM_STREAKS = { ...STREAKS, milestones: [] as number[] }
 
 const DAYS = Number(process.argv[2] ?? 365)
 const RUNS = Number(process.argv[3] ?? 300)
@@ -58,7 +63,7 @@ const RUNS = Number(process.argv[3] ?? 300)
 //   --pity=Nl        what-if: the real rule with N logs instead of the config value
 //   --pity=Nd        what-if (sim only): real rule off; if no item for N game days, the next log brings one
 //   --pity=off       real rule off
-//   --milestones=first|repeat  PROJECTION of M5: streak milestones (7/30/100) take a guaranteed
+//   --milestones=first|repeat  PROJECTION of M5: streak milestones (STREAK_MILESTONES) take a guaranteed
 //                    item from the same pool (via the real rollReward with a forced rare roll).
 //                    first = each milestone once ever; repeat = every time a streak reaches it.
 //   --no-twins       skip the no-treat twin runs (faster; treat comparison lines are skipped)
@@ -107,7 +112,7 @@ if (EXACT && MILESTONE_MODE) throw new Error('--exact is not supported with --mi
 const NO_TREATS: RewardConfig = { ...REWARD_CFG, treatChance: 0 }
 // Stage thresholds what-if: --stages=100,500,1300,3500,7000
 const STAGES_ARG = process.argv.find((a) => a.startsWith('--stages='))?.split('=')[1]?.split(',').map(Number)
-const MILESTONES = [7, 30, 100]
+const MILESTONES: readonly number[] = STREAK_MILESTONES
 const FREEZE_EVERY = 7
 const FREEZE_MAX = 2
 
@@ -481,7 +486,7 @@ function simulate(profile: Profile, seed: number, rewardCfg: RewardConfig = REWA
           forced = true
         }
       }
-      const ev = createLogEvent(t, todays, DEFAULT_SETTINGS, a.ts, `e${id++}`, STAGE_LIST, roll, rewardCfg)
+      const ev = createLogEvent(t, todays, DEFAULT_SETTINGS, a.ts, `e${id++}`, roll, { stages: STAGE_LIST, rewards: rewardCfg, streaks: SIM_STREAKS })
       if (!ev) {
         refused[a.taskId] = (refused[a.taskId] ?? 0) + 1
         continue

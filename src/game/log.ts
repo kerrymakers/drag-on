@@ -1,10 +1,19 @@
 // Creating events. The caller supplies the time and the id; nothing here reads the clock.
 
 import type { RewardConfig } from '../config/rewards'
+import type { StreakConfig } from '../config/streaks'
 import { dayKey } from './day'
-import { rollReward } from './rewards'
+import { milestoneReward, rollReward } from './rewards'
 import { activeLogs, dragonStage, heldStage, stageFor, taskAvailability } from './state'
+import { streakMilestoneReached } from './streaks'
 import type { GameEvent, LogEvent, RewardRoll, Settings, Stage, Task, UndoEvent } from './types'
+
+/** The config a new log is judged by: stage thresholds, reward odds and streak rules. */
+export interface LogRules {
+  stages: readonly Stage[]
+  rewards: RewardConfig
+  streaks: StreakConfig
+}
 
 /**
  * A new log for `task`, or null if the task's rules don't allow a log right now.
@@ -17,6 +26,11 @@ import type { GameEvent, LogEvent, RewardRoll, Settings, Stage, Task, UndoEvent 
  * `roll` is the caller's random draw for the variable reward (see rollReward). The
  * reward is attached before the stage is worked out, so a treat's bonus that crosses
  * a threshold is recorded too.
+ *
+ * A log that takes the overall streak to one of `streaks.milestones` for the first
+ * time ever (judged from `events`, so undoing it lets it be earned again) brings a
+ * guaranteed item instead of the roll, saved with the milestone. With every item
+ * already found, the normal roll applies.
  */
 export function createLogEvent(
   task: Task,
@@ -24,13 +38,15 @@ export function createLogEvent(
   settings: Settings,
   now: number,
   id: string,
-  stages: readonly Stage[],
   roll: RewardRoll,
-  rewards: RewardConfig,
+  { stages, rewards, streaks }: LogRules,
 ): LogEvent | null {
   if (!taskAvailability(task, events, settings, now).canLog) return null
   const event: LogEvent = { id, type: 'log', taskId: task.id, timestamp: now, xpAwarded: task.xp }
-  const reward = rollReward(task, events, roll, rewards)
+  const milestone = streakMilestoneReached(events, event, streaks)
+  const reward =
+    (milestone !== null ? milestoneReward(events, roll, rewards, milestone) : undefined) ??
+    rollReward(task, events, roll, rewards)
   if (reward) event.reward = reward
   const after = dragonStage([...events, event], stages)
   // With nothing recorded yet, the first stage needs no record.

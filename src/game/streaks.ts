@@ -9,7 +9,7 @@
 import type { StreakConfig } from '../config/streaks'
 import { activeLogs } from './active'
 import { clockToDayMinutes, dayKey, nextDayKey, shiftDayKey, weekdayOf } from './day'
-import type { GameEvent, Settings, Task, Weekday } from './types'
+import type { GameEvent, LogEvent, Settings, Task, Weekday } from './types'
 
 /**
  * How a game day looks on the History calendar.
@@ -97,6 +97,64 @@ export function overallStreak(events: readonly GameEvent[], now: number, config:
     }
   }
   return { current, best, freezesHeld: Math.max(0, held), todayLogged: logged.has(today), days }
+}
+
+/**
+ * The streak milestone (from `config.milestones`) that a new `log` reaches for the
+ * first time ever, or null. `events` are the events before it; the log's own
+ * timestamp is "now". It counts only if:
+ * - the log actually adds to the streak count (a second log the same day doesn't), and
+ * - the best overall streak before it was below the milestone, and the count with it
+ *   is at or above it.
+ * Nothing is stored, so undoing the log undoes the milestone and a relog earns it
+ * again; a later run reaching the same length after a break doesn't. Frozen days
+ * don't add to the count, so they don't bring a milestone closer.
+ */
+export function streakMilestoneReached(
+  events: readonly GameEvent[],
+  log: LogEvent,
+  config: StreakConfig,
+): number | null {
+  const now = log.timestamp
+  const before = overallStreak(events, now, config)
+  const after = overallStreak([...events, log], now, config)
+  if (after.current <= before.current) return null
+  const reached = [...config.milestones]
+    .filter((m) => before.best < m && after.current >= m)
+    .sort((a, b) => a - b)
+  return reached[0] ?? null
+}
+
+/**
+ * Whether `log` earns a streak freeze: it takes the count to a multiple of
+ * `config.freezeEveryDays` while fewer than `config.freezeMaxHeld` are held.
+ * `events` are the events before it.
+ */
+export function logEarnsFreeze(events: readonly GameEvent[], log: LogEvent, config: StreakConfig): boolean {
+  const now = log.timestamp
+  return overallStreak([...events, log], now, config).freezesHeld > overallStreak(events, now, config).freezesHeld
+}
+
+/**
+ * The latest day a freeze covered since the last log, while the run it kept going is
+ * still the current one; null if none (no freeze used since the last log, or the run
+ * ended anyway). An unlogged today is still pending, so it's skipped.
+ */
+export function latestFrozenDay(events: readonly GameEvent[], now: number, config: StreakConfig): string | null {
+  const { days } = overallStreak(events, now, config)
+  const today = dayKey(now)
+  for (let d = today; days.has(d); d = shiftDayKey(d, -1)) {
+    const status = days.get(d)
+    if (status === 'frozen') return d
+    if (status === 'logged' || status === 'missed') return null
+  }
+  return null
+}
+
+/** The smallest milestone above `best` (the best overall streak so far), or null after the last. */
+export function nextMilestone(best: number, milestones: readonly number[]): number | null {
+  const ahead = milestones.filter((m) => m > best).sort((a, b) => a - b)
+  return ahead[0] ?? null
 }
 
 export interface WakeStreak {

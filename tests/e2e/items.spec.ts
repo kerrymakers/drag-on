@@ -92,7 +92,7 @@ test('a rare roll finds an item: card, toast, Collection, and undo takes it back
   expect(await page.evaluate(() => document.getElementById('app')!.inert)).toBe(false)
   expect(await page.evaluate(() => document.activeElement?.matches('button.task'))).toBe(true)
   await expect(page.locator('#toast')).toHaveClass(/is-showing/)
-  await expect(page.locator('#toast-text')).toHaveText(`Found something! +${XP('read')} XP · Read for 20 minutes`)
+  await expect(page.locator('#toast-text')).toHaveText(`+${XP('read')} XP · Read for 20 minutes`) // the card already said "Found something!"
   await expect(page.locator('#toast-undo')).toBeVisible()
 
   // Collection: one find with its name and date, the rest a plain "?".
@@ -175,7 +175,7 @@ test('a find that also hatches the egg: stage-up first, then the card, then the 
   await closeCard(page)
   await expect(page.locator('.overlay')).toHaveCount(0)
   await expect(page.locator('#toast')).toHaveClass(/is-showing/)
-  await expect(page.locator('#toast-text')).toHaveText(`Found something! +${XP('gym')} XP · Gym / workout`)
+  await expect(page.locator('#toast-text')).toHaveText(`+${XP('gym')} XP · Gym / workout`)
   await page.locator('#toast-undo').click()
   await expect(page.locator('#xp-total')).toHaveText('90')
   expect(msgs).toEqual([])
@@ -266,7 +266,7 @@ test('the find toast keeps the whole task name, wrapping it rather than cutting 
   await setUp(page, RARE_ROLL)
   await page.locator('button.task[data-task-id="avoided"]').click()
   await closeCard(page)
-  await expect(page.locator('#toast-text')).toHaveText(`Found something! +${XP('avoided')} XP · Something I've been avoiding`)
+  await expect(page.locator('#toast-text')).toHaveText(`+${XP('avoided')} XP · Something I've been avoiding`)
   await settle(page)
   const g = await page.evaluate(() => {
     const toast = document.querySelector<HTMLElement>('#toast')!

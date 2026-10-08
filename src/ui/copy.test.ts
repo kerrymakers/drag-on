@@ -3,14 +3,14 @@ import { STAGES } from '../config/stages'
 import { STATS } from '../config/stats'
 import { dragonProgress } from '../game/state'
 import type { GameEvent, Stage } from '../game/types'
-import { COLLECTION, DRAGON_SCREEN, ITEM_FOUND, UNDONE, UNDONE_ITEM, collectionCount, collectionLine, foundTileLabel, friendlyDay, itemFoundLine, itemFoundSaved, undoneToast, wearToast } from './copy'
+import { COLLECTION, DRAGON_SCREEN, FREEZE_EARNED, ITEM_FOUND, milestoneFound, nextSurprise, UNDONE, UNDONE_ITEM, collectionCount, collectionLine, foundTileLabel, friendlyDay, itemFoundLine, itemFoundSaved, undoneToast, wearToast } from './copy'
 import { ITEMS } from '../config/items'
 import { LOGGED, LOOK_CHANGE, TREAT_FLOAT, loggedToast, LOOK_NAMES, LOOK_REVEAL, STAGE_UP, STAGE_UP_FALLBACK, celebrationCopy, lookLabel, progressLabel } from './copy'
 
 const from = (id: string) => STAGES.find((s) => s.id === id)!.xpFrom
 const labelFor = (events: GameEvent[], stages: readonly Stage[]) => {
   const p = dragonProgress(events, stages)
-  return progressLabel(p.stage.id, p.xpToNext, p.next?.name ?? null)
+  return progressLabel(p.stage.id, p.xpToNext, p.next !== null)
 }
 const logOf = (xp: number, stageReached?: string): GameEvent => ({
   id: `l${xp}`,
@@ -26,14 +26,18 @@ describe('progressLabel', () => {
     expect(labelFor([logOf(30)], STAGES)).toBe('70 XP to hatch')
   })
 
-  it('names the next stage after hatching', () => {
-    expect(labelFor([logOf(120)], STAGES)).toBe(`${from('whelp') - 120} XP to Whelp`)
+  it('counts down to growing after hatching, never naming a stage not reached yet', () => {
+    expect(labelFor([logOf(120)], STAGES)).toBe(`${from('whelp') - 120} XP to grow`)
+    for (const xp of [120, from('whelp'), from('juvenile'), from('adult')]) {
+      const label = labelFor([logOf(xp)], STAGES)
+      for (const stage of STAGES) expect(label).not.toContain(stage.name)
+    }
   })
 
   it('stays positive when the stage is held ahead of the XP', () => {
     // Hatchling held at 120 XP after its threshold was raised to 150.
     const harder = STAGES.map((s) => (s.id === 'hatchling' ? { ...s, xpFrom: 150 } : s))
-    expect(labelFor([logOf(120, 'hatchling')], harder)).toBe(`${from('whelp') - 120} XP to Whelp`)
+    expect(labelFor([logOf(120, 'hatchling')], harder)).toBe(`${from('whelp') - 120} XP to grow`)
   })
 
   it('says fully grown at the last stage', () => {
@@ -199,5 +203,26 @@ describe('wearing copy', () => {
       DRAGON_SCREEN.wearingEgg,
     ]
     for (const text of all) expect(text, text).not.toMatch(/\b(missed|failed|lost|only|should|never|yet to|must)\b/i)
+  })
+})
+
+describe('streak milestone and freeze copy', () => {
+  it('adds a freeze note on its own, keeping the lead and name as they were', () => {
+    expect(loggedToast(25, 'Read', 0, false, true)).toEqual({ lead: '+25 XP · ', name: 'Read', note: FREEZE_EARNED })
+    expect(loggedToast(25, 'Read', 13, false, true)).toEqual({ lead: 'Treat! +38 XP · ', name: 'Read', note: FREEZE_EARNED })
+    expect(loggedToast(25, 'Read', 0, true, true).note).toBe(FREEZE_EARNED)
+    expect(loggedToast(25, 'Read', 0, false, false)).not.toHaveProperty('note')
+    expect(LOGGED(25, 'Read', 0, false, true)).toBe('+25 XP · Read …and a streak freeze!')
+  })
+
+  it('celebrates a milestone find without naming or hinting at anything to come', () => {
+    expect(milestoneFound(7)).toEqual({ heading: '7 days together!', line: 'I found you something to celebrate.' })
+    expect(milestoneFound(100).heading).toBe('100 days together!')
+    expect(nextSurprise(30)).toBe('Next surprise at 30 days')
+  })
+
+  it('never guilt-trips', () => {
+    const all = [FREEZE_EARNED, milestoneFound(7).heading, milestoneFound(7).line, nextSurprise(30)]
+    for (const text of all) expect(text, text).not.toMatch(/\b(missed|failed|lost|only|should|never|yet to|don't)\b/i)
   })
 })
