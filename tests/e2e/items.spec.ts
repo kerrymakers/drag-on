@@ -1,12 +1,11 @@
 // Milestone 4, Slice 2: rare items and the Collection screen. Math.random is pinned to
 // a roll in the rare band, so every log finds the first item not found yet.
-import { test, expect, type Page } from './fixtures'
+import { test, expect, settle, shot, type Page } from './fixtures'
 import { ITEMS } from '../../src/config/items'
 import { REWARDS } from '../../src/config/rewards'
 import { TASKS } from '../../src/config/tasks'
 
 test.use({ timezoneId: 'Europe/London', locale: 'en-GB' })
-const shotDir = 'tests/screenshots'
 const NOW = new Date('2026-10-13T10:00:00+01:00')
 const XP = (id: string) => TASKS.find((t) => t.id === id)!.xp
 // Inside the rare band, and as `pick` it chooses the first item left.
@@ -53,7 +52,7 @@ const card = (page: Page) => page.locator('.overlay.item-found')
 const saved = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getItem('drag-on:v1')!).events.at(-1))
 
 async function closeCard(page: Page) {
-  await page.waitForTimeout(CLOSE_GUARD_MS + 50)
+  await page.waitForTimeout(CLOSE_GUARD_MS + 50) // past the card's close guard
   await card(page).click()
   await expect(card(page)).toHaveCount(0)
 }
@@ -77,8 +76,8 @@ test('a rare roll finds an item: card, toast, Collection, and undo takes it back
   await expect(card(page).locator('.overlay-button')).toBeVisible()
   expect(await page.evaluate(() => document.activeElement?.classList.contains('item-found'))).toBe(true)
   expect(await page.evaluate(() => document.getElementById('app')!.inert)).toBe(true)
-  await page.waitForTimeout(400)
-  await page.screenshot({ path: `${shotDir}/m4s2-card-${test.info().project.name}.png` })
+  await settle(page) // the card has finished arriving
+  await shot(page, `m4s2-card-${test.info().project.name}`)
 
   // The card sits inside the screen.
   const box = (await card(page).locator('.item-card').boundingBox())!
@@ -165,14 +164,14 @@ test('a find that also hatches the egg: stage-up first, then the card, then the 
   await page.locator('button.task[data-task-id="gym"]').click()
   await expect(page.locator('.overlay:not(.item-found)')).toBeVisible()
   await expect(card(page)).toHaveCount(0)
-  await page.waitForTimeout(1200)
+  await expect(page.locator('.overlay:not(.item-found)')).toHaveClass(/is-revealed/) // revealed after the close guard has passed
   await page.locator('.overlay:not(.item-found) .overlay-button').click()
   await expect(card(page)).toBeVisible()
   await expect(card(page).locator('.item-found-name')).toHaveText(FIRST.name)
   // The same tap (or a quick second one) doesn't close the card.
   await card(page).click()
   await expect(card(page)).toBeVisible()
-  await page.waitForTimeout(5600) // longer than the toast lasts
+  await expect(page.locator('#toast')).not.toHaveClass(/is-showing/, { timeout: 10_000 }) // the toast ran out behind the card
   await closeCard(page)
   await expect(page.locator('.overlay')).toHaveCount(0)
   await expect(page.locator('#toast')).toHaveClass(/is-showing/)
@@ -236,7 +235,7 @@ for (const scheme of ['light', 'dark'] as const) {
     expect(g.right).toBeLessThanOrEqual(g.vw)
     expect(g.docW).toBeLessThanOrEqual(g.vw)
     expect(g.nameOverflow).toBe(false)
-    await page.screenshot({ path: `${shotDir}/m4s2-collection-${scheme}-${test.info().project.name}.png` })
+    await shot(page, `m4s2-collection-${scheme}-${test.info().project.name}`)
   })
 }
 
@@ -260,8 +259,7 @@ test('the card in dark mode', async ({ page }) => {
   await setUp(page, RARE_ROLL)
   await page.locator('button.task[data-task-id="read"]').click()
   await expect(card(page)).toBeVisible()
-  await page.waitForTimeout(700)
-  await page.screenshot({ path: `${shotDir}/m4s2-card-dark-${test.info().project.name}.png` })
+  await shot(page, `m4s2-card-dark-${test.info().project.name}`, { settled: true })
 })
 
 test('the find toast keeps the whole task name, wrapping it rather than cutting it off', async ({ page }) => {
@@ -269,7 +267,7 @@ test('the find toast keeps the whole task name, wrapping it rather than cutting 
   await page.locator('button.task[data-task-id="avoided"]').click()
   await closeCard(page)
   await expect(page.locator('#toast-text')).toHaveText(`Found something! +${XP('avoided')} XP · Something I've been avoiding`)
-  await page.waitForTimeout(400)
+  await settle(page)
   const g = await page.evaluate(() => {
     const toast = document.querySelector<HTMLElement>('#toast')!
     const lead = document.querySelector<HTMLElement>('#toast-text .toast-lead')!
@@ -305,7 +303,7 @@ test('the find toast keeps the whole task name, wrapping it rather than cutting 
   expect(g.toast.left).toBeGreaterThanOrEqual(0)
   expect(g.toast.right).toBeLessThanOrEqual(g.vw)
   if (g.vw <= 360) expect(g.wrapped).toBe(true)
-  await page.screenshot({ path: `${shotDir}/m4s2-toast-wrap-${test.info().project.name}.png` })
+  await shot(page, `m4s2-toast-wrap-${test.info().project.name}`)
 })
 
 test('bad-luck protection: after enough logs with no item, the next log finds one', async ({ page }) => {

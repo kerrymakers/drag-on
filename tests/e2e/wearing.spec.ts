@@ -1,12 +1,11 @@
 // Milestone 4, Slice 3: the dragon wears found items. One item per spot; tap a found
 // tile in Collection to wear it, tap again to take it off; a new find goes on by
 // itself only if its spot is free.
-import { test, expect, type Page } from './fixtures'
+import { test, expect, settle, shot, SWEEPS_SIZES, type Page } from './fixtures'
 import { ITEMS } from '../../src/config/items'
 import { REWARDS } from '../../src/config/rewards'
 
 test.use({ timezoneId: 'Europe/London', locale: 'en-GB' })
-const shotDir = 'tests/screenshots'
 const NOW = new Date('2026-10-13T10:00:00+01:00')
 const DAY = 86_400_000
 const RARE_ROLL = REWARDS.rareChance / 3
@@ -71,7 +70,7 @@ const csToastText = (page: Page) => page.locator('#collection-screen .cs-toast .
 const card = (page: Page) => page.locator('.overlay.item-found')
 
 async function closeCard(page: Page) {
-  await page.waitForTimeout(CLOSE_GUARD_MS + 50)
+  await page.waitForTimeout(CLOSE_GUARD_MS + 50) // past the card's close guard
   await card(page).click()
   await expect(card(page)).toHaveCount(0)
 }
@@ -211,7 +210,7 @@ test('a find that also brings a stage-up stays hidden until its card closes', as
   // Neither the stage-up layers nor Home behind show the find yet.
   await expect(overlay.locator('[data-worn]')).toHaveCount(0)
   await expect(homeWorn(page, BOW.id)).toHaveCount(0)
-  await page.waitForTimeout(1200)
+  await expect(overlay).toHaveClass(/is-revealed/) // revealed after the close guard has passed
   await overlay.locator('.overlay-button').click()
   await expect(card(page)).toBeVisible()
   await expect(homeWorn(page, BOW.id)).toHaveCount(0)
@@ -258,7 +257,7 @@ test('as an egg: choices are kept, and show once it hatches', async ({ page }) =
   await expect(overlay).toBeVisible()
   await expect(overlay.locator(`.is-to [data-worn="${BOW.id}"]`)).toHaveCount(1)
   await expect(overlay.locator('.is-from [data-worn]')).toHaveCount(0)
-  await page.waitForTimeout(1200)
+  await expect(overlay).toHaveClass(/is-revealed/) // revealed after the close guard has passed
   await overlay.locator('.overlay-button').click()
   await expect(homeWorn(page, BOW.id)).toHaveCount(1)
   expect(msgs).toEqual([])
@@ -287,7 +286,7 @@ test('old saves and malformed outfits load safely', async ({ page }) => {
 for (const scheme of ['light', 'dark'] as const) {
   test(`layout with a full outfit (${scheme})`, async ({ page }) => {
     const msgs = collectConsole(page)
-    await page.emulateMedia({ colorScheme: scheme })
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' })
     const finds = ITEMS.slice(0, 9).map((i) => i.id)
     await seed(page, { xp: 4200, finds, wearing: { head: 'partyhat', neck: SCARF.id, held: 'balloon' }, lastLogDaysAgo: 3 })
     // partyhat and balloon aren't in the first nine: find them too.
@@ -306,7 +305,7 @@ for (const scheme of ['light', 'dark'] as const) {
     // Home: wearing all three, the welcome bubble clear of the hat, nothing scrolls.
     await expect(page.locator('#dragon-art [data-worn]')).toHaveCount(3)
     await expect(page.locator('#speech')).toHaveClass(/is-showing/)
-    await page.waitForTimeout(700)
+    await settle(page)
     const g = await page.evaluate(() => {
       const r = (e: Element) => e.getBoundingClientRect()
       const hat = r(document.querySelector('#dragon-art .worn-head')!)
@@ -322,7 +321,7 @@ for (const scheme of ['light', 'dark'] as const) {
     expect(g.overlap).toBe(false)
     expect(g.docH).toBeLessThanOrEqual(vp.height)
     expect(g.docW).toBeLessThanOrEqual(vp.width)
-    await page.screenshot({ path: `${shotDir}/m4s3-home-${scheme}-${test.info().project.name}.png` })
+    await shot(page, `m4s3-home-${scheme}-${test.info().project.name}`)
 
     // Collection: the preview fits, three tiles across, nothing sideways.
     await page.getByRole('link', { name: 'Collection' }).click()
@@ -347,10 +346,11 @@ for (const scheme of ['light', 'dark'] as const) {
     expect(c.minH).toBeGreaterThanOrEqual(44)
     expect(c.docW).toBeLessThanOrEqual(vp.width)
     await expect(page.locator('#collection-screen [data-worn]')).toHaveCount(3)
-    await page.waitForTimeout(400)
-    await page.screenshot({ path: `${shotDir}/m4s3-collection-${scheme}-${test.info().project.name}.png` })
+    await settle(page)
+    await shot(page, `m4s3-collection-${scheme}-${test.info().project.name}`)
     await tile(page, SCARF.id).click()
-    await page.waitForTimeout(400)
+    await expect(csToast(page)).toHaveClass(/is-showing/)
+    await settle(page)
     // The toast never catches a tap meant for a tile under it.
     expect(await csToast(page).evaluate((e) => getComputedStyle(e).pointerEvents)).toBe('none')
     const t = await csToast(page).boundingBox()
@@ -358,18 +358,18 @@ for (const scheme of ['light', 'dark'] as const) {
     expect(t!.x).toBeGreaterThanOrEqual(0)
     expect(t!.x + t!.width).toBeLessThanOrEqual(vp.width)
     expect(t!.y + t!.height).toBeLessThanOrEqual(tab!.y)
-    await page.screenshot({ path: `${shotDir}/m4s3-collection-toast-${scheme}-${test.info().project.name}.png` })
+    await shot(page, `m4s3-collection-toast-${scheme}-${test.info().project.name}`)
 
     // Dragon screen.
     await page.getByRole('link', { name: 'Dragon' }).click()
     await expect(page.locator('#dragon-screen .wear-item')).toHaveCount(2)
     await page.locator('#dragon-screen .wear-list').scrollIntoViewIfNeeded()
-    await page.screenshot({ path: `${shotDir}/m4s3-dragon-${scheme}-${test.info().project.name}.png` })
+    await shot(page, `m4s3-dragon-${scheme}-${test.info().project.name}`)
     expect(msgs).toEqual([])
   })
 }
 
-test('Home still fits without scrolling at 410x840 with a full outfit', async ({ page }, info) => {
+test('Home still fits without scrolling at 410x840 with a full outfit', SWEEPS_SIZES, async ({ page }, info) => {
   test.skip(info.project.name !== 'pixel10pro')
   await page.setViewportSize({ width: 410, height: 840 })
   await seed(page, { xp: 9000, finds: [BEANIE.id, SCARF.id, BOOK.id], wearing: { head: BEANIE.id, neck: SCARF.id, held: BOOK.id } })
@@ -394,14 +394,14 @@ test('curled up and sleepy carry the outfit, under reduced motion too', async ({
   await expect(page.locator('#dragon-art [data-worn]')).toHaveCount(3)
   // The hat rides inside the posture group, so it moves with the curl.
   expect(await page.locator('#dragon-art .dragon-pose .worn-head').count()).toBe(1)
-  await page.waitForTimeout(700)
-  await page.screenshot({ path: `${shotDir}/m4s3-curled-${test.info().project.name}.png` })
+  await settle(page)
+  await shot(page, `m4s3-curled-${test.info().project.name}`)
 })
 
 // The welcome bubble keeps clear of the hat, and covers at most a sliver (<10%) of
 // anything worn at the neck or held, on every stage that wears things.
 for (const [w, h] of [[410, 914], [410, 840], [360, 800]] as const) {
-  test(`the welcome bubble keeps clear of worn items at ${w}x${h}`, async ({ browser }, info) => {
+  test(`the welcome bubble keeps clear of worn items at ${w}x${h}`, SWEEPS_SIZES, async ({ browser }, info) => {
     test.skip(info.project.name !== 'pixel10pro')
     test.setTimeout(90_000)
     const logs: string[][] = []
@@ -411,13 +411,13 @@ for (const [w, h] of [[410, 914], [410, 840], [360, 800]] as const) {
         { head: 'partyhat', neck: 'bell', held: 'balloon' },
       ]) {
         // A fresh context each time, so each case gets its own welcome.
-        const context = await browser.newContext({ ...info.project.use, viewport: { width: w, height: h }, timezoneId: 'Europe/London', locale: 'en-GB' })
+        const context = await browser.newContext({ ...info.project.use, viewport: { width: w, height: h }, timezoneId: 'Europe/London', locale: 'en-GB', reducedMotion: 'reduce' })
         const ctx = await context.newPage()
         logs.push(collectConsole(ctx))
         await seed(ctx, { xp, finds: [outfit.head, outfit.neck, outfit.held], wearing: outfit, lastLogDaysAgo: 3 })
         await open(ctx)
         await expect(ctx.locator('#speech')).toHaveClass(/is-showing/)
-        await ctx.waitForTimeout(700)
+        await settle(ctx)
         const g = await ctx.evaluate(() => {
           const r = (s: string) => document.querySelector(s)!.getBoundingClientRect()
           const bubble = r('#speech')
@@ -440,7 +440,7 @@ for (const [w, h] of [[410, 914], [410, 840], [360, 800]] as const) {
         expect(g.hat, name).toBe(0)
         expect(g.inView, name).toBe(true)
         expect(g.docH, name).toBeLessThanOrEqual(h)
-        if (xp === 1600 && outfit.head === BEANIE.id) await ctx.screenshot({ path: `${shotDir}/m4s3-bubble-${w}x${h}.png` })
+        if (xp === 1600 && outfit.head === BEANIE.id) await shot(ctx, `m4s3-bubble-${w}x${h}`)
         await context.close()
       }
     }

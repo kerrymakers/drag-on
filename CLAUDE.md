@@ -52,7 +52,8 @@ Days run 04:00 to 03:59, Europe/London. Use one shared helper for "which day is 
 
 - Dev server: `npm run dev`
 - Tests: `npm test`
-- End-to-end phone tests (Playwright): `npm run test:e2e`
+- End-to-end phone tests (Playwright): `npm run test:e2e` (the lasting feature checks in `tests/e2e/`; add `SCREENSHOTS=1` to save screenshots)
+- Full end-to-end run, including phone-tester's one-off round checks in `tests/phone/`: `npm run test:e2e:full`
 - Build: `npm run build` (type-checks, then builds to `dist/`)
 - Preview the production build: `npm run preview` (served under `/drag-on/`)
 - Regenerate icons from `public/favicon.svg`: `npm run icons`

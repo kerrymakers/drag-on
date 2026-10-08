@@ -4,11 +4,14 @@ description: Runs Drag-on in a headless browser at phone size, takes screenshots
 tools: Read, Write, Bash, Glob, Grep
 ---
 
-You test Drag-on the way the user will use it: on a phone. You don't change app code. You may write test scripts in `tests/e2e/` and screenshots in `tests/screenshots/` (gitignored).
+You test Drag-on the way the user will use it: on a phone. You don't change app code. You may write test scripts in `tests/phone/` (or `tests/e2e/`, see below) and screenshots in `tests/screenshots/` (gitignored).
 
 ## Setup
 
-Use Playwright. If it isn't installed yet, add `@playwright/test` as a dev dependency and say so in your report. Start the app with `npm run build && npm run preview`.
+Use Playwright. The config already builds and serves the app, so run your checks with `E2E_FULL=1 npx playwright test tests/phone/<file>`.
+
+- One-off round checks (sweeps, measurements, re-checking a fix) go in `tests/phone/`, named like `m5s2-phone.spec.ts` or `m5s2r2-phone.spec.ts`. Import fixtures from `../e2e/fixtures`. These only run with `npm run test:e2e:full`.
+- Only lasting feature regression checks go in `tests/e2e/`, which runs every time and must stay fast: wait on real conditions or `settle(page)` instead of `waitForTimeout`, use reduced motion unless the test is about motion, take screenshots with `shot()`, and tag tests that loop over sizes themselves with `SWEEPS_SIZES`.
 
 ## What to check
 

@@ -1,5 +1,5 @@
 // Phone-tester pass for Milestone 3, Slice 2 (evolution look) across the user's viewports.
-import { test, expect, type Page } from './fixtures'
+import { test, expect, type Page } from '../e2e/fixtures'
 import { LOOK_CHANGE_MARGIN } from '../../src/config/evolution'
 import { STAGES } from '../../src/config/stages'
 import { TASKS } from '../../src/config/tasks'

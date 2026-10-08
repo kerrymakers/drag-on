@@ -1,6 +1,6 @@
 // Phone-tester round 2 extras for M4 slice 2: wrapped log toasts for every task
 // (normal and after a find), accent in light mode, reduced motion on the stage-up.
-import { test, expect, type Page } from './fixtures'
+import { test, expect, type Page } from '../e2e/fixtures'
 import { REWARDS } from '../../src/config/rewards'
 import { TASKS } from '../../src/config/tasks'
 

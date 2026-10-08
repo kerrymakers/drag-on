@@ -1,8 +1,7 @@
-import { test, expect, type ConsoleMessage, type Page } from './fixtures'
+import { test, expect, settle, shot, type ConsoleMessage, type Page } from './fixtures'
 import { STAGES } from '../../src/config/stages'
 import { TASKS } from '../../src/config/tasks'
 
-const shotDir = 'tests/screenshots'
 
 test.use({ timezoneId: 'Europe/London', locale: 'en-GB' })
 
@@ -90,14 +89,14 @@ for (const scheme of ['light', 'dark'] as const) {
     await expect(task(page, 'wake')).toBeVisible()
     await expect(task(page, 'wake')).toContainText('by 06:45')
     await checkLayout(page)
-    await page.screenshot({ path: `${shotDir}/home-${p}-weekday0600-${scheme}.png` })
+    await shot(page, `home-${p}-weekday0600-${scheme}`)
 
     // After a couple of logs: done states, counter, undo, feedback
     await task(page, 'gym').click()
     await task(page, 'avoided').click()
     await expect(page.locator('#undo')).toBeVisible()
     await checkLayout(page)
-    await page.screenshot({ path: `${shotDir}/home-${p}-weekday-logged-${scheme}.png` })
+    await shot(page, `home-${p}-weekday-logged-${scheme}`)
 
     const colours = await page.evaluate(() => {
       const g = (s: string) => getComputedStyle(document.querySelector(s)!)
@@ -121,7 +120,7 @@ for (const scheme of ['light', 'dark'] as const) {
     await expect(task(page, 'gym')).toBeVisible()
     await expect(task(page, 'wake')).toHaveCount(0)
     await checkLayout(page)
-    await page.screenshot({ path: `${shotDir}/home-${p}-saturday-${scheme}.png` })
+    await shot(page, `home-${p}-saturday-${scheme}`)
 
     expect(msgs, msgs.join('\n')).toEqual([])
   })
@@ -138,7 +137,7 @@ test('one tap logs, feedback, done states, avoided up to its limit', async ({ pa
   await expect(page.locator('#toast-text')).toHaveText(`+${XP('gym')} XP · Gym / workout`)
   await expect(task(page, 'gym')).toBeDisabled()
   await expect(task(page, 'gym')).toContainText('Done')
-  await page.screenshot({ path: `${shotDir}/home-${info.project.name}-feedback.png` })
+  await shot(page, `home-${info.project.name}-feedback`)
 
   // tapping a done task does nothing
   await task(page, 'gym').click({ force: true })
@@ -163,7 +162,7 @@ test('one tap logs, feedback, done states, avoided up to its limit', async ({ pa
   await expect(task(page, 'avoided')).toContainText('Done')
   expect(await xp(page)).toBe(total)
   await expect(page.locator('#stage-name')).toHaveText(stageNameFor(total))
-  await page.screenshot({ path: `${shotDir}/home-${info.project.name}-alldone.png` })
+  await shot(page, `home-${info.project.name}-alldone`)
 
   // Persistence
   await page.reload()
@@ -192,10 +191,10 @@ test('reaching the Hatchling threshold shows Hatchling', async ({ page }, info) 
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('drag-on:v1')!).events.length)
   expect(saved).toBe(4)
   await page.clock.runFor(1500)
-  await page.screenshot({ path: `${shotDir}/home-${info.project.name}-hatch-overlay.png` })
+  await shot(page, `home-${info.project.name}-hatch-overlay`)
   await overlay.getByRole('button', { name: 'Hi there!' }).click()
   await expect(overlay).toHaveCount(0)
-  await page.screenshot({ path: `${shotDir}/home-${info.project.name}-hatchling.png` })
+  await shot(page, `home-${info.project.name}-hatchling`)
   // Undo is for mis-taps, so it may take the stage back.
   await page.locator('#undo').click()
   const afterUndo = total - XP('read')
@@ -276,7 +275,7 @@ test('day rollover: 03:30 log counts for previous day', async ({ page }, info) =
   await expect(task(page, 'gym')).toBeEnabled()
   await expect(task(page, 'wake')).toBeEnabled()
   await expect(page.locator('#undo')).toBeHidden()
-  await page.screenshot({ path: `${shotDir}/home-${info.project.name}-after-rollover.png` })
+  await shot(page, `home-${info.project.name}-after-rollover`)
   // Without visibilitychange: does the screen update on its own if left open?
   await page.clock.setSystemTime(at('2026-10-06T03:50:00+01:00'))
   await page.reload()
@@ -369,7 +368,7 @@ test('offline: load, go offline, log, reload, log persists', async ({ page, cont
   await task(page, 'walk').click()
   await page.reload()
   expect(await xp(page)).toBe(XP('gym') + XP('walk'))
-  await page.screenshot({ path: `${shotDir}/home-${info.project.name}-offline.png` })
+  await shot(page, `home-${info.project.name}-offline`)
   await page.goto('./some/deep/link')
   await expect(page.locator('#task-list button.task').first()).toBeVisible()
   await context.setOffline(false)
@@ -451,7 +450,7 @@ test('s3: one tap gives instant feedback; toast Undo reverts; tapping the dragon
   expect(now.vibes).toEqual([30])
   expect(now.fillTransition).toBe('0.48s')
   expect(now.label).toBe(`${HATCH_AT - 20 - XP('gym')} XP to hatch`)
-  await page.waitForTimeout(600)
+  await settle(page)
   const fillAfter = await page.locator('#xp-fill').evaluate((e) => getComputedStyle(e).width)
   expect(fillAfter).not.toBe(fillBefore)
   expect(await savedEvents(page)).toBe(2)
@@ -513,7 +512,8 @@ test('s3: hatch overlay: saved first, 600ms guard, button/Escape/backdrop close,
   await page.waitForTimeout(50)
   await expect(overlay).toHaveCount(1)
   await expect(overlay).not.toHaveClass(/is-closing/)
-  await page.waitForTimeout(1500)
+  await expect(overlay).toHaveClass(/is-revealed/)
+  await settle(page)
   const btn = await size(page, '.overlay-button')
   const scrim = await overlay.evaluate((e) => ({ bg: getComputedStyle(e).backgroundColor, op: getComputedStyle(e).opacity }))
   const focused = await page.evaluate(() => document.activeElement?.className)
@@ -528,7 +528,7 @@ test('s3: hatch overlay: saved first, 600ms guard, button/Escape/backdrop close,
   await page.locator('#undo').click()
   await expect(page.locator('#stage-name')).toHaveText('Egg')
   await expect(page.locator('#growth-label')).toHaveText('15 XP to hatch')
-  await page.waitForTimeout(800)
+  await settle(page)
   await expect(overlay).toHaveCount(0)
   const look = await page.locator('#dragon-art .dragon-react').getAttribute('data-look')
   const bodyText = (await page.locator('body').innerText()).toLowerCase()
@@ -539,7 +539,7 @@ test('s3: hatch overlay: saved first, 600ms guard, button/Escape/backdrop close,
   // 3) Re-cross: overlay again; Escape closes
   await task(page, 'gym').click()
   await expect(overlay).toBeVisible()
-  await page.waitForTimeout(700)
+  await page.waitForTimeout(700) // past the overlay's 600ms close guard
   await page.keyboard.press('Escape')
   await expect(overlay).toHaveCount(0)
 
@@ -548,7 +548,7 @@ test('s3: hatch overlay: saved first, 600ms guard, button/Escape/backdrop close,
   await expect(page.locator('#stage-name')).toHaveText('Egg')
   await task(page, 'gym').click()
   await expect(overlay).toBeVisible()
-  await page.waitForTimeout(700)
+  await page.waitForTimeout(700) // past the overlay's 600ms close guard
   await overlay.click({ position: { x: 10, y: 10 } })
   await expect(overlay).toHaveCount(0)
   expect(await xp(page)).toBe(85 + XP('gym'))
@@ -612,7 +612,7 @@ test('s3: newer-version data shows a calm notice and is never written', async ({
   await checkLayout(page)
   for (const scheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: scheme })
-    await page.screenshot({ path: `${shotDir}/s3-${info.project.name}-notice-newer-${scheme}.png` })
+    await shot(page, `s3-${info.project.name}-notice-newer-${scheme}`)
   }
   await task(page, 'gym').click()
   await task(page, 'walk').click()
@@ -646,9 +646,9 @@ test('s3: a failed save shows a gentle notice and keeps the tap', async ({ page 
   console.log('save-failed notice:', await page.locator('#notice-text').textContent())
   expect(await xp(page)).toBe(XP('gym'))
   await expect(page.locator('#toast-text')).toHaveText(`+${XP('gym')} XP · Gym / workout`)
-  await page.waitForTimeout(500) // real time: let the CSS squish settle before measuring
+  await settle(page) // let the CSS squish settle before measuring
   await checkLayout(page)
-  await page.screenshot({ path: `${shotDir}/s3-${info.project.name}-notice-savefail-light.png` })
+  await shot(page, `s3-${info.project.name}-notice-savefail-light`)
   await page.locator('#notice-close').click()
   await task(page, 'walk').click()
   await expect(page.locator('#notice')).toBeHidden() // stays dismissed this session
@@ -757,7 +757,8 @@ test('s3: overlay keeps keyboard focus inside and returns it sensibly on close',
   await page.keyboard.press('Enter')
   const overlay = page.locator('.overlay')
   await expect(overlay).toBeVisible()
-  await page.waitForTimeout(1200)
+  await expect(overlay).toHaveClass(/is-revealed/)
+  await settle(page)
   const appInert = await page.evaluate(() => (document.getElementById('app') as any).inert)
   expect(appInert).toBe(true)
   const seen: string[] = []
@@ -773,7 +774,7 @@ test('s3: overlay keeps keyboard focus inside and returns it sensibly on close',
   for (const s of seen) expect(s).not.toContain('BEHIND')
   await page.keyboard.press('Escape')
   await expect(overlay).toHaveCount(0)
-  await page.waitForTimeout(300)
+  await settle(page)
   const after = await page.evaluate(() => ({
     inert: (document.getElementById('app') as any).inert,
     active: `${document.activeElement?.tagName}#${document.activeElement?.id}.${document.activeElement?.className} ${(document.activeElement as HTMLElement)?.dataset?.taskId ?? ''}`,

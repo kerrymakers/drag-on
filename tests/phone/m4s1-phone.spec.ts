@@ -1,6 +1,6 @@
 // Phone-tester pass for Milestone 4 slice 1 (treats): floats, toast, reaction,
 // undo, offline, tap targets and layout, light/dark, reduced motion on/off.
-import { test, expect, type Page } from './fixtures'
+import { test, expect, type Page } from '../e2e/fixtures'
 import { REWARDS } from '../../src/config/rewards'
 import { TASKS } from '../../src/config/tasks'
 

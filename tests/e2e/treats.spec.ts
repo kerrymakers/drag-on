@@ -1,11 +1,10 @@
 // Milestone 4, Slice 1: treats. A treat roll adds a second float, a happy hop, a
 // longer buzz and a toast that mentions it. A normal log feels exactly as before.
-import { test, expect, type Page } from './fixtures'
+import { test, expect, shot, type Page } from './fixtures'
 import { REWARDS } from '../../src/config/rewards'
 import { TASKS } from '../../src/config/tasks'
 
 test.use({ timezoneId: 'Europe/London', locale: 'en-GB' })
-const shotDir = 'tests/screenshots'
 const NOW = new Date('2026-10-13T10:00:00+01:00')
 const XP = (id: string) => TASKS.find((t) => t.id === id)!.xp
 const BONUS = (id: string) => Math.round(XP(id) * REWARDS.treatBonusShare)
@@ -73,8 +72,7 @@ test('a treat: second float, happy hop, longer buzz, toast, and the bonus saved'
   if (page.viewportSize()!.width >= 410) expect(fit.name).toBe(true)
 
   // Mid-animation, for a look at the float pair on the phone.
-  await page.waitForTimeout(350)
-  await page.screenshot({ path: `${shotDir}/m4s1-treat-${test.info().project.name}.png` })
+  await shot(page, `m4s1-treat-${test.info().project.name}`, { delay: 350 })
 
   await page.locator('#toast-undo').click()
   await expect(page.locator('#xp-total')).toHaveText('0')
@@ -102,8 +100,7 @@ test('a treat in dark mode', async ({ page }) => {
     return { color: s.color, bg: s.backgroundColor }
   })
   expect(colours).toEqual({ color: 'rgb(255, 194, 216)', bg: 'rgb(90, 47, 64)' })
-  await page.waitForTimeout(350)
-  await page.screenshot({ path: `${shotDir}/m4s1-treat-dark-${test.info().project.name}.png` })
+  await shot(page, `m4s1-treat-dark-${test.info().project.name}`, { delay: 350 })
 })
 
 test('reduced motion: no hop, the floats and toast still say it', async ({ page }) => {
@@ -142,7 +139,7 @@ test('a treat that also hatches the egg is acknowledged again when the overlay c
   await setUp(page, TREAT_ROLL)
   await page.locator('button.task[data-task-id="gym"]').click()
   await expect(page.locator('.overlay')).toBeVisible()
-  await page.waitForTimeout(5600) // longer than the toast lasts
+  await expect(page.locator('#toast')).not.toHaveClass(/is-showing/, { timeout: 10_000 }) // the toast ran out behind the overlay
   await page.locator('.overlay-button').click()
   await expect(page.locator('.overlay')).toHaveCount(0)
   const toast = page.locator('#toast')

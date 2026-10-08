@@ -1,7 +1,7 @@
 // Phone-tester pass for Milestone 4 slice 2: Collection tab and the "found something"
 // card. 410x914 (pixel10pro project) and 360x800 (narrow360 project), light/dark,
 // reduced motion, offline, installed-PWA height, Android back, console.
-import { test, expect, type Page } from './fixtures'
+import { test, expect, type Page } from '../e2e/fixtures'
 import { ITEMS } from '../../src/config/items'
 import { REWARDS } from '../../src/config/rewards'
 

@@ -1,5 +1,5 @@
 // Milestone 3, Slice 1: fixed layout, tab bar, Dragon screen, Heart task.
-import { test, expect, type Page } from './fixtures'
+import { test, expect, settle, shot, SWEEPS_SIZES, type Page } from './fixtures'
 import { STAGES } from '../../src/config/stages'
 import { TASKS } from '../../src/config/tasks'
 
@@ -32,7 +32,7 @@ const box = (page: Page, sel: string) =>
   })
 
 for (const [w, h] of [[410, 840], [410, 914], [360, 800]] as const) {
-  test(`home fits without scrolling at ${w}x${h} on a weekday at 06:00`, async ({ page }, info) => {
+  test(`home fits without scrolling at ${w}x${h} on a weekday at 06:00`, SWEEPS_SIZES, async ({ page }, info) => {
     test.skip(info.project.name !== 'pixel10pro')
     const msgs = collectConsole(page)
     await page.setViewportSize({ width: w, height: h })
@@ -58,7 +58,7 @@ for (const [w, h] of [[410, 840], [410, 914], [360, 800]] as const) {
   })
 }
 
-test('on a short screen only the task list scrolls, with a fade, and the header stays put', async ({ page }, info) => {
+test('on a short screen only the task list scrolls, with a fade, and the header stays put', SWEEPS_SIZES, async ({ page }, info) => {
   test.skip(info.project.name !== 'pixel10pro')
   await page.setViewportSize({ width: 360, height: 640 })
   await page.clock.install({ time: TUE_0600 })
@@ -157,7 +157,7 @@ test('a welcome-back seen on Home is not replayed by switching tabs', async ({ p
   await page.getByRole('link', { name: 'Dragon' }).click()
   await expect(page.locator('#speech')).not.toHaveClass(/is-showing/)
   await page.getByRole('link', { name: 'Home' }).click()
-  await page.waitForTimeout(300)
+  await settle(page)
   await expect(page.locator('#speech')).not.toHaveClass(/is-showing/)
 })
 
@@ -165,7 +165,6 @@ test('a welcome-back seen on Home is not replayed by switching tabs', async ({ p
 // Phone tester, M3 Slice 1: every viewport (incl. the installed-PWA 410x840),
 // light and dark, stages, welcome, toast across tabs, reduced motion, offline.
 // ---------------------------------------------------------------------------
-const shotDir = 'tests/screenshots'
 const VIEWPORTS = [
   [410, 840],
   [410, 914],
@@ -195,7 +194,7 @@ async function smallTargets(page: Page, root: string) {
 
 for (const [w, h] of VIEWPORTS) {
   for (const scheme of ['light', 'dark'] as const) {
-    test(`pt home ${w}x${h} ${scheme}: page never scrolls, list scrolls under a fixed header`, async ({ page }, info) => {
+    test(`pt home ${w}x${h} ${scheme}: page never scrolls, list scrolls under a fixed header`, SWEEPS_SIZES, async ({ page }, info) => {
       test.skip(info.project.name !== 'pixel10pro')
       const msgs = collectConsole(page)
       await page.setViewportSize({ width: w, height: h })
@@ -206,7 +205,7 @@ for (const [w, h] of VIEWPORTS) {
       await expect(page.locator('#undo')).toBeVisible()
       await expect(page.locator('button.task')).toHaveCount(TASKS.length)
       await expect(page.locator('button.task[data-task-id="wake"]')).toContainText('by 06:45')
-      await page.waitForTimeout(3600) // let the toast go so the shot shows the resting layout
+      await settle(page) // the log's feedback has finished (the toast is still up, so its Undo is measured too)
 
       const ps = await pageScroll(page)
       const list = await page.locator('#tasks').evaluate((e) => ({ over: e.scrollHeight - e.clientHeight, fade: e.dataset.fade ?? '' }))
@@ -223,7 +222,7 @@ for (const [w, h] of VIEWPORTS) {
         expect(list.fade).toBe('')
       }
       for (const sel of ['.top', '#mood-chip', '#dragon-art', '.tabbar']) await expect(page.locator(sel).first()).toBeInViewport()
-      await page.screenshot({ path: `${shotDir}/m3-home-${w}x${h}-${scheme}.png` })
+      await shot(page, `m3-home-${w}x${h}-${scheme}`)
 
       if (list.over > 0) {
         expect(list.fade).toBe('bottom')
@@ -240,23 +239,23 @@ for (const [w, h] of VIEWPORTS) {
           await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
         }
         await swipe(tb.y + tb.height - 10, tb.y + 10)
-        await page.waitForTimeout(600)
+        await page.waitForTimeout(600) // a fling has no event to wait on: let it coast to a stop
         const st = await page.locator('#tasks').evaluate((e) => ({ top: e.scrollTop, max: e.scrollHeight - e.clientHeight, fade: e.dataset.fade }))
         console.log(`pt ${w}x${h} after swipe`, JSON.stringify(st))
         expect(st.top).toBeGreaterThan(0)
         if (st.top < st.max - 1) {
           expect(st.fade).toBe('both')
-          await page.screenshot({ path: `${shotDir}/m3-home-${w}x${h}-${scheme}-midscroll.png` })
+          await shot(page, `m3-home-${w}x${h}-${scheme}-midscroll`)
         }
         await page.locator('#tasks').evaluate((e) => e.scrollTo(0, e.scrollHeight))
         await expect(page.locator('#tasks')).toHaveAttribute('data-fade', 'top')
         const hb = (await page.locator('.top').boundingBox())!
         await swipe(hb.y + hb.height / 2, hb.y - 200 > 0 ? hb.y - 200 : 1)
         await page.mouse.wheel(0, 400)
-        await page.waitForTimeout(300)
+        await page.waitForTimeout(300) // give a wrongly scrolling page time to move
         expect(await fixed()).toEqual(before)
         expect((await pageScroll(page)).y).toBe(0)
-        await page.screenshot({ path: `${shotDir}/m3-home-${w}x${h}-${scheme}-scrolled.png` })
+        await shot(page, `m3-home-${w}x${h}-${scheme}-scrolled`)
       }
       expect(msgs, msgs.join('\n')).toEqual([])
     })
@@ -311,7 +310,7 @@ async function leakCheck(page: Page, reachedCount: number) {
 for (const [w, h] of [[410, 840], [360, 680], [410, 914]] as const) {
   for (const scheme of ['light', 'dark'] as const) {
     for (const stage of ['egg', 'hatchling', 'adult'] as const) {
-      test(`pt dragon screen ${stage} ${w}x${h} ${scheme}`, async ({ page }, info) => {
+      test(`pt dragon screen ${stage} ${w}x${h} ${scheme}`, SWEEPS_SIZES, async ({ page }, info) => {
         test.skip(info.project.name !== 'pixel10pro')
         const msgs = collectConsole(page)
         const seedData = STAGE_SEEDS[stage]!
@@ -343,11 +342,10 @@ for (const [w, h] of [[410, 840], [360, 680], [410, 914]] as const) {
           expect(x.w, `${x.id} w`).toBeGreaterThanOrEqual(44)
           expect(x.h, `${x.id} h`).toBeGreaterThanOrEqual(44)
         }
-        await page.screenshot({ path: `${shotDir}/m3-dragon-${stage}-${w}x${h}-${scheme}.png` })
+        await shot(page, `m3-dragon-${stage}-${w}x${h}-${scheme}`)
         if (ds.over > 0) {
           await page.locator('#dragon-screen .ds-scroll').evaluate((e) => e.scrollTo(0, e.scrollHeight))
-          await page.waitForTimeout(100)
-          await page.screenshot({ path: `${shotDir}/m3-dragon-${stage}-${w}x${h}-${scheme}-bottom.png` })
+          await shot(page, `m3-dragon-${stage}-${w}x${h}-${scheme}-bottom`)
         }
         if (stage === 'egg') {
           // Heart from a selfcare log: the only stat, so its bar is full.
@@ -358,7 +356,7 @@ for (const [w, h] of [[410, 840], [360, 680], [410, 914]] as const) {
           const b2 = await barCheck(page)
           console.log('pt egg after selfcare', JSON.stringify(b2), await screen.locator('.history-item.is-reached').allInnerTexts())
           expect(b2.find((b) => b.stat === 'heart')!.frac).toBeGreaterThan(0.98)
-          await page.screenshot({ path: `${shotDir}/m3-dragon-egg-selfcare-${w}x${h}-${scheme}.png` })
+          await shot(page, `m3-dragon-egg-selfcare-${w}x${h}-${scheme}`)
         }
         expect(msgs, msgs.join('\n')).toEqual([])
       })
@@ -372,19 +370,20 @@ test('pt welcome: opened straight on #/dragon after a 3-day gap, bubble waits fo
   await page.clock.install({ time: new Date('2026-10-06T10:00:00+01:00') })
   await page.goto('./#/dragon')
   await expect(page.locator('#dragon-screen')).toBeVisible()
-  await page.waitForTimeout(800)
+  await settle(page)
   expect(await page.locator('#speech').evaluate((e) => e.classList.contains('is-showing'))).toBe(false)
   expect(await page.evaluate(() => localStorage.getItem('drag-on:ui'))).toBeNull()
   await page.getByRole('link', { name: 'Home' }).click()
   await expect(page.locator('#speech')).toHaveClass(/is-showing/)
   console.log('pt welcome text', await page.locator('#speech').textContent(), 'chip', await page.locator('#mood-chip').textContent())
-  await page.screenshot({ path: `${shotDir}/m3-welcome-home.png` })
+  await shot(page, `m3-welcome-home`)
   await page.getByRole('link', { name: 'Dragon' }).click()
   await page.getByRole('link', { name: 'Home' }).click()
-  await page.waitForTimeout(500)
+  await settle(page)
   await expect(page.locator('#speech')).not.toHaveClass(/is-showing/)
   await page.reload()
-  await page.waitForTimeout(800)
+  await expect(page.locator('#home')).toBeVisible()
+  await settle(page)
   await expect(page.locator('#speech')).not.toHaveClass(/is-showing/)
   expect(msgs).toEqual([])
 })
@@ -402,15 +401,15 @@ for (const variant of ['quick', 'slow'] as const) {
       const r = t.getBoundingClientRect()
       return { showing: t.classList.contains('is-showing'), visible: r.width > 0 && (t as HTMLElement).offsetParent !== null }
     })
-    await page.screenshot({ path: `${shotDir}/m3-toast-on-dragon-${variant}.png` })
-    if (variant === 'slow') await page.waitForTimeout(6000)
+    await shot(page, `m3-toast-on-dragon-${variant}`)
+    if (variant === 'slow') await page.clock.runFor(6000) // past the toast's 5s
     await page.getByRole('link', { name: 'Home' }).click()
     const back = await page.evaluate(() => ({
       showing: document.querySelector('#toast')!.classList.contains('is-showing'),
       undoDisabled: (document.querySelector('#toast-undo') as HTMLButtonElement).disabled,
     }))
     console.log(`pt toast ${variant}`, JSON.stringify({ onDragon, back }))
-    await page.screenshot({ path: `${shotDir}/m3-toast-back-${variant}.png` })
+    await shot(page, `m3-toast-back-${variant}`)
     if (back.showing && !back.undoDisabled) {
       await page.locator('#toast-undo').click()
       await expect(page.locator('#xp-total')).toHaveText('0')
@@ -462,7 +461,7 @@ test('pt offline: log on Home, see it on Dragon, reload offline straight into #/
   await expect(page.locator('.stat[data-stat="heart"] .stat-value')).toHaveText(String(XP('selfcare')))
   await page.getByRole('link', { name: 'Home' }).click()
   await expect(page.locator('button.task[data-task-id="selfcare"]')).toBeDisabled()
-  await page.screenshot({ path: `${shotDir}/m3-offline-home.png` })
+  await shot(page, `m3-offline-home`)
   await context.setOffline(false)
   const relevant = msgs.filter((m) => !m.includes('ERR_INTERNET_DISCONNECTED'))
   expect(relevant, relevant.join('\n')).toEqual([])

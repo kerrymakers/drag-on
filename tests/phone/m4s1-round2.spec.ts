@@ -1,6 +1,6 @@
 // Phone-tester round 2 for M4 slice 1: toast name truncation, float coverage per task,
 // and the treat toast after the hatch overlay closes.
-import { test, expect, type Page } from './fixtures'
+import { test, expect, type Page } from '../e2e/fixtures'
 import { REWARDS } from '../../src/config/rewards'
 import { TASKS } from '../../src/config/tasks'
 

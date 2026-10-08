@@ -1,5 +1,5 @@
 // Clean single-tap shots (fresh page per tap) for float coverage, round 2.
-import { test, expect } from './fixtures'
+import { test, expect } from '../e2e/fixtures'
 import { REWARDS } from '../../src/config/rewards'
 test.use({ timezoneId: 'Europe/London', locale: 'en-GB' })
 const TREAT_ROLL = REWARDS.rareChance + REWARDS.treatChance / 2

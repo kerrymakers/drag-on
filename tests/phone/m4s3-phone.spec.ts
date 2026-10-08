@@ -1,5 +1,5 @@
 // Phone-tester checks for M4 slice 3 (wearing items). Screenshots: tests/screenshots/m4s3-phone-* (or $SHOT_PREFIX-*)
-import { test, expect, type Page } from './fixtures'
+import { test, expect, type Page } from '../e2e/fixtures'
 import * as fs from 'node:fs'
 import { ITEMS } from '../../src/config/items'
 import { REWARDS } from '../../src/config/rewards'

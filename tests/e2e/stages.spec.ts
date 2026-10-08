@@ -1,10 +1,9 @@
 // Milestone 2, Slice 1: the grown stages, their reveals, and stage holding.
-import { test, expect, type Page } from './fixtures'
+import { test, expect, settle, shot, SWEEPS_SIZES, type Page } from './fixtures'
 import { STAGES } from '../../src/config/stages'
 import { TASKS } from '../../src/config/tasks'
 
 test.use({ timezoneId: 'Europe/London', locale: 'en-GB' })
-const shotDir = 'tests/screenshots'
 const TUE_1000 = new Date('2026-10-06T10:00:00+01:00')
 const OLD = Date.parse('2026-10-01T12:00:00+01:00')
 const XP = (id: string) => TASKS.find((t) => t.id === id)!.xp
@@ -79,7 +78,7 @@ const SEED_AT: Record<(typeof GROWN)[number], number> = {
 // 1. Home screen at each stage
 for (const [w, h] of SIZES) {
   for (const scheme of ['light', 'dark'] as const) {
-    test(`home stages ${w}x${h} ${scheme}`, async ({ page }, info) => {
+    test(`home stages ${w}x${h} ${scheme}`, SWEEPS_SIZES, async ({ page }, info) => {
       test.skip(info.project.name !== 'pixel10pro')
       const msgs = collectConsole(page)
       await page.setViewportSize({ width: w, height: h })
@@ -109,7 +108,7 @@ for (const [w, h] of SIZES) {
         expect(f.lastTask!.b).toBeLessThanOrEqual(h)
         expect(f.undo!.b).toBeLessThanOrEqual(h)
         sizes[stage] = f.art.w * f.art.h
-        await page.screenshot({ path: `${shotDir}/m2-${w}x${h}-${scheme}-${stage}.png` })
+        await shot(page, `m2-${w}x${h}-${scheme}-${stage}`)
       }
       console.log(`${w}x${h} painted area by stage`, JSON.stringify(sizes))
       expect(msgs, msgs.join('\n')).toEqual([])
@@ -148,8 +147,8 @@ for (const [a, b] of TRANSITIONS) {
       await expect(overlay).toBeVisible()
       const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('drag-on:v1')!).events.at(-1))
       expect(saved.stageReached).toBe(b)
-      await page.waitForTimeout(2200)
       await expect(page.locator('.overlay')).toHaveClass(/is-revealed/)
+      await settle(page)
       const f = await artFit(page, '.overlay .overlay-layer.is-to')
       const m = await page.evaluate(() => {
         const msg = document.querySelector('.overlay-message')!
@@ -183,7 +182,7 @@ for (const [a, b] of TRANSITIONS) {
         // balanced: no orphan line much shorter than the longest
         expect(Math.min(...m.lines) / Math.max(...m.lines)).toBeGreaterThan(0.45)
       }
-      await page.screenshot({ path: `${shotDir}/m2-${info.project.name}-up-${b}-${scheme}.png` })
+      await shot(page, `m2-${info.project.name}-up-${b}-${scheme}`)
 
       // Tab can't reach the page behind
       for (let i = 0; i < 3; i++) {
@@ -206,7 +205,7 @@ for (const [a, b] of TRANSITIONS) {
       await page.locator('button.task[data-task-id="walk"]').click()
       await page.reload()
       await page.locator('button.task[data-task-id="read"]').click()
-      await page.waitForTimeout(800)
+      await settle(page)
       await expect(page.locator('.overlay')).toHaveCount(0)
       expect(await page.evaluate(() => (window as any).__overlays)).toBe(0) // counter resets on reload; none since
       expect(msgs, msgs.join('\n')).toEqual([])
@@ -225,14 +224,15 @@ test('stage-up button closes and undo back down shows nothing sad', async ({ pag
   await page.locator('.overlay').click({ position: { x: 8, y: 8 } })
   await page.waitForTimeout(50)
   await expect(page.locator('.overlay')).toHaveCount(1)
-  await page.waitForTimeout(1500)
+  await expect(page.locator('.overlay')).toHaveClass(/is-revealed/) // revealed after the close guard has passed
+  await settle(page)
   await page.locator('.overlay-button').click()
   await expect(page.locator('.overlay')).toHaveCount(0)
   await expect(page.locator('#stage-name')).toHaveText('Whelp')
   await page.locator('#undo').click()
   // Undoing the mis-tap takes the stage back; no overlay, nothing sad
   console.log('after undo stage', await page.locator('#stage-name').textContent(), await page.locator('#growth-label').textContent())
-  await page.waitForTimeout(800)
+  await settle(page)
   await expect(page.locator('.overlay')).toHaveCount(0)
   expect(msgs).toEqual([])
 })
@@ -251,10 +251,10 @@ test('held stage: stageReached whelp below its threshold shows Whelp, counting t
   console.log('held bar', bar)
   expect(Number(bar.now)).toBe(0) // below the held stage's own threshold: progress shows from the start
   expect(await page.locator('#dragon-art .dragon-react').getAttribute('data-look')).toBe('whelp')
-  await page.screenshot({ path: `${shotDir}/m2-${info.project.name}-held-whelp.png` })
+  await shot(page, `m2-${info.project.name}-held-whelp`)
   // A log here doesn't celebrate (already Whelp)
   await page.locator('button.task[data-task-id="gym"]').click()
-  await page.waitForTimeout(800)
+  await settle(page)
   await expect(page.locator('.overlay')).toHaveCount(0)
   await expect(page.locator('#stage-name')).toHaveText('Whelp')
   expect(msgs).toEqual([])
@@ -270,7 +270,7 @@ test('existing hatchling data without stageReached loads and one log does not ce
   await expect(page.locator('#growth-label')).toHaveText(`${from('whelp') - 130} XP to Whelp`)
   await page.locator('button.task[data-task-id="walk"]').click()
   await expect(page.locator('#toast-text')).toHaveText(`+${XP('walk')} XP · Went for a walk`)
-  await page.waitForTimeout(1200)
+  await settle(page)
   await expect(page.locator('.overlay')).toHaveCount(0)
   const last = await page.evaluate(() => JSON.parse(localStorage.getItem('drag-on:v1')!).events.at(-1))
   console.log('new event on legacy data', last)
@@ -285,7 +285,7 @@ test('elder: Fully grown, full bar, logging still gives feedback', async ({ page
   await page.goto('./')
   await expect(page.locator('#stage-name')).toHaveText('Elder')
   await expect(page.locator('#growth-label')).toHaveText('Fully grown')
-  await page.waitForTimeout(700) // let the bar's width transition finish
+  await settle(page) // let the bar's width transition finish
   const bar = await page.locator('#xp-bar').evaluate((e) => ({ now: e.getAttribute('aria-valuenow'), fill: getComputedStyle(e.firstElementChild!).width, track: getComputedStyle(e).width }))
   console.log('elder bar', bar)
   expect(bar.now).toBe('100')
@@ -299,7 +299,7 @@ test('elder: Fully grown, full bar, logging still gives feedback', async ({ page
   expect(fb).toEqual({ float: `+${XP('gym')} XP`, wiggle: true, toast: `+${XP('gym')} XP · Gym / workout` })
   expect(await xpTotal(page)).toBe(from('elder') + 500 + XP('gym'))
   await expect(page.locator('#growth-label')).toHaveText('Fully grown')
-  await page.waitForTimeout(800)
+  await settle(page)
   await expect(page.locator('.overlay')).toHaveCount(0)
   expect(msgs).toEqual([])
 })

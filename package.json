@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:full": "E2E_FULL=1 playwright test --workers=2",
     "icons": "pwa-assets-generator"
   },
   "devDependencies": {

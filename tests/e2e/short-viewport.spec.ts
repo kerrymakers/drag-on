@@ -1,7 +1,6 @@
-import { test, expect, type Page } from './fixtures'
+import { test, expect, settle, shot, SWEEPS_SIZES, type Page } from './fixtures'
 test.use({ timezoneId: 'Europe/London' })
 
-const shotDir = 'tests/screenshots'
 // Tuesday mid-morning: wake window closed, all other tasks open.
 const TUE_1000 = new Date('2026-10-06T10:00:00+01:00')
 
@@ -64,7 +63,7 @@ const SIZES = [
 
 for (const [w, h] of SIZES) {
   for (const scheme of ['light', 'dark'] as const) {
-    test.describe(`viewport ${w}x${h} ${scheme}`, () => {
+    test.describe(`viewport ${w}x${h} ${scheme}`, SWEEPS_SIZES, () => {
       test.beforeEach(({}, info) => test.skip(info.project.name !== 'pixel10pro'))
       test.use({ viewport: { width: w, height: h } })
       const tag = `s3-${w}x${h}-${scheme}`
@@ -83,7 +82,7 @@ for (const [w, h] of SIZES) {
           console.log(tag, name, look, label, JSON.stringify(g))
           expect(g.scrollW).toBeLessThanOrEqual(w)
           expect(g.scrollH).toBeLessThanOrEqual(h)
-          await page.screenshot({ path: `${shotDir}/${tag}-${name}.png` })
+          await shot(page, `${tag}-${name}`)
           expect(msgs).toEqual([])
         })
       }
@@ -95,7 +94,8 @@ for (const [w, h] of SIZES) {
         await page.clock.setFixedTime(TUE_1000)
         await page.goto('./')
         await page.locator('button.task[data-task-id="avoided"]').click()
-        await page.waitForTimeout(950) // float and wiggle done, toast still up
+        await expect(page.locator('.float-xp')).toHaveCount(0) // float and wiggle done, toast still up
+        await settle(page)
         await expect(page.locator('#toast')).toHaveClass(/is-showing/)
         const g = await geometry(page)
         console.log(tag, 'toast', JSON.stringify(g))
@@ -107,7 +107,7 @@ for (const [w, h] of SIZES) {
         expect(g.toastUndo!.w).toBeGreaterThanOrEqual(44)
         expect(g.toastUndo!.h).toBeGreaterThanOrEqual(44)
         if (g.eyes) console.log(tag, 'toast overlaps eyes:', g.toast!.top < g.eyes.bottom)
-        await page.screenshot({ path: `${shotDir}/${tag}-toast.png` })
+        await shot(page, `${tag}-toast`)
         expect(msgs).toEqual([])
       })
 
@@ -119,14 +119,14 @@ for (const [w, h] of SIZES) {
         await page.goto('./')
         await page.locator('button.task[data-task-id="gym"]').click()
         await expect(page.getByRole('dialog')).toBeVisible()
-        await page.waitForTimeout(1800)
         await expect(page.locator('.overlay')).toHaveClass(/is-revealed/)
+        await settle(page)
         const g = await geometry(page)
         console.log(tag, 'overlay', JSON.stringify({ art: g.overlayArt, msg: g.overlayMsg, btn: g.overlayBtn }))
         expect(g.overlayBtn!.h).toBeGreaterThanOrEqual(44)
         expect(g.overlayBtn!.bottom).toBeLessThanOrEqual(h)
         expect(g.overlayArt!.top).toBeGreaterThanOrEqual(0)
-        await page.screenshot({ path: `${shotDir}/${tag}-overlay.png` })
+        await shot(page, `${tag}-overlay`)
         expect(msgs).toEqual([])
       })
     })
@@ -134,7 +134,7 @@ for (const [w, h] of SIZES) {
 }
 
 for (const [w, h] of [[410, 800], [360, 680]] as const) {
-  test(`short viewport ${w}x${h}`, async ({ page }, info) => {
+  test(`short viewport ${w}x${h}`, SWEEPS_SIZES, async ({ page }, info) => {
     test.skip(info.project.name !== 'pixel10pro')
     await page.setViewportSize({ width: w, height: h })
     await page.clock.install({ time: new Date('2026-10-06T06:00:00+01:00') })
@@ -147,11 +147,11 @@ for (const [w, h] of [[410, 800], [360, 680]] as const) {
       firstTaskTop: document.querySelector('.task')!.getBoundingClientRect().top,
     }))
     console.log(w, h, JSON.stringify(r))
-    await page.screenshot({ path: `tests/screenshots/home-short-${w}x${h}.png` })
+    await shot(page, `home-short-${w}x${h}`)
   })
 }
 
-test('notice at 360x680 leaves the dragon visible', async ({ page }, info) => {
+test('notice at 360x680 leaves the dragon visible', SWEEPS_SIZES, async ({ page }, info) => {
   test.skip(info.project.name !== 'pixel10pro')
   await page.setViewportSize({ width: 360, height: 680 })
   await page.addInitScript(() => {
@@ -164,5 +164,5 @@ test('notice at 360x680 leaves the dragon visible', async ({ page }, info) => {
   const notice = await page.locator('#notice').boundingBox()
   console.log('360x680 with notice', JSON.stringify({ notice, art: g.art, firstTask: g.firstTask, undo: g.undo, scrollH: g.scrollH }))
   expect(g.scrollH).toBeLessThanOrEqual(680)
-  await page.screenshot({ path: `${shotDir}/s3-360x680-notice.png` })
+  await shot(page, `s3-360x680-notice`)
 })

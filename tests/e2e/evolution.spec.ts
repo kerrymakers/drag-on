@@ -1,5 +1,5 @@
 // Milestone 3, Slice 2: the evolution look.
-import { test, expect, type Page } from './fixtures'
+import { test, expect, settle, shot, type Page } from './fixtures'
 import { LOOK_CHANGE_MARGIN } from '../../src/config/evolution'
 import { STAGES } from '../../src/config/stages'
 import { TASKS } from '../../src/config/tasks'
@@ -10,7 +10,6 @@ const TUE_1000 = new Date('2026-10-06T10:00:00+01:00')
 const OLD = Date.parse('2026-10-01T12:00:00+01:00')
 const from = (id: string) => STAGES.find((s) => s.id === id)!.xpFrom
 const XP = (id: string) => TASKS.find((t) => t.id === id)!.xp
-const shotDir = 'tests/screenshots'
 
 function collectConsole(page: Page) {
   const msgs: string[] = []
@@ -86,7 +85,7 @@ for (const motion of ['no-preference', 'reduce'] as const) {
     const btn = await page.locator('.overlay-button').boundingBox()
     expect(btn!.height).toBeGreaterThanOrEqual(44)
     expect(btn!.y + btn!.height).toBeLessThanOrEqual(page.viewportSize()!.height)
-    await page.screenshot({ path: `${shotDir}/m3s2-${info.project.name}-juvenile-reveal-${motion}.png` })
+    await shot(page, `m3s2-${info.project.name}-juvenile-reveal-${motion}`)
 
     await page.locator('.overlay-button').click()
     await expect(page.locator('.overlay')).toHaveCount(0)
@@ -102,7 +101,7 @@ for (const motion of ['no-preference', 'reduce'] as const) {
     // Other look names stay a surprise.
     const html = await page.evaluate(() => document.body.innerHTML)
     for (const name of ALL_NAMES.filter((x) => x !== LOOK_NAMES.strength)) expect(html).not.toContain(name)
-    await page.screenshot({ path: `${shotDir}/m3s2-${info.project.name}-dragon-screen-strength-${motion}.png` })
+    await shot(page, `m3s2-${info.project.name}-dragon-screen-strength-${motion}`)
     expect(msgs).toEqual([])
   })
 }
@@ -129,7 +128,7 @@ test('a first-time change of look gets a gentle celebration, and undo reverts it
   expect(await page.locator('.overlay-layer.is-to .dragon-svg').getAttribute('data-stage')).toBe('juvenile')
   await expect(page.locator('.overlay-message')).toContainText(LOOK_NAMES.wisdom)
   await expect(page.locator('.overlay-sub')).toHaveCount(0)
-  await page.screenshot({ path: `${shotDir}/m3s2-${info.project.name}-look-change.png` })
+  await shot(page, `m3s2-${info.project.name}-look-change`)
   await page.locator('.overlay-button').click()
   await expect(page.locator('.overlay')).toHaveCount(0)
   expect(await homeLook(page)).toBe('juvenile-wisdom')
@@ -137,7 +136,7 @@ test('a first-time change of look gets a gentle celebration, and undo reverts it
 
   // Undo goes back to the earlier look, with no celebration.
   await page.locator('#undo').click()
-  await page.waitForTimeout(800)
+  await settle(page)
   await expect(page.locator('.overlay')).toHaveCount(0)
   expect(await homeLook(page)).toBe('juvenile-strength')
   expect(msgs).toEqual([])
@@ -159,7 +158,7 @@ test('changing back to a look seen before happens quietly', async ({ page }) => 
 
   await page.locator('button.task[data-task-id="gym"]').click()
   await expect.poll(() => homeLook(page)).toBe('juvenile-strength')
-  await page.waitForTimeout(800)
+  await settle(page)
   await expect(page.locator('.overlay')).toHaveCount(0)
   await page.getByRole('link', { name: 'Dragon' }).click()
   await expect(page.locator('#dragon-screen .look-chip')).toHaveText(`${LOOK_NAMES.strength} dragon`)
@@ -197,7 +196,7 @@ test('every look draws cleanly at every grown stage, mood and scheme', async ({ 
           expect(fit.r, `${stage} ${look} ${mood}`).toBeLessThanOrEqual(361)
           expect(fit.w).toBeLessThanOrEqual(360)
           if (mood === 'sleepy' || (mood === 'happy' && stage !== 'adult')) {
-            await page.locator('#dragon-art').screenshot({ path: `${shotDir}/m3s2-${scheme}-${stage}-${look}-${mood}.png` })
+            await shot(page, `m3s2-${scheme}-${stage}-${look}-${mood}`, { of: '#dragon-art' })
           }
         }
       }

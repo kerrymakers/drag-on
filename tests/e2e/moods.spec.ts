@@ -1,11 +1,10 @@
 // Milestone 2, Slice 2: moods, the mood chip and the welcome back.
-import { test, expect, type Page } from './fixtures'
+import { test, expect, settle, shot, SWEEPS_SIZES, type Page } from './fixtures'
 import { STAGES } from '../../src/config/stages'
 import { TASKS } from '../../src/config/tasks'
 import { MOODS } from '../../src/config/mood'
 
 test.use({ timezoneId: 'Europe/London', locale: 'en-GB' })
-const shotDir = 'tests/screenshots'
 // Tuesday 13 Oct 2026 (BST), mid-morning: wake window closed.
 const NOW = new Date('2026-10-13T10:00:00+01:00')
 const DAY = 86_400_000
@@ -116,7 +115,7 @@ const SIZES = [
 for (const [w, h] of SIZES) {
   for (const scheme of ['light', 'dark'] as const) {
     for (const [stage, baseXp] of [['egg', 50], ['hatchling', 150]] as const) {
-      test(`moods ${stage} ${w}x${h} ${scheme}`, async ({ page }, info) => {
+      test(`moods ${stage} ${w}x${h} ${scheme}`, SWEEPS_SIZES, async ({ page }, info) => {
         test.skip(info.project.name !== 'pixel10pro')
         const msgs = collectConsole(page)
         await page.setViewportSize({ width: w, height: h })
@@ -129,9 +128,9 @@ for (const [w, h] of SIZES) {
             localStorage.removeItem('drag-on:ui')
           }, events(baseXp, d))
           await page.reload()
-          await page.waitForTimeout(700) // mood fades and bubble entrance
           const [id, label] = LABEL[d]!
           await expect(chip(page)).toHaveText(label)
+          await settle(page) // mood fades and bubble entrance
           await expect(chip(page)).toHaveAttribute('data-mood', id)
           const g = await geo(page)
           expect(g.svgMood).toBe(id)
@@ -152,7 +151,7 @@ for (const [w, h] of SIZES) {
             expect(g.speech!.t).toBeGreaterThanOrEqual(0)
           } else expect(g.speech).toBeNull()
           console.log(`${stage} ${w}x${h} ${scheme} d${d}`, JSON.stringify({ speech: g.speech, zzz: g.zzz, art: g.art, speechOverZzz: overlap(g.speech, g.zzz), speechOverArt: overlap(g.speech, g.art) }))
-          await page.screenshot({ path: `${shotDir}/m2s2-${w}x${h}-${scheme}-${stage}-${id}.png` })
+          await shot(page, `m2s2-${w}x${h}-${scheme}-${stage}-${id}`)
         }
         expect(msgs, msgs.join('\n')).toEqual([])
       })
@@ -163,7 +162,7 @@ for (const [w, h] of SIZES) {
 // Quick pass: later stages, sleepy and curled up
 for (const [w, h] of SIZES) {
   for (const scheme of ['light', 'dark'] as const) {
-    test(`moods later stages ${w}x${h} ${scheme}`, async ({ page }, info) => {
+    test(`moods later stages ${w}x${h} ${scheme}`, SWEEPS_SIZES, async ({ page }, info) => {
       test.skip(info.project.name !== 'pixel10pro')
       const msgs = collectConsole(page)
       await page.setViewportSize({ width: w, height: h })
@@ -177,9 +176,9 @@ for (const [w, h] of SIZES) {
             localStorage.removeItem('drag-on:ui')
           }, events(from(stage) + 100, d, stage))
           await page.reload()
-          await page.waitForTimeout(700)
           const [id, label] = LABEL[d]!
           await expect(chip(page)).toHaveText(label)
+          await settle(page)
           const g = await geo(page)
           expect(g.svgMood).toBe(id)
           expect(g.lastTask!.b).toBeLessThanOrEqual(h)
@@ -193,7 +192,7 @@ for (const [w, h] of SIZES) {
           expect(overlap(g.speech, g.head), 'bubble clear of head and headgear').toBe(0)
           expect(overlap(g.speech, g.zzz), 'bubble clear of zzz').toBe(0)
           console.log(`later ${stage} ${w}x${h} ${scheme} ${id}`, JSON.stringify({ speechOverZzz: overlap(g.speech, g.zzz), speechOverArt: overlap(g.speech, g.art), speech: g.speech, art: g.art }))
-          await page.screenshot({ path: `${shotDir}/m2s2-later-${w}x${h}-${scheme}-${stage}-${id}.png` })
+          await shot(page, `m2s2-later-${w}x${h}-${scheme}-${stage}-${id}`)
         }
       }
       expect(msgs, msgs.join('\n')).toEqual([])
@@ -389,7 +388,7 @@ test('hop and log wiggle do not clash or leave stray transforms', async ({ page 
         return { wrap: getComputedStyle(wrap).transform, pose: getComputedStyle(pose).transform, svgTop: Math.round(svg.top - art.top) }
       }),
     )
-    if (i === 2) await page.screenshot({ path: `${shotDir}/m2s2-${info.project.name}-hop-wiggle.png` })
+    if (i === 2) await shot(page, `m2s2-${info.project.name}-hop-wiggle`)
     await page.waitForTimeout(90)
   }
   console.log('hop+wiggle samples', JSON.stringify(samples))

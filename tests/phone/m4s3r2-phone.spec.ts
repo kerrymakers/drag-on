@@ -1,7 +1,7 @@
 // Phone-tester round 2 checks for M4 slice 3 (wearing items). Screenshots: tests/screenshots/m4s3r2-phone-*
 // Check 1 compares bubble placement with a build of the last commit, served at BASE_URL
 // (skipped if it isn't running).
-import { test, expect, type Page, type Browser, type TestInfo } from './fixtures'
+import { test, expect, type Page, type Browser, type TestInfo } from '../e2e/fixtures'
 import * as fs from 'node:fs'
 import { ITEMS } from '../../src/config/items'
 import { REWARDS } from '../../src/config/rewards'
