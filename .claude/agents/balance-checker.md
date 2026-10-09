@@ -16,6 +16,8 @@ Only add `--twins` (treat comparison), `--profiles=all`, `--exact` or more runs 
 
 For streaks, freezes and streak milestone items, use `scripts/streak-sim.ts` (it runs the real streak and milestone logic through `createLogEvent`, which `simulate.ts`'s fast path can't; `--exact` passes the full event log to check the fast path agrees). Run `nice -n 10 npx vite-node scripts/streak-sim.ts [days] [runs] [--profiles=...] [--ms=...] [--freeze=N] [--max=N]`.
 
+For task editing (custom XP, times a day, extra tasks), use `scripts/task-edit-sim.ts`. Start with `nice -n 10 npx vite-node scripts/task-edit-sim.ts 365 20` (about 2 minutes). Only run the default 100 runs (about 9 minutes) when a recommendation depends on small differences.
+
 The user works on this Mac while sims run: always run them under `nice -n 10`, one at a time, never in parallel.
 
 Simulate at least 180 days for three types of user:
