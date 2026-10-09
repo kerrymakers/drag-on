@@ -50,11 +50,15 @@ export function crackLevel(progress: number): CrackLevel {
 
 let uidCounter = 0
 
-/** The markup for a look, plus a key that changes only when the picture does. */
-function art(look: DragonLook): { key: string; svg: string } {
+/**
+ * The markup for a look, plus a key that changes only when the picture does. Every
+ * call draws with fresh gradient ids, so drawings shown at the same time never clash.
+ */
+export function drawLook(look: DragonLook): { key: string; svg: string } {
+  const uid = String(++uidCounter)
   if (look.stage === 'egg') {
     const crack = crackLevel(look.progress)
-    return { key: `egg-${crack}`, svg: eggSvg(crack, String(++uidCounter)) }
+    return { key: `egg-${crack}`, svg: eggSvg(crack, uid) }
   }
   const known = STAGE_ART[look.stage]
   const stage = known ? look.stage : 'elder' // an id the art doesn't know (a stage added later): the most grown-up look
@@ -63,7 +67,7 @@ function art(look: DragonLook): { key: string; svg: string } {
   const wearing = drawnWearing(look.wearing)
   const base = evolved === 'neutral' ? stage : `${stage}-${evolved}`
   const worn = WEAR_ORDER.map((slot) => wearing[slot] ?? '').join(',')
-  return { key: worn === ',,' ? base : `${base}+${worn}`, svg: draw(evolved, wearing) }
+  return { key: worn === ',,' ? base : `${base}+${worn}`, svg: draw(evolved, wearing, uid) }
 }
 
 const WEAR_ORDER: readonly WearSlot[] = ['head', 'neck', 'held']
@@ -82,12 +86,12 @@ function drawnWearing(wearing: WearLook | undefined): WearLook {
  * Each stage's drawing, and whether it has art for the evolution looks. Which stage
  * the dragon first evolves at is game config (EVOLVES_AT_STAGE), not decided here.
  */
-const STAGE_ART: Record<string, { draw: (look: EvolutionLook, wearing: WearLook) => string; looks: boolean }> = {
-  hatchling: { draw: (_look, wearing) => hatchlingSvg(wearing), looks: false },
-  whelp: { draw: (_look, wearing) => whelpSvg(wearing), looks: false },
-  juvenile: { draw: juvenileSvg, looks: true },
-  adult: { draw: adultSvg, looks: true },
-  elder: { draw: elderSvg, looks: true },
+const STAGE_ART: Record<string, { draw: (look: EvolutionLook, wearing: WearLook, uid: string) => string; looks: boolean }> = {
+  hatchling: { draw: (_look, wearing, uid) => hatchlingSvg(uid, wearing), looks: false },
+  whelp: { draw: (_look, wearing, uid) => whelpSvg(uid, wearing), looks: false },
+  juvenile: { draw: (look, wearing, uid) => juvenileSvg(uid, look, wearing), looks: true },
+  adult: { draw: (look, wearing, uid) => adultSvg(uid, look, wearing), looks: true },
+  elder: { draw: (look, wearing, uid) => elderSvg(uid, look, wearing), looks: true },
 }
 
 /** True if a stage id has art for the evolution looks (unknown ids draw as the most grown-up stage). */
@@ -99,10 +103,13 @@ export function hasLookArt(stage: string): boolean {
  * Draws the dragon into `container`. Calling it again with a look that draws the
  * same picture (same stage, look and outfit) keeps the drawing, so idle animations
  * don't restart on every render.
- * A mood change only updates data-mood, so CSS can fade between moods smoothly.
+ * A mood change only updates data-mood. CSS fades the mood overlays, eases the
+ * posture, and eases how much each idle motion moves without restarting it. Only
+ * breathing and blinking change speed with the mood, which can shift them by a few
+ * pixels mid-cycle, under the fade.
  */
 export function renderDragon(container: HTMLElement, look: DragonLook): void {
-  const { key, svg } = art(look)
+  const { key, svg } = drawLook(look)
   let wrap = container.querySelector<HTMLElement>(':scope > .dragon-react')
   if (wrap?.dataset.look !== key) {
     wrap = container.ownerDocument.createElement('div')
@@ -146,7 +153,7 @@ export function speechKeepClear(container: HTMLElement): DOMRect[] {
 
 /**
  * A short one-off animation: a happy wiggle on log, a delighted double hop on a treat,
- * a bounce on tap, a shake before hatching.
+ * a squish and wiggle (with a happy squint) on tap, a shake before hatching.
  */
 export function react(container: HTMLElement, kind: Reaction): void {
   const wrap = container.querySelector<HTMLElement>(':scope > .dragon-react')
@@ -157,11 +164,12 @@ export function react(container: HTMLElement, kind: Reaction): void {
   wrap.classList.remove('react-log', 'react-treat', 'react-hatch', 'react-tap', 'react-perk')
   void wrap.offsetWidth // restart the animation if it's already running
   wrap.classList.add(`react-${kind}`)
-  wrap.addEventListener(
-    'animationend',
-    (e) => {
-      if (e.target === wrap) wrap.classList.remove(`react-${kind}`)
-    },
-    { once: true },
-  )
+  // Parts inside (the eyes' squint, say) have their own short animations whose
+  // animationend bubbles up here too, so wait for the wrap's own.
+  const done = (e: AnimationEvent) => {
+    if (e.target !== wrap) return
+    wrap.classList.remove(`react-${kind}`)
+    wrap.removeEventListener('animationend', done)
+  }
+  wrap.addEventListener('animationend', done)
 }

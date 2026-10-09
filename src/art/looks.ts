@@ -2,7 +2,7 @@
 // [data-evolution]) and adds one or two features drawn here from each stage's anchors.
 // The neutral look adds nothing.
 
-import { pair, type Anchors } from './parts'
+import { onHead, onWings, pair, type Anchors } from './parts'
 
 export type EvolutionLook = 'neutral' | 'strength' | 'discipline' | 'wisdom' | 'heart'
 
@@ -59,7 +59,7 @@ function strength(a: Anchors, l: LookAnchors): string {
   return `<g class="look-part look-strength">
     ${pair('lk-plate', plate)}
     ${pair('lk-plate-ridge', ridge)}
-    <path class="lk-nosehorn" d="${horn}" />
+    ${onHead(`<path class="lk-nosehorn" d="${horn}" />`)}
   </g>`
 }
 
@@ -84,7 +84,7 @@ function discipline(a: Anchors, l: LookAnchors): string {
     <path class="lk-sash-stripe" d="${sash}" />
     <circle class="lk-badge" cx="${bx}" cy="${by}" r="${r1(19 * s)}" />
     <path class="lk-star" d="${starPath(bx, by, 12 * s)}" />
-    <path class="lk-star lk-forehead" d="${starPath(256, l.forehead, 15 * s)}" />
+    ${onHead(`<path class="lk-star lk-forehead" d="${starPath(256, l.forehead, 15 * s)}" />`)}
   </g>`
 }
 
@@ -93,8 +93,8 @@ function wisdomUnder(_a: Anchors, l: LookAnchors): string {
   const s = l.size
   const [[ax, ay], [bx, by]] = l.wingSpots
   return `<g class="look-part look-wisdom">
-    ${pair('lk-wingmark', starPath(ax, ay, 13 * s))}
-    ${pair('lk-wingmark', starPath(bx, by, 9 * s))}
+    ${onWings('lk-wingmark', starPath(ax, ay, 13 * s))}
+    ${onWings('lk-wingmark', starPath(bx, by, 9 * s))}
   </g>`
 }
 
@@ -104,12 +104,12 @@ function wisdomOver(a: Anchors, l: LookAnchors): string {
   const lx = 256 - dx
   const bridgeY = r1(y - r * 0.25)
   const arm = `M${r1(lx - r)} ${r1(y - 2)} L${r1(lx - r - 20 * l.size)} ${r1(y - 8)}`
-  return `<g class="look-part look-wisdom look-glasses">
+  return onHead(`<g class="look-part look-wisdom look-glasses">
     <circle class="lk-lens" cx="${lx}" cy="${y}" r="${r}" />
     <circle class="lk-lens" cx="${256 + dx}" cy="${y}" r="${r}" />
     <path class="lk-frame" d="M${r1(lx + r * 0.96)} ${bridgeY} Q256 ${r1(bridgeY - 10)} ${r1(256 + dx - r * 0.96)} ${bridgeY}" />
     ${pair('lk-frame', arm)}
-  </g>`
+  </g>`)
 }
 
 /** Warm-hearted: a flower tucked by a horn and little hearts on the wings. */
@@ -124,9 +124,9 @@ function heart(_a: Anchors, l: LookAnchors): string {
     .join('')
   const [[ax, ay], [bx, by]] = l.wingSpots
   return `<g class="look-part look-heart">
-    ${pair('lk-wingmark', heartPath(ax, ay, 0.9 * s))}
-    ${pair('lk-wingmark', heartPath(bx, by, 0.65 * s))}
-    <g class="lk-flower">${petals}<circle class="lk-flower-centre" cx="${r1(fx)}" cy="${r1(fy)}" r="${r1(6 * s)}" /></g>
+    ${onWings('lk-wingmark', heartPath(ax, ay, 0.9 * s))}
+    ${onWings('lk-wingmark', heartPath(bx, by, 0.65 * s))}
+    ${onHead(`<g class="lk-flower">${petals}<circle class="lk-flower-centre" cx="${r1(fx)}" cy="${r1(fy)}" r="${r1(6 * s)}" /></g>`)}
   </g>`
 }
 

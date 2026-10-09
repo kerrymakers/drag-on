@@ -1571,7 +1571,8 @@ body {
 /* A small preview of the dragon in its outfit. */
 .cs-art {
   height: clamp(96px, 15dvh, 132px);
-  margin: 0 auto 4px;
+  /* Headroom so the tallest horns stay in the scroll area through a tap reaction. */
+  margin: 16px auto 4px;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-user-select: none;

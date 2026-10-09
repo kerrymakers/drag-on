@@ -5,11 +5,12 @@ import { STAGES } from '../config/stages'
 import { STATS } from '../config/stats'
 import { ADULT, ADULT_SCALE, ELDER, ELDER_SCALE, JUVENILE, JUVENILE_SCALE, WHELP, WHELP_SCALE, adultSvg, elderSvg, juvenileSvg, whelpSvg } from './grown'
 import { HATCHLING, HATCHLING_SCALE, hatchlingSvg } from './hatchling'
-import { CRACK_BIG_AT, CRACK_SMALL_AT, crackLevel, hasLookArt } from './index'
+import { CRACK_BIG_AT, CRACK_SMALL_AT, crackLevel, drawLook, hasLookArt, type MoodLook } from './index'
 import { eggSvg } from './egg'
 import { WEAR_PIN, hasItemArt, itemSvg, unknownItemSvg, wornItemBox, wornItemSvg } from './items'
 import { EVOLVED_LOOKS, knownLook, type EvolutionLook } from './looks'
-import { mirror, type Anchors, type WearLook, type WearSlot } from './parts'
+import artCss from './art.css?raw'
+import { HEAD_SWAY, mirror, type Anchors, type WearLook, type WearSlot } from './parts'
 
 describe('crackLevel', () => {
   it('shows no crack below the small threshold', () => {
@@ -43,11 +44,11 @@ describe('mirror', () => {
 
 describe('stage art', () => {
   const drawings: Record<string, string> = {
-    hatchling: hatchlingSvg(),
-    whelp: whelpSvg(),
-    juvenile: juvenileSvg(),
-    adult: adultSvg(),
-    elder: elderSvg(),
+    hatchling: hatchlingSvg('t'),
+    whelp: whelpSvg('t'),
+    juvenile: juvenileSvg('t'),
+    adult: adultSvg('t'),
+    elder: elderSvg('t'),
   }
 
   it('has a drawing for every stage after the egg', () => {
@@ -69,11 +70,11 @@ describe('stage art', () => {
 describe('mood parts', () => {
   const drawings: Record<string, string> = {
     egg: eggSvg(0, 'test'),
-    hatchling: hatchlingSvg(),
-    whelp: whelpSvg(),
-    juvenile: juvenileSvg(),
-    adult: adultSvg(),
-    elder: elderSvg(),
+    hatchling: hatchlingSvg('t'),
+    whelp: whelpSvg('t'),
+    juvenile: juvenileSvg('t'),
+    adult: adultSvg('t'),
+    elder: elderSvg('t'),
   }
 
   it('every stage, egg included, carries every mood overlay and starts content', () => {
@@ -105,7 +106,11 @@ describe('mood parts', () => {
 
 describe('evolution looks', () => {
   const LOOKS = ['strength', 'discipline', 'wisdom', 'heart'] as const
-  const STAGE_SVGS = { juvenile: juvenileSvg, adult: adultSvg, elder: elderSvg }
+  const STAGE_SVGS: Record<string, (look?: EvolutionLook) => string> = {
+    juvenile: (look) => juvenileSvg('t', look),
+    adult: (look) => adultSvg('t', look),
+    elder: (look) => elderSvg('t', look),
+  }
 
   it('has a look for every stat in config', () => {
     expect([...EVOLVED_LOOKS].sort()).toEqual(STATS.map((s) => s.id).sort())
@@ -136,10 +141,10 @@ describe('evolution looks', () => {
   })
 
   it('draws glasses over the mood lids, and everything else under them', () => {
-    const svg = juvenileSvg('wisdom')
+    const svg = juvenileSvg('t', 'wisdom')
     expect(svg.indexOf('look-glasses')).toBeGreaterThan(svg.lastIndexOf('mood-lid'))
     for (const look of ['strength', 'discipline', 'heart'] as const) {
-      const s = juvenileSvg(look)
+      const s = juvenileSvg('t', look)
       expect(s.indexOf(`look-${look}`), look).toBeLessThan(s.indexOf('mood-lid'))
     }
   })
@@ -206,11 +211,11 @@ describe('worn items', () => {
   const SLOTS: readonly WearSlot[] = ['head', 'neck', 'held']
   const ALL_LOOKS: readonly EvolutionLook[] = ['neutral', ...EVOLVED_LOOKS]
   const STAGES_ART: Record<string, { draw: (look: EvolutionLook, w?: WearLook) => string; anchors: Anchors; scale: number; looks: boolean }> = {
-    hatchling: { draw: (_l, w) => hatchlingSvg(w), anchors: HATCHLING, scale: HATCHLING_SCALE, looks: false },
-    whelp: { draw: (_l, w) => whelpSvg(w), anchors: WHELP, scale: WHELP_SCALE, looks: false },
-    juvenile: { draw: juvenileSvg, anchors: JUVENILE, scale: JUVENILE_SCALE, looks: true },
-    adult: { draw: adultSvg, anchors: ADULT, scale: ADULT_SCALE, looks: true },
-    elder: { draw: elderSvg, anchors: ELDER, scale: ELDER_SCALE, looks: true },
+    hatchling: { draw: (_l, w) => hatchlingSvg('t', w), anchors: HATCHLING, scale: HATCHLING_SCALE, looks: false },
+    whelp: { draw: (_l, w) => whelpSvg('t', w), anchors: WHELP, scale: WHELP_SCALE, looks: false },
+    juvenile: { draw: (l, w) => juvenileSvg('t', l, w), anchors: JUVENILE, scale: JUVENILE_SCALE, looks: true },
+    adult: { draw: (l, w) => adultSvg('t', l, w), anchors: ADULT, scale: ADULT_SCALE, looks: true },
+    elder: { draw: (l, w) => elderSvg('t', l, w), anchors: ELDER, scale: ELDER_SCALE, looks: true },
   }
   // The curled-up posture in art.css (--curl-pose); keep the two in step: translateY(12px) scale(1.05, 0.9) about (256, 492).
   const CURL = { dy: 12, sx: 1.05, sy: 0.9 }
@@ -278,7 +283,7 @@ describe('worn items', () => {
   })
 
   it('wears all three spots at once', () => {
-    const svg = adultSvg('wisdom', { head: 'crown', neck: 'scarf', held: 'book' })
+    const svg = adultSvg('t', 'wisdom', { head: 'crown', neck: 'scarf', held: 'book' })
     for (const id of ['crown', 'scarf', 'book']) expect(svg).toContain(`data-worn="${id}"`)
     // Neck and held tuck under the blanket; the hat sits on top of everything, glasses included.
     expect(svg.indexOf('data-worn="scarf"')).toBeLessThan(svg.indexOf('mood-blanket'))
@@ -315,9 +320,10 @@ describe('worn items', () => {
       expect(y, stage).toBeLessThanOrEqual(hy0)
       expect(x + w, stage).toBeGreaterThanOrEqual(hx1)
       expect(y + h, stage).toBeGreaterThanOrEqual(hy1)
-      // No hat, no change.
+      // No hat: just the head, with room for its idle motion at the sides and below.
+      const [bx0, by0, bx1, by1] = art.anchors.headBox
       expect(art.draw('neutral', { neck: 'scarf' })).toContain(
-        `x="${art.anchors.headBox[0]}" y="${art.anchors.headBox[1]}"`,
+        `x="${bx0 - HEAD_SWAY.side}" y="${by0}" width="${bx1 - bx0 + 2 * HEAD_SWAY.side}" height="${by1 - by0 + HEAD_SWAY.below}"`,
       )
     }
   })
@@ -325,9 +331,9 @@ describe('worn items', () => {
   it('draws nothing for an unknown, empty or missing id', () => {
     for (const id of ['nope', '', 'toString', '__proto__', null, undefined]) {
       expect(wornItemSvg(id, 'head', HATCHLING.wear.head), String(id)).toBe('')
-      expect(hatchlingSvg({ head: id, neck: id, held: id }), String(id)).toBe(hatchlingSvg())
+      expect(hatchlingSvg('t', { head: id, neck: id, held: id }), String(id)).toBe(hatchlingSvg('t'))
     }
-    expect(juvenileSvg('heart', { head: 'nope' })).toBe(juvenileSvg('heart'))
+    expect(juvenileSvg('t', 'heart', { head: 'nope' })).toBe(juvenileSvg('t', 'heart'))
   })
 
   it('draws nothing worn without an outfit, so the plain drawings are unchanged', () => {
@@ -340,5 +346,131 @@ describe('worn items', () => {
       expect(x).toBeGreaterThanOrEqual(0)
       expect(y).toBeLessThanOrEqual(64)
     }
+  })
+})
+
+describe('richer look and idle life', () => {
+  const ALL_LOOKS = ['neutral', ...EVOLVED_LOOKS] as const
+  const MOODS: readonly MoodLook[] = ['content', 'happy', 'sleepy', 'grumpy']
+  const OUTFIT = { head: 'crown', neck: 'scarf', held: 'book' }
+  const ids = (svg: string) => [...svg.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]!)
+  const refs = (svg: string) => [...svg.matchAll(/url\(#([^)]+)\)/g)].map((m) => m[1]!)
+  /** Every drawing the art can make: each stage and crack, each look, with and without an outfit. */
+  const everyDrawing = () => {
+    const out: [string, string][] = []
+    for (const progress of [0, CRACK_SMALL_AT, CRACK_BIG_AT]) out.push([`egg ${progress}`, drawLook({ stage: 'egg', progress }).svg])
+    for (const s of STAGES.slice(1)) {
+      for (const look of ALL_LOOKS) {
+        for (const wearing of [undefined, OUTFIT]) {
+          for (const mood of MOODS) out.push([`${s.id} ${look} ${mood}${wearing ? ' worn' : ''}`, drawLook({ stage: s.id, progress: 0, mood, look, wearing }).svg])
+        }
+      }
+    }
+    return out
+  }
+
+  it('draws every stage, look and outfit with no NaN or undefined, and every gradient it uses defined in the same drawing', () => {
+    for (const [name, svg] of everyDrawing()) {
+      expect(svg, name).not.toContain('NaN')
+      expect(svg, name).not.toContain('undefined')
+      const own = ids(svg)
+      expect(new Set(own).size, `${name} duplicate ids`).toBe(own.length)
+      for (const r of refs(svg)) expect(own, `${name} url(#${r})`).toContain(r)
+    }
+  })
+
+  it('gives every rendered drawing its own gradient ids, so two dragons on screen never clash', () => {
+    for (const stage of ['egg', ...STAGES.slice(1).map((s) => s.id)]) {
+      const a = ids(drawLook({ stage, progress: 0.9, look: 'heart' }).svg)
+      const b = ids(drawLook({ stage, progress: 0.9, look: 'heart' }).svg)
+      expect(a.length, stage).toBeGreaterThan(0)
+      for (const id of a) expect(b, `${stage} ${id}`).not.toContain(id)
+    }
+  })
+
+  it('shades every dragon stage: skin, belly, wings, horns, blush and shine all painted with gradients', () => {
+    for (const s of STAGES.slice(1)) {
+      const svg = drawLook({ stage: s.id, progress: 0 }).svg
+      for (const part of ['skin', 'belly', 'wing', 'horn', 'blush', 'shine']) expect(svg, `${s.id} ${part}`).toMatch(new RegExp(`fill="url\\(#dg-${part}-`))
+      expect(svg, s.id).toContain('hd-eye-shine')
+      expect(svg, s.id).toContain('dragon-shadow')
+    }
+  })
+
+  it('gives every stage the moving parts: idle group, tail, both wings, gaze and a head that carries its lids', () => {
+    for (const s of STAGES.slice(1)) {
+      const svg = drawLook({ stage: s.id, progress: 0, look: 'wisdom', wearing: OUTFIT }).svg
+      for (const cls of ['class="dragon-idle"', 'class="dragon-tail"', 'class="dg-wing dg-l"', 'class="dg-wing dg-r"', 'class="dragon-gaze"', 'dragon-head dg-head-move'])
+        expect(svg, `${s.id} ${cls}`).toContain(cls)
+      expect(svg, s.id).toMatch(/style="--head-pivot: 256px \d+px; --wing-l: \d+px \d+px; --wing-r: \d+px \d+px"/)
+    }
+  })
+
+  it('moves everything worn or drawn on the head with the head, and wing marks with the wings', () => {
+    // The hat, glasses, lids and happy twinkles each sit inside a .dg-head-move group.
+    const inHeadMove = (svg: string, marker: string) => {
+      const at = svg.lastIndexOf('<', svg.indexOf(marker)) // the start of the marker's own tag
+      const open = svg.lastIndexOf('dg-head-move', at)
+      if (at < 0 || open < 0) return false
+      // Inside if the head group (opened just before `open`) is still open at the marker.
+      const between = svg.slice(open, at)
+      return 1 + between.split('<g').length - 1 > between.split('</g>').length - 1
+    }
+    for (const s of ['juvenile', 'adult', 'elder']) {
+      const wise = drawLook({ stage: s, progress: 0, look: 'wisdom', wearing: OUTFIT }).svg
+      for (const m of ['data-worn="crown"', 'look-glasses', 'mood-sleepy mood-lid', 'mood-lid-fill', 'mood-twinkle']) expect(inHeadMove(wise, m), `${s} ${m}`).toBe(true)
+      expect(inHeadMove(drawLook({ stage: s, progress: 0, look: 'heart' }).svg, 'lk-flower'), s).toBe(true)
+      expect(inHeadMove(drawLook({ stage: s, progress: 0, look: 'discipline' }).svg, 'lk-forehead'), s).toBe(true)
+      expect(inHeadMove(drawLook({ stage: s, progress: 0, look: 'strength' }).svg, 'lk-nosehorn'), s).toBe(true)
+      // Neck and held items stay with the body.
+      expect(inHeadMove(wise, 'data-worn="scarf"'), s).toBe(false)
+      expect(wise.match(/<g class="dg-wing dg-[lr]"><path class="lk-wingmark"/g)?.length, s).toBe(4)
+    }
+  })
+
+  describe('art.css', () => {
+    const css = artCss.replace(/\/\*[\s\S]*?\*\//g, '')
+    const reducedAt = css.indexOf('@media (prefers-reduced-motion: reduce)')
+    /** Top-level and @media rules as [selector, body], skipping @keyframes. */
+    const rules = (text: string) => {
+      const out: [string, string][] = []
+      const re = /([^{}]+)\{([^{}]*)\}/g
+      for (const m of text.matchAll(re)) out.push([m[1]!.trim(), m[2]!])
+      return out
+    }
+    const keyframes = [...css.matchAll(/@keyframes\s+([\w-]+)\s*\{((?:[^{}]*\{[^{}]*\})*)\s*\}/g)]
+    const withoutKeyframes = css.replace(/@keyframes\s+[\w-]+\s*\{(?:[^{}]*\{[^{}]*\})*\s*\}/g, '')
+
+    it('animates transform and opacity only, so idle life stays cheap on a phone', () => {
+      expect(keyframes.length).toBeGreaterThan(10)
+      for (const [, name, body] of keyframes) {
+        for (const decl of body!.matchAll(/([\w-]+)\s*:/g)) expect(['transform', 'opacity'], `${name}: ${decl[1]}`).toContain(decl[1])
+      }
+    })
+
+    it('stills every animation under reduced motion', () => {
+      expect(reducedAt).toBeGreaterThan(-1)
+      const reduced = css.slice(reducedAt, css.indexOf('}', css.indexOf('}', reducedAt) + 1) + 1)
+      for (const sel of ['.dragon-svg,', '.dragon-svg *', '.dragon-react']) expect(reduced, sel).toContain(sel)
+      // Every class drawn inside a dragon svg is covered by `.dragon-svg *`; the svg itself by `.dragon-svg`.
+      const drawn = new Set<string>()
+      for (const [, svg] of everyDrawing()) for (const m of svg.matchAll(/class="([^"]+)"/g)) for (const c of m[1]!.split(' ')) drawn.add(c)
+      const named = new Set(keyframes.map((k) => k[1]))
+      for (const [sel, body] of rules(withoutKeyframes.slice(0, withoutKeyframes.indexOf('@media (prefers-reduced-motion: reduce)')))) {
+        const anim = /(?:^|;)\s*animation(?:-name)?\s*:\s*([^;]+)/.exec(body)
+        if (!anim || anim[1]!.trim() === 'none') continue
+        for (const one of sel.split(',')) {
+          const parts = one.trim().split(/\s+/)
+          let subject = parts.pop()!
+          // An element-only subject (e.g. `.mood-zzz text`) is covered through the class it sits in.
+          while (!subject.includes('.') && parts.length) subject = parts.pop()!
+          const classes = [...subject.matchAll(/\.([\w-]+)/g)].map((m) => m[1]!)
+          const covered = classes.some((c) => drawn.has(c) || /^react-/.test(c) && reduced.includes(`.${c}`)) || subject.includes('.dragon-svg') || subject.includes('.egg')
+          expect(covered, `${one.trim()} is animated but not stilled under reduced motion`).toBe(true)
+        }
+        const name = anim[1]!.trim().split(/\s+/).find((w) => named.has(w))
+        if (!/animation-name/.test(anim[0]) || name) expect(name, `${sel}: keyframes defined`).toBeTruthy()
+      }
+    })
   })
 })

@@ -37,17 +37,56 @@ export interface Eyes {
   ry: number
 }
 
-/** Eyes with highlights, grouped so they blink together. */
+/**
+ * Eyes with a big and a little shine, grouped so they blink together. The outer
+ * .dragon-gaze group lets them glance about while the inner group blinks.
+ */
 export function eyes({ y, dx, rx, ry }: Eyes): string {
   const l = 256 - dx
   const r = 256 + dx
   const hr = Math.max(4, Math.round(rx * 0.36))
-  return `<g class="dragon-eyes">
+  const sr = Math.max(2.5, r1(hr * 0.45))
+  const shine = (x: number) => `<circle cx="${r1(x + rx * 0.35)}" cy="${r1(y - ry * 0.4)}" r="${hr}" fill="#fff" />
+    <circle class="hd-eye-shine" cx="${r1(x - rx * 0.32)}" cy="${r1(y + ry * 0.42)}" r="${sr}" fill="#fff" />`
+  return `<g class="dragon-gaze"><g class="dragon-eyes">
     <ellipse class="hd-eye" cx="${l}" cy="${y}" rx="${rx}" ry="${ry}" />
     <ellipse class="hd-eye" cx="${r}" cy="${y}" rx="${rx}" ry="${ry}" />
-    <circle cx="${l + rx * 0.35}" cy="${y - ry * 0.4}" r="${hr}" fill="#fff" />
-    <circle cx="${r + rx * 0.35}" cy="${y - ry * 0.4}" r="${hr}" fill="#fff" />
-  </g>`
+    ${shine(l)}
+    ${shine(r)}
+  </g></g>`
+}
+
+/**
+ * The back wings, left and right, each in its own group so it can flick about its
+ * root (the pivots come from Anchors.wingRoot). `lines` are the membrane lines.
+ */
+export function wingPair(d: string, lines?: string): string {
+  const side = (dd: string, ll: string | undefined, s: 'l' | 'r') =>
+    `<g class="dg-wing dg-${s}"><path class="hd-wing" d="${dd}" />${ll ? `<path class="hd-wing-line" d="${ll}" />` : ''}</g>`
+  return side(d, lines, 'l') + side(mirror(d), lines ? mirror(lines) : undefined, 'r')
+}
+
+/** Little ear frills on the head, each flicking about its own root. */
+export function earPair(d: string): string {
+  return `<path class="hd-wing dg-ear dg-l" d="${d}" /><path class="hd-wing dg-ear dg-r" d="${mirror(d)}" />`
+}
+
+/**
+ * Anything drawn on a wing (look marks): the left one rides with the left wing's flick,
+ * the right one with the right wing's.
+ */
+export function onWings(cls: string, d: string): string {
+  return `<g class="dg-wing dg-l"><path class="${cls}" d="${d}" /></g><g class="dg-wing dg-r"><path class="${cls}" d="${mirror(d)}" /></g>`
+}
+
+/** Anything that sits on the head: it moves with the head as it looks about. */
+export const onHead = (markup: string) => `<g class="dg-head-move">${markup}</g>`
+
+/** A soft highlight on the upper left of an ellipse (lit from above, a little to the left). */
+export function shine(cx: number, cy: number, rx: number, ry: number): string {
+  const x = r1(cx - rx * 0.36)
+  const y = r1(cy - ry * 0.5)
+  return `<ellipse class="hd-shine" cx="${x}" cy="${y}" rx="${r1(rx * 0.34)}" ry="${r1(ry * 0.2)}" transform="rotate(-18 ${x} ${y})" />`
 }
 
 /** Where a stage's features are, so the shared mood parts can be placed on any stage. */
@@ -64,6 +103,10 @@ export interface Anchors {
   headBox: readonly [number, number, number, number]
   /** Where a worn item sits in each spot (see items.ts for how each spot is pinned). */
   wear: Record<WearSlot, WearSpot>
+  /** y of the point (on the centre line) the head tilts and nods about. */
+  neckY: number
+  /** Where the left back wing joins the body; it flicks about this point (mirrored for the right). */
+  wingRoot: readonly [number, number]
 }
 
 /** The spots an item can be worn in. Kept in the art's own words, not imported from game code. */
@@ -148,16 +191,14 @@ export function moodParts({ eyes: e, headTop, body }: Anchors): string {
   const x1 = Math.round(256 + body.rx + 24)
   const bottom = 496
   return `
-    <g class="mood-part mood-happy" aria-hidden="true">
+    <g class="mood-part mood-happy dg-head-move" aria-hidden="true">
       ${twinkle(l - e.rx - 16, e.y - e.ry - 6, 12)}
       ${twinkle(r + e.rx + 18, e.y - e.ry - 2, 9)}
     </g>
-    ${lid(l, e.y, e.rx, e.ry, sleepyEdge, 'mood-sleepy')}
-    ${lid(r, e.y, e.rx, e.ry, sleepyEdge, 'mood-sleepy')}
+    ${onHead(lid(l, e.y, e.rx, e.ry, sleepyEdge, 'mood-sleepy') + lid(r, e.y, e.rx, e.ry, sleepyEdge, 'mood-sleepy'))}
     ${zzz(r + e.rx + 26, headTop + 40)}
     <g class="mood-part mood-grumpy">
-      ${smileLid(l, e.y, e.rx, e.ry)}
-      ${smileLid(r, e.y, e.rx, e.ry)}
+      ${onHead(smileLid(l, e.y, e.rx, e.ry) + smileLid(r, e.y, e.rx, e.ry))}
       ${heart(l - e.rx - 36, headTop + 30, 1.8)}
       <path class="mood-tail" d="M${x1 - 18} ${top + 34} C${x1 + 10} ${top + 10} ${x1 + 14} ${top - 18} ${x1 + 2} ${top - 34} C${x1 + 26} ${top - 26} ${x1 + 34} ${top + 4} ${x1 - 6} ${top + 44} Z" />
       <path class="mood-blanket" d="M${x0} ${top + 10} Q${x0 + 40} ${top - 22} 256 ${top - 6} Q${x1 - 40} ${top - 22} ${x1} ${top + 10} L${x1 + 8} ${bottom - 14} Q${x1 + 8} ${bottom} ${x1 - 8} ${bottom} L${x0 + 8} ${bottom} Q${x0 - 8} ${bottom} ${x0 - 8} ${bottom - 14} Z" />
@@ -180,37 +221,114 @@ export interface StageSvgOptions {
   features?: { under: string; over: string }
   /** The items being worn, by spot. */
   wearing?: WearLook | undefined
+  /**
+   * Makes the gradient ids unique to this drawing, so two dragons on screen at once
+   * (Home and the Dragon screen, say) never share or clash over a gradient.
+   */
+  uid: string
+}
+
+/** Which gradient each part is painted with. A part gets the first match in its class list. */
+const PAINT: readonly (readonly [string, string])[] = [
+  ['hd-skin', 'skin'],
+  ['mood-lid', 'skin'],
+  ['mood-lid-fill', 'skin'],
+  ['mood-tail', 'skin'],
+  ['hd-belly', 'belly'],
+  ['hd-wing', 'wing'],
+  ['hd-horn', 'horn'],
+  ['hd-spine', 'horn'],
+  ['hd-mane', 'horn'],
+  ['lk-nosehorn', 'horn'],
+  ['hd-cheek', 'blush'],
+  ['hd-shine', 'shine'],
+]
+
+/** The id of one of a drawing's gradients. */
+export const paintId = (name: string, uid: string) => `dg-${name}-${uid}`
+
+/**
+ * Points each painted part at its gradient. The colours stay in CSS (the gradient stops
+ * read the same custom properties), so the evolution looks and dark mode still apply.
+ */
+export function paint(markup: string, uid: string): string {
+  return markup.replace(/class="([^"]*)"/g, (m, cls: string) => {
+    const list = cls.split(' ')
+    const hit = PAINT.find(([c]) => list.includes(c))
+    return hit ? `${m} fill="url(#${paintId(hit[1], uid)})"` : m
+  })
+}
+
+/**
+ * The soft shading: skin is lighter towards the top of the head and deeper underneath,
+ * one gradient across the whole dragon (in drawing units) so lids and tail match the
+ * skin they sit on. Belly, wings and horns shade within each shape; cheeks are a soft
+ * blush and the shine a gentle highlight.
+ */
+function paintDefs(uid: string, top: number): string {
+  const id = (n: string) => paintId(n, uid)
+  const v = (n: string, stops: string) => `<linearGradient id="${id(n)}" x1="0" y1="0" x2="0" y2="1">${stops}</linearGradient>`
+  return `<defs>
+    <linearGradient id="${id('skin')}" gradientUnits="userSpaceOnUse" x1="0" y1="${top}" x2="0" y2="490">
+      <stop offset="0" class="g-skin-hi" /><stop offset="0.5" class="g-skin" /><stop offset="1" class="g-skin-lo" />
+    </linearGradient>
+    ${v('belly', '<stop offset="0" class="g-belly-hi" /><stop offset="1" class="g-belly-lo" />')}
+    ${v('wing', '<stop offset="0" class="g-wing-hi" /><stop offset="1" class="g-wing-lo" />')}
+    ${v('horn', '<stop offset="0" class="g-horn-hi" /><stop offset="1" class="g-horn-lo" />')}
+    <radialGradient id="${id('blush')}"><stop offset="0.2" class="g-blush" /><stop offset="1" class="g-blush g-clear" /></radialGradient>
+    <radialGradient id="${id('shine')}"><stop offset="0" class="g-shine" /><stop offset="1" class="g-shine g-clear" /></radialGradient>
+  </defs>`
 }
 
 /**
  * Wraps a drawing so it sits on the ground line and grows by `scale` from there.
- * Structure: scale (attribute) > .dragon-pose (mood posture, hop) > .dragon-body
- * (breathing) > drawing + mood parts.
+ * Structure: scale (attribute) > ground shadow, and .dragon-pose (mood posture, hop)
+ * > .dragon-idle (sway, huff) > .dragon-body (breathing) > drawing + mood parts.
+ * Inside the drawing, .dragon-tail sways, .dg-wing groups flick about their roots, and
+ * everything on the head (.dg-head-move: the head itself, lids, look features, a hat)
+ * shares one animation so it all looks about together and nothing detaches.
  * Worn items ride inside .dragon-body, so they breathe, hop and curl up with the
  * dragon. Neck and held items sit under the mood overlays (curled up tucks them under
  * the blanket); a head item sits on top of everything. The speech bubble's keep-clear
  * box grows to cover a head item, so bubbles stay clear of hats.
  */
 export function dragonSvg(
-  { stage, label, scale, anchors, bodyClass, evolution = 'neutral', features, wearing }: StageSvgOptions,
+  { stage, label, scale, anchors, bodyClass, evolution = 'neutral', features, wearing, uid }: StageSvgOptions,
   body: string,
 ): string {
   const neck = wornItemSvg(wearing?.neck, 'neck', anchors.wear.neck)
   const held = wornItemSvg(wearing?.held, 'held', anchors.wear.held)
   const head = wornItemSvg(wearing?.head, 'head', anchors.wear.head)
-  const headBox = head ? unionBox(anchors.headBox, wornItemBox('head', anchors.wear.head)) : anchors.headBox
+  const worn = head ? unionBox(anchors.headBox, wornItemBox('head', anchors.wear.head)) : anchors.headBox
+  // Room for the head's idle motion (art.css: the look-around tilt swings it sideways,
+  // nodding off dips it), so a speech bubble placed once stays clear all the while.
+  const headBox: Box = [worn[0] - HEAD_SWAY.side, worn[1], worn[2] + HEAD_SWAY.side, worn[3] + HEAD_SWAY.below]
+  const [wx, wy] = anchors.wingRoot
+  // The points the head and wings move about, in drawing units, for art.css.
+  const pivots = `--head-pivot: 256px ${anchors.neckY}px; --wing-l: ${wx}px ${wy}px; --wing-r: ${512 - wx}px ${wy}px`
+  const drawing = paint(`${body}${features?.under ?? ''}${neck}${held}${moodParts(anchors)}${features?.over ?? ''}${head ? onHead(head) : ''}`, uid)
   return `
-<svg class="dragon-svg dragon-${stage}" data-stage="${stage}" data-evolution="${evolution}" data-mood="content" viewBox="0 0 512 512" role="img" aria-label="${label}">
+<svg class="dragon-svg dragon-${stage}" data-stage="${stage}" data-evolution="${evolution}" data-mood="content" viewBox="0 0 512 512" role="img" aria-label="${label}" style="${pivots}">
+  ${paintDefs(uid, anchors.headTop - 20)}
   <g transform="translate(256 492) scale(${scale}) translate(-256 -492)">
     ${headBoxRect(headBox, true)}
+    <ellipse class="dragon-shadow" cx="256" cy="486" rx="${r1(anchors.body.rx * 0.95)}" ry="9" />
     <g class="dragon-pose">
-      <g class="${bodyClass ? `${bodyClass} ` : ''}dragon-body">${body}${features?.under ?? ''}${neck}${held}${moodParts(anchors)}${features?.over ?? ''}${head}</g>
+      <g class="dragon-idle">
+        <g class="${bodyClass ? `${bodyClass} ` : ''}dragon-body">${drawing}</g>
+      </g>
     </g>
   </g>
 </svg>`
 }
 
 type Box = readonly [number, number, number, number]
+
+/**
+ * How far (drawing units) the head's idle motion can carry it sideways or down: the
+ * look-around tilt swings the horn tips a little, nodding off dips the chin 8 units.
+ */
+export const HEAD_SWAY = { side: 5, below: 10 } as const
 
 function unionBox(a: Box, b: Box): Box {
   return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])]

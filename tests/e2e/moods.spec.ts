@@ -374,9 +374,10 @@ test('hop and log wiggle do not clash or leave stray transforms', async ({ page 
     document.getAnimations().map((a: any) => `${a.animationName}@${(a.effect?.target as Element)?.getAttribute?.('class')}`),
   )
   console.log('happy idle animations', anims)
-  // Line up the log with the hop (hop peak is at 88% of 5.5s)
+  // Line up the log with the end-of-cycle hop (idle-hop: 11s, delay -2s, peak at 89%,
+  // so the peak is at currentTime 9790 - 2000)
   await page.evaluate(() => {
-    for (const a of document.getAnimations() as any[]) if (a.animationName === 'mood-hop') a.currentTime = 4700
+    for (const a of document.getAnimations() as any[]) if (a.animationName === 'idle-hop') a.currentTime = 7400
   })
   await page.locator('button.task[data-task-id="read"]').click()
   const samples: object[] = []
