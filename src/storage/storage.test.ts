@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS } from '../config/settings'
+import { TASK_LIMITS, TASKS } from '../config/tasks'
+import { archiveTask, effectiveTasks, updateTask, withTasks } from '../game/tasks'
 import { totalXp } from '../game/state'
 import type { GameEvent } from '../game/types'
 import {
@@ -357,6 +359,110 @@ describe('settings', () => {
     a.wearing.head = 'bow'
     expect(load(new FakeStore()).data.settings.wearing.head).toBeNull()
     expect(DEFAULT_SETTINGS.wearing.head).toBeNull()
+  })
+
+  describe('tasks', () => {
+    const good = { id: 'my-1', name: 'Stretch', stat: 'heart', xp: 15, rules: { kind: 'oncePerDay' }, archived: false }
+
+    it('loads older saves without a task list as none (the config tasks apply)', () => {
+      expect('tasks' in loadSettings({ dragonName: 'Ember' })).toBe(false)
+      expect('tasks' in loadSettings({ tasks: 'nope' })).toBe(false)
+      expect('tasks' in loadSettings({ tasks: { 0: good } })).toBe(false)
+    })
+
+    it('keeps good tasks in order, every known rules shape included', () => {
+      const tasks = [
+        { ...good, id: 'wake', rules: { kind: 'wakeUp' } },
+        good,
+        { ...good, id: 'my-2', rules: { kind: 'maxPerDay', max: 3 }, archived: true },
+      ]
+      expect(loadSettings({ tasks }).tasks).toEqual(tasks)
+    })
+
+    const bad = [
+      null,
+      'gym',
+      { ...good, id: '' },
+      { ...good, id: 7 },
+      { ...good, name: '' },
+      { ...good, name: '   ' },
+      { ...good, name: null },
+      { ...good, stat: 'luck' },
+      { ...good, stat: undefined },
+      { ...good, xp: 0 },
+      { ...good, xp: -5 },
+      { ...good, xp: '15' },
+      { ...good, xp: null }, // what JSON makes of Infinity or NaN
+      { ...good, rules: null },
+      { ...good, rules: { kind: 'weekly' } },
+      { ...good, rules: { kind: 'maxPerDay' } },
+      { ...good, rules: { kind: 'maxPerDay', max: 0 } },
+      { ...good, rules: { kind: 'maxPerDay', max: 1.5 } },
+      { ...good, rules: 'oncePerDay' },
+    ]
+
+    it('keeps tasks it cannot read exactly as they are, but never uses them', () => {
+      for (const t of bad) {
+        const s = loadSettings({ tasks: [t] })
+        expect(s.tasks, JSON.stringify(t)).toEqual([t])
+        expect(effectiveTasks(s, TASKS), JSON.stringify(t)).toEqual(TASKS)
+      }
+      const s = loadSettings({ tasks: [...bad, good] })
+      expect(s.tasks).toEqual([...bad, good])
+      expect(effectiveTasks(s, TASKS).map((t) => t.id)).toEqual(['my-1', ...TASKS.map((t) => t.id)])
+    })
+
+    it('reads a missing or odd archived flag as not archived', () => {
+      const { archived: _a, ...noFlag } = good
+      expect(loadSettings({ tasks: [noFlag] }).tasks).toEqual([good])
+      expect(loadSettings({ tasks: [{ ...good, archived: 'yes' }] }).tasks).toEqual([good])
+      // Unreadable for another reason: left exactly as it was.
+      const { archived: _b, ...noFlagBadStat } = { ...good, stat: 'luck' }
+      expect(loadSettings({ tasks: [noFlagBadStat] }).tasks).toEqual([noFlagBadStat])
+    })
+
+    it('keeps both of two tasks with one id, and uses the first', () => {
+      const s = loadSettings({ tasks: [good, { ...good, name: 'Second' }] })
+      expect(s.tasks).toEqual([good, { ...good, name: 'Second' }])
+      expect(effectiveTasks(s, TASKS).filter((t) => t.id === 'my-1')).toEqual([good])
+    })
+
+    it('a task with an unknown rules kind survives load, an edit to another task, save and load', () => {
+      const later = { ...good, id: 'my-later', rules: { kind: 'weekly', days: 3 } }
+      const store = withRaw(JSON.stringify({ schemaVersion: 1, events: [], settings: { tasks: [later, good] } }))
+      const loaded = load(store).data
+      const tasks = effectiveTasks(loaded.settings, TASKS)
+      expect(tasks.some((t) => t.id === 'my-later')).toBe(false)
+      const edited = archiveTask(updateTask(tasks, 'my-1', { name: 'Stretch more' }, TASK_LIMITS), 'gym')
+      save({ ...loaded, settings: withTasks(loaded.settings, edited, TASKS) }, store)
+      const again = load(store).data.settings
+      expect(again.tasks?.[0]).toEqual(later)
+      expect(again.tasks?.[1]).toMatchObject({ id: 'my-1', name: 'Stretch more' })
+      expect(effectiveTasks(again, TASKS).find((t) => t.id === 'gym')?.archived).toBe(true)
+    })
+
+    it('a built-in task it cannot read gets its default back, in its place', () => {
+      const badGym = { ...TASKS.find((t) => t.id === 'gym')!, xp: 'lots' }
+      const store = withRaw(JSON.stringify({ schemaVersion: 1, events: [], settings: { tasks: [good, badGym] } }))
+      const s = load(store).data.settings
+      expect(s.tasks).toEqual([good, badGym])
+      const tasks = effectiveTasks(s, TASKS)
+      expect(tasks.map((t) => t.id)).toEqual(['my-1', 'gym', ...TASKS.filter((t) => t.id !== 'gym').map((t) => t.id)])
+      expect(tasks[1]).toEqual(TASKS.find((t) => t.id === 'gym'))
+    })
+
+    it('keeps unknown fields on a task and its rules through a load and save', () => {
+      const store = withRaw(
+        JSON.stringify({
+          schemaVersion: 1,
+          events: [],
+          settings: { tasks: [{ ...good, colour: 'moss', rules: { kind: 'oncePerDay', from: 'later' } }] },
+        }),
+      )
+      save(load(store).data, store)
+      const saved = JSON.parse(store.map.get(STORAGE_KEY) as string)
+      expect(saved.settings.tasks).toEqual([{ ...good, colour: 'moss', rules: { kind: 'oncePerDay', from: 'later' } }])
+    })
   })
 
   it('keeps unrecognised fields through a load and save', () => {

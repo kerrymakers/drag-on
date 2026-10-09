@@ -28,13 +28,13 @@ import { watchScrollFade } from './scroll-fade'
 
 export interface HistoryScreenState {
   events: readonly GameEvent[]
+  /** Every task, archived ones too (old logs still need their names). */
+  tasks: readonly Task[]
   settings: Settings
   now: number
 }
 
 export interface HistoryScreenConfig {
-  /** Every task, archived ones too (old logs still need their names). */
-  tasks: readonly Task[]
   items: readonly Item[]
   streaks: StreakConfig
 }
@@ -248,7 +248,7 @@ export function createHistoryScreen(doc: Document, root: HTMLElement, config: Hi
 
   function render(state: HistoryScreenState) {
     last = state
-    const { events, settings, now } = state
+    const { events, settings, tasks, now } = state
     const today = dayKey(now)
     const streak = overallStreak(events, now, config.streaks)
     firstDay = firstLogDay(events, now)
@@ -277,13 +277,16 @@ export function createHistoryScreen(doc: Document, root: HTMLElement, config: Hi
     flakes.hidden = streak.freezesHeld === 0
     freezesText.textContent = freezesLine(streak.freezesHeld, config.streaks.freezeEveryDays)
 
-    const w = wakeStreak(events, config.tasks, settings, now)
-    const wakeTask = config.tasks.some((t) => t.rules.kind === 'wakeUp' && !t.archived)
+    const w = wakeStreak(events, tasks, settings, now)
+    // While the wake-up task is archived its streak isn't shown. Archiving isn't dated,
+    // so on unarchiving, days with a target while it was archived count as days it
+    // wasn't logged: the streak usually comes back at 0 (best kept), shown as a fresh start.
+    const wakeTask = tasks.some((t) => t.rules.kind === 'wakeUp' && !t.archived)
     wake.hidden = !wakeTask || (!w.hasTargets && w.best === 0)
-    wakeValue.textContent = w.current > 0 ? dayCount(w.current) : HISTORY.weekNone
+    wakeValue.textContent = w.current > 0 ? dayCount(w.current) : w.best > 0 ? HISTORY.wakeFresh : HISTORY.weekNone
     if (w.best > w.current) wakeValue.textContent += ` · best ${w.best}`
 
-    const shown = weeklyTasks(config.tasks)
+    const shown = weeklyTasks(tasks)
     const counts = weeklyCounts(events, shown, now, config.streaks)
     weekList.replaceChildren(
       ...counts.map((c, i) => {
@@ -312,7 +315,7 @@ export function createHistoryScreen(doc: Document, root: HTMLElement, config: Hi
     }
 
     // The selected day.
-    const entries = dayEntries(events, selected, config.tasks, config.items)
+    const entries = dayEntries(events, selected, tasks, config.items)
     detailTitle.textContent = friendlyDay(selected, today)
     detailList.replaceChildren(
       ...entries.map((e) => {

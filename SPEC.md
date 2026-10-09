@@ -42,6 +42,10 @@ XP reflects how hard a task is for me, not how hard it is in general. I should b
 
 Decided 2026-10-09: a task's stat is chosen when the task is added and is fixed after that. Changing it would rewrite past stats and the dragon's look. (Milestone 6, slice 3.)
 
+Task editing (Milestone 6, slice 3): in Settings I can rename a task, change its XP and how many times a day it can be logged, add a task (choosing its stat), and archive or unarchive one. Tasks are never deleted, only archived. Archived tasks are hidden from Home and from History's weekly counts, but their past logs still count towards their stat. XP edits apply from the next log; past logs keep the XP they were made with.
+
+Limits set 2026-10-09 after simulation (Milestone 6, slice 3): task XP is 5 to 50 in steps of 5, a task can be logged up to 3 times a day, but its XP × times a day can't go over 50, and at most 8 tasks can be active. A task saved before these limits keeps its XP until I next change its XP or times a day. Raising every task to 60 brought a typical user's Juvenile to ~day 12 and Elder to ~day 69; ten tasks, three times a day at 60, gave Elder by ~day 33 and finished the item collection ~day 90, months before Elder. With these limits the worst case for a typical user is Juvenile ~day 14 and Elder ~day 75, and adding two everyday tasks gives Juvenile ~day 23, Elder ~day 126 and the collection ~day 145. Each stat's XP is a lifetime total, so after months of one stat the look stays put even if habits change (that comes from the totals, not the 10% margin).
+
 ### Wake-up schedule
 
 Each day of the week has its own wake-up target, or none. This is set in settings.

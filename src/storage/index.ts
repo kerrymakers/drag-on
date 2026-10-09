@@ -3,6 +3,7 @@
 
 import { DEFAULT_SETTINGS } from '../config/settings'
 import type { GameEvent, ScheduleEntry, Settings, WakeSchedule, Wearing } from '../game/types'
+import { isReadableTask } from '../game/tasks'
 import { isClockTime } from '../game/day'
 import { WEEKDAYS } from '../game/settings'
 import { WEAR_SLOTS } from '../game/wearing'
@@ -127,18 +128,35 @@ function readScheduleHistory(v: unknown): ScheduleEntry[] | undefined {
 }
 
 /**
+ * The stored task list, or undefined if there isn't one (older saves, or never edited:
+ * then the config's tasks apply). Nothing in it is ever dropped: an entry this version
+ * can't read is kept exactly as it is, so the next save doesn't lose it, and game logic
+ * leaves it out (see effectiveTasks). The one tidy-up: a task that's readable apart
+ * from a missing or odd `archived` reads as not archived.
+ */
+function readTasks(v: unknown): unknown[] | undefined {
+  if (!Array.isArray(v)) return undefined
+  return v.map((t) => {
+    if (!isObject(t) || t.archived === true || t.archived === false) return t
+    const tidied = { ...t, archived: false }
+    return isReadableTask(tidied) ? tidied : t
+  })
+}
+
+/**
  * Fills in anything missing from the defaults. Fields we don't recognise are kept,
  * so data written by a later version survives a round trip. A wake time that isn't
  * a real "HH:MM" becomes null (skipped), never a guessed time. `lastBackupAt` is kept
  * only if it's a finite number. The wake schedule history is checked entry by entry
- * (see readScheduleHistory).
+ * (see readScheduleHistory), and the task list task by task (see readTasks).
  */
 function readSettings(v: unknown): Settings {
   const defaults = defaultData().settings
   if (!isObject(v)) return defaults
   const schedule = isObject(v.wakeSchedule) ? readSchedule(v.wakeSchedule, defaults.wakeSchedule) : defaults.wakeSchedule
   const history = readScheduleHistory(v.wakeScheduleHistory)
-  const { lastBackupAt, wakeScheduleHistory: _history, ...rest } = v
+  const tasks = readTasks(v.tasks)
+  const { lastBackupAt, wakeScheduleHistory: _history, tasks: _tasks, ...rest } = v
   return {
     ...rest,
     wakeSchedule: schedule,
@@ -148,6 +166,8 @@ function readSettings(v: unknown): Settings {
     wearing: readWearing(v.wearing, defaults.wearing),
     // Older saves have none (never backed up). Anything that isn't a real time is dropped.
     ...(typeof lastBackupAt === 'number' && Number.isFinite(lastBackupAt) ? { lastBackupAt } : {}),
+    // Older saves have none: then the config's tasks apply (see effectiveTasks).
+    ...(tasks ? { tasks } : {}),
   }
 }
 

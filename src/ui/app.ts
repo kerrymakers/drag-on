@@ -11,7 +11,7 @@ import { MOODS } from '../config/mood'
 import { STAGES } from '../config/stages'
 import { STATS } from '../config/stats'
 import { STREAK_CHIP_FROM, STREAKS } from '../config/streaks'
-import { TASKS } from '../config/tasks'
+import { NEW_TASK_ID_PREFIX, NEW_TASK_TIMES_A_DAY, NEW_TASK_XP, TASK_LIMITS, TASKS } from '../config/tasks'
 import { backupDue } from '../game/backup'
 import { dayKey, dayMinutesToClock } from '../game/day'
 import { evolutionLook, lookChange, type Evolution } from '../game/evolution'
@@ -29,6 +29,17 @@ import {
   wakeDeadline,
 } from '../game/state'
 import { latestFrozenDay, logEarnsFreeze, overallStreak } from '../game/streaks'
+import {
+  addTask,
+  archiveTask,
+  effectiveTasks,
+  newTaskId,
+  unarchiveTask,
+  updateTask,
+  withTasks,
+  type NewTask,
+  type TaskChanges,
+} from '../game/tasks'
 import type { GameEvent, Item, RewardRoll, Settings, Task, TaskAvailability, WakeSchedule, Wearing } from '../game/types'
 import { isWorn, toggleWear, wearOnFind, wornItems, type WornItems } from '../game/wearing'
 import { STORAGE_KEY, load, requestPersistence, save } from '../storage'
@@ -71,8 +82,13 @@ const SPEECH_TAPPABLE_MS = 8000
 const EVOLUTION_RULES = { evolvesAt: EVOLVES_AT_STAGE, margin: LOOK_CHANGE_MARGIN }
 
 /** The dragon's evolution look and every look it has had, derived from the log. */
-function evolution(events: readonly GameEvent[]): Evolution {
-  return evolutionLook(events, TASKS, STATS, STAGES, EVOLUTION_RULES)
+function evolution(events: readonly GameEvent[], tasks: readonly Task[]): Evolution {
+  return evolutionLook(events, tasks, STATS, STAGES, EVOLUTION_RULES)
+}
+
+/** The task list in use: as edited in Settings, or the config's (see effectiveTasks). */
+function tasksOf(settings: Settings): readonly Task[] {
+  return effectiveTasks(settings, TASKS)
 }
 
 /** What's worn right now: only found, known items in their own spot (see wornItems). */
@@ -240,15 +256,22 @@ export function startApp(doc: Document): App {
     settingsScreen: byId(doc, 'settings-screen'),
     streakChip: byId<HTMLButtonElement>(doc, 'streak-chip'),
   }
-  const dragonScreen = createDragonScreen(doc, el.dragonScreen, { tasks: TASKS, stats: STATS, stages: STAGES })
+  const dragonScreen = createDragonScreen(doc, el.dragonScreen, { stats: STATS, stages: STAGES })
   const collectionScreen = createCollectionScreen(doc, el.collectionScreen, { items: REWARDS.items, onWear: wear })
-  const historyScreen = createHistoryScreen(doc, el.historyScreen, { tasks: TASKS, items: REWARDS.items, streaks: STREAKS })
+  const historyScreen = createHistoryScreen(doc, el.historyScreen, { items: REWARDS.items, streaks: STREAKS })
   const settingsScreen = createSettingsScreen(doc, el.settingsScreen, {
     stages: STAGES,
     nameMax: DRAGON_NAME_MAX,
     defaultWakeTime: DEFAULT_WAKE_TIME,
     onRename: rename,
     onSchedule: setSchedule,
+    stats: STATS,
+    taskLimits: TASK_LIMITS,
+    newTask: { xp: NEW_TASK_XP, timesADay: NEW_TASK_TIMES_A_DAY },
+    onAddTask: addNewTask,
+    onUpdateTask: editTask,
+    onArchiveTask: archive,
+    onUnarchiveTask: unarchive,
     onExport: exportBackup,
     onImport: importFile,
     now: () => Date.now(),
@@ -410,7 +433,8 @@ export function startApp(doc: Document): App {
     el.name.textContent = data.settings.dragonName ?? 'your dragon'
     el.stage.textContent = progress.stage.name
     const { mood } = moodFor(data.events, now, MOODS)
-    const { look } = evolution(data.events)
+    const tasks = tasksOf(data.settings)
+    const { look } = evolution(data.events, tasks)
     const worn = wornNow(data.events, data.settings.wearing)
     const wearing = outfitOf(worn)
     el.mood.textContent = MOOD_LABELS[mood]
@@ -436,7 +460,7 @@ export function startApp(doc: Document): App {
 
     // Only rebuild the buttons when something about them changed, so a tick never
     // swaps a button out from under a finger or drops keyboard focus.
-    const visible = TASKS.map((task) => ({
+    const visible = tasks.map((task) => ({
       task,
       a: taskAvailability(task, data.events, data.settings, now),
     })).filter(({ a }) => a.visible)
@@ -459,6 +483,7 @@ export function startApp(doc: Document): App {
     if (route === 'dragon') {
       dragonScreen.render({
         events: data.events,
+        tasks,
         settings: data.settings,
         stage: progress.stage,
         progress: progress.fraction,
@@ -477,11 +502,12 @@ export function startApp(doc: Document): App {
       })
     }
 
-    if (route === 'history') historyScreen.render({ events: data.events, settings: data.settings, now })
+    if (route === 'history') historyScreen.render({ events: data.events, settings: data.settings, tasks, now })
     if (route === 'settings') {
       settingsScreen.render({
         dragonName: data.settings.dragonName,
         wakeSchedule: data.settings.wakeSchedule,
+        tasks,
         lastBackupAt: data.settings.lastBackupAt,
         readOnly,
         now,
@@ -543,6 +569,31 @@ export function startApp(doc: Document): App {
   }
 
   /**
+   * Task edits from Settings. Each applies a pure edit to the task list in use and saves
+   * the whole list (so the first edit stores it). XP and times a day count from the
+   * next log: each log keeps the XP it was made with. Returns whether anything changed.
+   */
+  function setTasks(next: readonly Task[] | null): boolean {
+    if (readOnly || next === null) return false
+    data = { ...data, settings: withTasks(data.settings, next, TASKS) }
+    persist()
+    render()
+    return true
+  }
+  function addNewTask(draft: NewTask): boolean {
+    return setTasks(addTask(tasksOf(data.settings), draft, newTaskId(NEW_TASK_ID_PREFIX, newId()), TASK_LIMITS))
+  }
+  function editTask(id: string, changes: TaskChanges): boolean {
+    return setTasks(updateTask(tasksOf(data.settings), id, changes, TASK_LIMITS))
+  }
+  function archive(id: string): boolean {
+    return setTasks(archiveTask(tasksOf(data.settings), id))
+  }
+  function unarchive(id: string): boolean {
+    return setTasks(unarchiveTask(tasksOf(data.settings), id, TASK_LIMITS))
+  }
+
+  /**
    * Downloads a backup. A successful export counts as the latest backup, unless the
    * app is read-only (then nothing is written, and the stored data goes out untouched).
    */
@@ -594,7 +645,8 @@ export function startApp(doc: Document): App {
 
   el.list.addEventListener('click', (e) => {
     const button = (e.target as Element).closest<HTMLButtonElement>('button.task')
-    const task = TASKS.find((t) => t.id === button?.dataset.taskId)
+    const tasks = tasksOf(data.settings)
+    const task = tasks.find((t) => t.id === button?.dataset.taskId)
     if (!button || !task) return
     const now = Date.now()
     const before = data.events
@@ -677,8 +729,8 @@ export function startApp(doc: Document): App {
     // A stage-up gets the full moment. A look the dragon has never had gets a gentle
     // one; changing back to a look it has had before happens quietly (render did it).
     const reached = stageUp(before, data.events, STAGES)
-    const lookBefore = evolution(before)
-    const lookAfter = evolution(data.events)
+    const lookBefore = evolution(before, tasks)
+    const lookAfter = evolution(data.events, tasks)
     const newLook = lookChange(lookBefore, lookAfter)
     if (reached || newLook?.firstTime) {
       const from = dragonStage(before, STAGES)
@@ -739,6 +791,13 @@ export function startApp(doc: Document): App {
     // History opens on this month with today selected.
     if (next === 'history') historyScreen.reset()
     if (from === null) return // the first render happens below
+    if (from === 'settings' && next !== 'settings') {
+      // Leaving Settings (a tab, back, or the address bar) closes any sheet without
+      // saving. Focus was in it, so it goes to the tab for the screen now showing.
+      const hadSheet = doc.querySelector('dialog.sheet[open]') !== null
+      settingsScreen.closeSheets()
+      if (hadSheet) doc.querySelector<HTMLElement>('#tabbar a.tab.is-active')?.focus({ preventScroll: true })
+    }
     if (next !== 'home') {
       hush()
       // "+XP" floats live on <body> (position: fixed): don't let one drift over another screen.

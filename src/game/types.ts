@@ -74,6 +74,14 @@ export interface Settings {
    * a backup that was imported. Absent if there's never been one (older saves too).
    */
   lastBackupAt?: number
+  /**
+   * The task list as edited in Settings. Absent until the first edit (and in older
+   * saves): then the config's tasks apply. Entries are checked at run time, never
+   * trusted: one this version can't read (from a later version, or edited by hand) is
+   * kept as it is so a save never loses it, but isn't used. Always read through
+   * effectiveTasks and write through withTasks.
+   */
+  tasks?: unknown[]
 }
 
 /** One item id, or null for nothing, per spot on the dragon. */

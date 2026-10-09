@@ -15,6 +15,8 @@ import { watchScrollFade } from './scroll-fade'
 
 export interface DragonScreenState {
   events: readonly GameEvent[]
+  /** Every task, archived ones too (their past XP still counts under their stat). */
+  tasks: readonly Task[]
   settings: Settings
   stage: Stage
   /** 0 to 1 toward the next stage, for the art. */
@@ -28,7 +30,6 @@ export interface DragonScreenState {
 }
 
 export interface DragonScreenConfig {
-  tasks: readonly Task[]
   stats: readonly Stat[]
   stages: readonly Stage[]
 }
@@ -215,7 +216,7 @@ export function createDragonScreen(doc: Document, root: HTMLElement, config: Dra
         lookText.textContent = lookLabel(state.look)
       }
 
-      const totals = statTotals(state.events, config.tasks, config.stats)
+      const totals = statTotals(state.events, state.tasks, config.stats)
       const fractions = barFractions(totals.map((t) => t.xp))
       totals.forEach((t, i) => {
         const row = statRows.find((r) => r.id === t.stat.id)

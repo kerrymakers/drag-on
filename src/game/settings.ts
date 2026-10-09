@@ -96,6 +96,24 @@ function characters(text: string): string[] {
  * "your dragon".
  */
 export function cleanDragonName(raw: string, max: number): string | null {
-  const name = characters(raw.trim()).slice(0, Math.max(0, max)).join('').trim()
-  return name === '' ? null : name
+  return cleanText(raw, max)
+}
+
+/**
+ * `text` cut to at most `max` characters (counted as `characters` does), untrimmed:
+ * for keeping a field within its limit while it's being typed.
+ */
+export function cutText(text: string, max: number): string {
+  const chars = characters(text)
+  return chars.length <= max ? text : chars.slice(0, Math.max(0, max)).join('')
+}
+
+/**
+ * Typed text tidied for saving: trimmed, and cut to `max` characters (counted as
+ * `characters` does, so an emoji is never cut in half). Blank gives null. Used for the
+ * dragon's name and task names.
+ */
+export function cleanText(raw: string, max: number): string | null {
+  const text = characters(raw.trim()).slice(0, Math.max(0, max)).join('').trim()
+  return text === '' ? null : text
 }

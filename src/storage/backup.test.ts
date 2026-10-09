@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { TASK_LIMITS, TASKS } from '../config/tasks'
 import { withScheduleEdit } from '../game/settings'
+import { addTask, archiveTask, updateTask, withTasks } from '../game/tasks'
 import type { GameEvent } from '../game/types'
 import { at } from '../testing/helpers'
 import {
@@ -99,6 +101,19 @@ describe('export then import', () => {
     importBackup(defaultData(), check.data, check.exportedAt, NOW + 1, store)
     expect(load(store).data.settings.wakeScheduleHistory).toEqual(data.settings.wakeScheduleHistory)
     expect(load(store).data.settings.wakeSchedule.sat).toBe('08:00')
+  })
+
+  it('carries the edited task list both ways', () => {
+    const d = sample()
+    const tasks = updateTask(archiveTask(TASKS, 'read'), 'gym', { name: 'Lifting', xp: 45 }, TASK_LIMITS)
+    const added = addTask(tasks, { name: 'Call Mum', stat: 'heart', xp: 20, timesADay: 2 }, 'my-1', TASK_LIMITS)!
+    const data: SaveData = { ...d, settings: withTasks(d.settings, added, TASKS) }
+    const check = readBackup(backupText(data, NOW))
+    expect(check.ok && check.data.settings.tasks).toEqual(added)
+    if (!check.ok) return
+    const store = new FakeStore()
+    importBackup(defaultData(), check.data, check.exportedAt, NOW + 1, store)
+    expect(load(store).data.settings.tasks).toEqual(added)
   })
 
   it('the export holds the save data plus exportedAt, and nothing else', () => {

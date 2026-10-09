@@ -1,6 +1,6 @@
-// The Settings screen: the dragon's name, the wake-up times and Backup (export and
-// import), each a card in one scrolling column. The tasks get their own card in a
-// later slice.
+// The Settings screen: the dragon's name, the tasks, the wake-up times and Backup
+// (export and import), each a card in one scrolling column. The Tasks card and its
+// edit sheet live in tasks-card.ts.
 //
 // The name and the wake-up times save as soon as they change, with a small "Saved"
 // beside the card's title. There's no save button and nothing to confirm.
@@ -12,7 +12,8 @@ import { activeLogs } from '../game/active'
 import { dayKey, isClockTime } from '../game/day'
 import { cleanDragonName, WEEKDAYS } from '../game/settings'
 import { dragonStage } from '../game/state'
-import type { Stage, WakeSchedule, Weekday } from '../game/types'
+import type { NewTask, TaskChanges, TaskLimits } from '../game/tasks'
+import type { Stage, Stat, Task, WakeSchedule, Weekday } from '../game/types'
 import type { SaveData } from '../storage'
 import { readBackup, type BackupCheck } from '../storage/backup'
 import {
@@ -27,6 +28,7 @@ import {
   wakeTimeLabel,
 } from './copy'
 import { watchScrollFade } from './scroll-fade'
+import { createTasksCard } from './tasks-card'
 import { createToast } from './toast'
 
 export type ReadyBackup = Extract<BackupCheck, { ok: true }>
@@ -35,9 +37,11 @@ export interface SettingsScreenState {
   dragonName: string | null
   /** The wake schedule in force today. */
   wakeSchedule: WakeSchedule
+  /** Every task, archived ones too (see effectiveTasks). */
+  tasks: readonly Task[]
   /** When the last backup was made (or the imported one was exported), if ever. */
   lastBackupAt: number | undefined
-  /** Import, the name and the wake-up times are off while the app can't save on this phone. */
+  /** Import, the name, the tasks and the wake-up times are off while the app can't save on this phone. */
   readOnly: boolean
   now: number
 }
@@ -55,6 +59,16 @@ export interface SettingsScreenConfig {
   onRename(name: string | null): void
   /** Save a new wake schedule, from today on. */
   onSchedule(schedule: WakeSchedule): void
+  stats: readonly Stat[]
+  /** Bounds for task editing (config). */
+  taskLimits: TaskLimits
+  /** A new task's starting XP and times a day (config). */
+  newTask: { xp: number; timesADay: number }
+  /** Task edits. Each returns whether the change was made. */
+  onAddTask(draft: NewTask): boolean
+  onUpdateTask(id: string, changes: TaskChanges): boolean
+  onArchiveTask(id: string): boolean
+  onUnarchiveTask(id: string): boolean
   /** Download a backup file. */
   onExport(): SettingsOutcome
   /** Replace this phone's data with a checked backup the user has confirmed. */
@@ -68,6 +82,8 @@ export interface SettingsScreen {
   render(state: SettingsScreenState): void
   /** Scrolls the Backup card into view (instantly under reduced motion). */
   revealBackup(): void
+  /** Closes any open sheet without changing anything (on leaving Settings). */
+  closeSheets(): void
 }
 
 const SAVED_MS = 2000
@@ -199,8 +215,24 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
     return note
   })
 
-  // The tasks get a card here in a later slice.
-  scroller.append(title, nameCard, wakeCard, backup)
+  // Tasks
+  const tasksSaved = savedNote()
+  const tasksCard = createTasksCard(doc, {
+    stats: config.stats,
+    limits: config.taskLimits,
+    newTask: config.newTask,
+    onAdd: (draft) => config.onAddTask(draft),
+    onUpdate: (id, changes) => config.onUpdateTask(id, changes),
+    onArchive: (id) => config.onArchiveTask(id),
+    onUnarchive: (id) => config.onUnarchiveTask(id),
+    say: (message) => say({ ok: true, message }),
+    saved: () => tasksSaved.show(),
+    readOnly: () => readOnlyNow,
+    reducedMotion: config.reducedMotion,
+  })
+  tasksCard.head.append(tasksSaved.el)
+
+  scroller.append(title, nameCard, tasksCard.el, wakeCard, backup)
 
   // A short, warm toast above the tab bar.
   const dock = el(doc, 'div', 'ss-toast-dock')
@@ -256,6 +288,11 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
       },
     }
   }
+
+  /** Whether the app can't save on this phone, as of the last render. */
+  let readOnlyNow = false
+  /** Cancels the import confirm sheet, while it's open. */
+  let cancelImport: (() => void) | null = null
 
   // What the screen last showed, so a change knows what it's changing.
   let shownName: string | null = null
@@ -381,25 +418,32 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
     doc.body.append(sheet)
 
     let done = false
-    const close = () => {
+    const close = (restoreFocus = true) => {
       if (done) return
       done = true
+      cancelImport = null
       sheet.close()
       sheet.remove()
-      importButton.focus({ preventScroll: true })
+      if (restoreFocus) importButton.focus({ preventScroll: true })
     }
+    cancelImport = () => close(false)
     confirm.addEventListener('click', () => {
       if (done) return
       const outcome = config.onImport(backupFile)
       close()
       say(outcome)
     })
-    cancel.addEventListener('click', close)
+    cancel.addEventListener('click', () => close())
     // Escape, or the back gesture's cancel.
-    sheet.addEventListener('close', close)
-    // A tap on the dimmed backdrop (outside the card) is a cancel.
+    sheet.addEventListener('close', () => close())
+    // A tap on the dimmed backdrop (outside the card) is a cancel, if it started there too.
+    let downOnBackdrop = false
+    sheet.addEventListener('pointerdown', (e) => {
+      downOnBackdrop = e.target === sheet
+    })
     sheet.addEventListener('click', (e) => {
-      if (e.target === sheet) close()
+      if (e.target === sheet && downOnBackdrop) close()
+      downOnBackdrop = false
     })
     sheet.showModal()
     // Focus the safe choice, so a stray Enter never replaces anything.
@@ -407,7 +451,7 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
   }
 
   return {
-    render({ dragonName, wakeSchedule, lastBackupAt, readOnly, now }) {
+    render({ dragonName, wakeSchedule, tasks, lastBackupAt, readOnly, now }) {
       // Never rewrite the name while it's being typed.
       shownName = dragonName
       if (doc.activeElement !== nameInput) nameInput.value = dragonName ?? ''
@@ -418,7 +462,9 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
         row.time.disabled = readOnly
         row.toggle.disabled = readOnly
       }
+      readOnlyNow = readOnly
       for (const note of editsPaused) note.hidden = !readOnly
+      tasksCard.render(tasks, readOnly)
 
       last.textContent = lastBackupLine(
         lastBackupAt === undefined ? null : friendlyDay(dayKey(lastBackupAt), dayKey(now)),
@@ -428,6 +474,10 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
       if (readOnly) importButton.setAttribute('aria-describedby', paused.id)
       else importButton.removeAttribute('aria-describedby')
       refreshFade()
+    },
+    closeSheets() {
+      tasksCard.closeSheet()
+      cancelImport?.()
     },
     revealBackup() {
       const top = scroller.scrollTop + backup.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 12

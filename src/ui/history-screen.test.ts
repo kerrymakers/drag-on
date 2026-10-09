@@ -99,6 +99,12 @@ describe('dayEntries', () => {
     const odd = itemLog({ id: 'gone', xp: 5 }, noon, 'from-the-future')
     expect(dayEntries([odd], day, TASKS, ITEMS)[0]).toMatchObject({ taskName: HISTORY.unknownTask, itemName: null })
   })
+
+  it("still shows an archived task's past logs, by its name", () => {
+    const archived = TASKS.map((t) => (t.id === 'read' ? { ...t, archived: true } : t))
+    const l = log(read, at('2026-10-05T09:00:00+01:00'))
+    expect(dayEntries([l], '2026-10-05', archived, ITEMS)).toMatchObject([{ taskName: read.name, xp: read.xp }])
+  })
 })
 
 describe('weeklyTasks', () => {

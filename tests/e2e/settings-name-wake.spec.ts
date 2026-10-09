@@ -4,7 +4,7 @@ import { test, expect, settle, shot, type Page } from './fixtures'
 import { DRAGON_NAME_MAX } from '../../src/config/settings'
 import { DEFAULT_WAKE_TIME } from '../../src/config/time'
 import { TASKS } from '../../src/config/tasks'
-import { SETTINGS } from '../../src/ui/copy'
+import { SETTINGS, TASKS_COPY } from '../../src/ui/copy'
 
 test.use({ timezoneId: 'Europe/London', locale: 'en-GB' })
 // Friday 9 October 2026 (BST). Weekdays have a 06:30 target by default.
@@ -49,7 +49,7 @@ test('cards in order, tap targets, labels and no overflow, in light and dark', a
   const msgs = collectConsole(page)
   await open(page, FRI('10:00'), null, '#/settings')
   const titles = await page.locator('#settings-screen h2').allTextContents()
-  expect(titles).toEqual([SETTINGS.nameTitle, SETTINGS.wakeTitle, SETTINGS.backupTitle])
+  expect(titles).toEqual([SETTINGS.nameTitle, TASKS_COPY.title, SETTINGS.wakeTitle, SETTINGS.backupTitle])
 
   // Seven days, Monday first, weekdays on at 06:30 and the weekend off.
   await expect(page.locator('.ss-day')).toHaveCount(7)

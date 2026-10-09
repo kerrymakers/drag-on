@@ -325,6 +325,8 @@ export const HISTORY = {
   /** A screen reader's version of the snowflakes. */
   freezesNone: 'No streak freezes yet',
   wakeTitle: 'Up on time',
+  /** The wake-up streak is 0 after an earlier run: never a loss, just the next start. */
+  wakeFresh: 'Fresh start',
   /** Under the wake-up streak: weekends (or any day with no target) never count against it. */
   wakeNote: "Days with no wake-up time don't count",
   weekTitle: 'This week',
@@ -431,9 +433,57 @@ export const SETTINGS = {
   wakeOff: 'Lie-in',
   /** Beside a card's title, briefly, after a change is saved. */
   saved: 'Saved',
-  /** Under the name and wake-up cards while the app can't save on this phone. */
+  /** Under the name, tasks and wake-up cards while the app can't save on this phone. */
   editsPaused: "Changes are paused while your dragon can't save on this phone.",
 } as const
+
+/** The Tasks card in Settings and its edit sheet. */
+export const TASKS_COPY = {
+  title: 'Tasks',
+  intro: 'Tap a task to change it.',
+  add: 'Add a task',
+  /** Under Add (and Unarchive) when the list is full. Takes the cap. */
+  full: (max: number) => `${max} tasks is a full list. Archiving one makes room for another.`,
+  archivedTitle: (n: number) => `Archived (${n})`,
+  unarchive: 'Unarchive',
+  /** The edit sheet. */
+  editHeading: 'Edit task',
+  addHeading: 'New task',
+  nameLabel: 'Name',
+  namePlaceholder: 'What will you do?',
+  xpLabel: 'XP',
+  xpLess: 'Less XP',
+  xpMore: 'More XP',
+  timesLabel: 'Times a day',
+  statLabel: 'Stat',
+  /** On the add sheet, under the stat choices. */
+  statFixed: "A task's stat can't be changed later.",
+  /** On the edit sheet: XP and times a day never rewrite past logs. */
+  nextLog: 'Changes count from your next log.',
+  done: 'Done',
+  cancel: 'Cancel',
+  archive: 'Archive this task',
+  archiveNote: 'Its history is kept, and you can bring it back any time.',
+} as const
+
+/** Under the XP stepper at the daily limit: "Up to 15 XP when it's three times a day". */
+export const dailyXpHint = (xp: number, times: number): string =>
+  `Up to ${xp} XP when it's ${times === 2 ? 'twice' : times === 3 ? 'three times' : `${times} times`} a day`
+
+/** The edit sheet's line naming a task's stat, e.g. "Counts towards Strength". */
+export const taskStatLine = (stat: string): string => `Counts towards ${stat}`
+/** A task row's label for a screen reader: "Gym / workout, Strength, 40 XP. Edit". */
+export const taskRowLabel = (name: string, stat: string, xp: number): string => `${name}, ${stat}, ${xp} XP. Edit`
+/** "Unarchive Gym / workout", for a screen reader. */
+export const unarchiveLabel = (name: string): string => `Unarchive ${name}`
+/** The stepper's value, e.g. "15 XP". */
+export const xpValue = (xp: number): string => `${xp} XP`
+/** "Once", "Twice", "3 times" a day, for a screen reader on the 1 / 2 / 3 choice. */
+export const timesADayLabel = (n: number): string => (n === 1 ? 'Once a day' : n === 2 ? 'Twice a day' : `${n} times a day`)
+/** After the sheet's Done or the archive actions. */
+export const taskAdded = (name: string): string => `${name} is on Home now. Have fun!`
+export const taskArchived = (name: string): string => `${name} is archived. Its history is kept.`
+export const taskUnarchived = (name: string): string => `${name} is back on Home.`
 
 /** Settings' day names, Monday first. */
 export const WEEKDAY_NAMES = {

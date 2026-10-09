@@ -483,6 +483,13 @@ body {
   min-width: 0;
 }
 
+/* A long task name (up to TASK_NAME_MAX) wraps, even with no spaces in it. */
+.task-name,
+.hs-row-name,
+.hs-entry-name {
+  overflow-wrap: anywhere;
+}
+
 .task-hint {
   font-size: 0.85rem;
   font-weight: 500;
@@ -1209,30 +1216,35 @@ body {
 }
 
 /* Stats: one colour and icon each. */
-.stat {
+.stat,
+.tinted {
   --stat: #ee8f5a;
   --stat-soft: #ffe2c2;
   --stat-text: #9a4c1c;
 }
 .stat[data-stat='strength'],
+.tinted[data-stat='strength'],
 .look-chip[data-look='strength'] {
   --stat: #ef8a63;
   --stat-soft: #fde0d3;
   --stat-text: #a8452a;
 }
 .stat[data-stat='discipline'],
+.tinted[data-stat='discipline'],
 .look-chip[data-look='discipline'] {
   --stat: #8d80d8;
   --stat-soft: #e6e2f6;
   --stat-text: #5547a3;
 }
 .stat[data-stat='wisdom'],
+.tinted[data-stat='wisdom'],
 .look-chip[data-look='wisdom'] {
   --stat: #45a3a0;
   --stat-soft: #d7efec;
   --stat-text: #23706d;
 }
 .stat[data-stat='heart'],
+.tinted[data-stat='heart'],
 .look-chip[data-look='heart'] {
   --stat: #ea7898;
   --stat-soft: #fde0e8;
@@ -1241,24 +1253,28 @@ body {
 
 @media (prefers-color-scheme: dark) {
   .stat[data-stat='strength'],
+  .tinted[data-stat='strength'],
   .look-chip[data-look='strength'] {
     --stat: #f39c78;
     --stat-soft: #573427;
     --stat-text: #ffc3a8;
   }
   .stat[data-stat='discipline'],
+  .tinted[data-stat='discipline'],
   .look-chip[data-look='discipline'] {
     --stat: #a79cf0;
     --stat-soft: #3d3757;
     --stat-text: #d9d0f5;
   }
   .stat[data-stat='wisdom'],
+  .tinted[data-stat='wisdom'],
   .look-chip[data-look='wisdom'] {
     --stat: #6cc4c0;
     --stat-soft: #24443f;
     --stat-text: #b6e6e2;
   }
   .stat[data-stat='heart'],
+  .tinted[data-stat='heart'],
   .look-chip[data-look='heart'] {
     --stat: #f58fac;
     --stat-soft: #55303d;
@@ -2489,6 +2505,312 @@ button.hs-cell {
   cursor: default;
 }
 
+/* The Tasks card: a row per task (the whole row opens the edit sheet). */
+.ss-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ss-task-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+.ss-task + .ss-task {
+  border-top: 1px solid var(--track);
+}
+.ss-task-row {
+  width: calc(100% + 16px);
+  min-height: 60px;
+  margin: 0 -8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 0;
+  border-radius: 16px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 160ms var(--bounce);
+}
+.ss-task-row:active:not(:disabled) {
+  transform: scale(0.98);
+  background: var(--bg);
+}
+.ss-task-row:focus-visible,
+.ss-small-button:focus-visible,
+.ss-archived-summary:focus-visible,
+.ts-step:focus-visible,
+.ts-segment:focus-visible,
+.ts-stat:focus-visible,
+.ts-archive-button:focus-visible {
+  outline: 3px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+.ss-task-row:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.ss-task-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ss-task-name {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.ss-task-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  color: var(--text-soft);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+.ss-task-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--stat-soft);
+  color: var(--stat-text);
+}
+.ss-task-icon .icon {
+  width: 14px;
+  height: 14px;
+}
+.ss-task-xp::before {
+  content: '·';
+  margin-right: 6px;
+}
+.ss-task-chevron {
+  flex: 0 0 auto;
+  display: grid;
+  color: var(--text-soft);
+}
+.ss-task-chevron .icon {
+  width: 20px;
+  height: 20px;
+}
+.ss-task.is-archived {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 60px;
+  padding: 6px 0;
+}
+.ss-task.is-archived .ss-task-name {
+  color: var(--text-soft);
+}
+.ss-small-button {
+  flex: 0 0 auto;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 16px;
+  border: 2px solid var(--track);
+  border-radius: 22px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.ss-small-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.ss-archived[hidden] {
+  display: none;
+}
+.ss-archived-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  border-radius: 12px;
+  color: var(--text-soft);
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+.ss-archived-summary::-webkit-details-marker {
+  display: none;
+}
+.ss-archived-summary::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  margin: 0 4px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 160ms ease-out;
+}
+.ss-archived[open] > .ss-archived-summary::before {
+  transform: rotate(45deg);
+}
+
+/* The task sheet: the same bottom sheet as import, with a few more controls. */
+.task-sheet .sheet-card {
+  gap: 16px;
+}
+.ts-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ts-label {
+  font-weight: 700;
+}
+.ts-note {
+  font-size: 0.88rem;
+}
+.ts-stat-line {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-soft);
+  font-weight: 600;
+}
+.ts-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.ts-stat {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 2px solid var(--track);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.ts-stat-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--stat-soft);
+  color: var(--stat-text);
+}
+.ts-stat-icon .icon {
+  width: 18px;
+  height: 18px;
+}
+.ts-stat[aria-checked='true'] {
+  border-color: var(--stat-text);
+  background: var(--stat-soft);
+}
+/* On the chosen card the icon's circle takes the card colour, so it doesn't vanish into the tint. */
+.ts-stat[aria-checked='true'] .ts-stat-icon {
+  background: var(--surface);
+}
+.ts-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ts-step {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #3b2418;
+  font: inherit;
+  font-size: 1.7rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 160ms var(--bounce);
+}
+.ts-step:active:not(:disabled) {
+  transform: scale(0.92);
+}
+.ts-step:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ts-xp {
+  flex: 1 1 auto;
+  text-align: center;
+  font-size: 1.4rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.ts-segments {
+  display: flex;
+  padding: 4px;
+  gap: 4px;
+  border-radius: 16px;
+  background: var(--bg);
+}
+.ts-segment {
+  flex: 1 1 0;
+  min-height: 48px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 800;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.ts-segment[aria-checked='true'] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+.ts-archive {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+}
+.ts-archive-button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 22px;
+  background: none;
+  color: var(--accent-strong);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
 /* Settings' toast floats just above the tab bar; messages here may wrap. */
 .ss-toast-dock {
   position: absolute;
@@ -2592,12 +2914,17 @@ button.hs-cell {
 
 @media (prefers-reduced-motion: reduce) {
   .ss-button,
+  .ss-task-row,
+  .ts-step,
+  .ss-archived-summary::before,
   .ss-saved,
   .ss-switch-track,
   .ss-switch-track::after {
     transition: none;
   }
-  .ss-button:active:not(:disabled) {
+  .ss-button:active:not(:disabled),
+  .ss-task-row:active:not(:disabled),
+  .ts-step:active:not(:disabled) {
     transform: none;
   }
   .sheet,
