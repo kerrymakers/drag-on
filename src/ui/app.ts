@@ -1,7 +1,8 @@
-// The app shell: wires game logic, storage and art to the Home, Dragon, Collection and History screens.
+// The app shell: wires game logic, storage and art to the Home, Dragon, Collection, History and Settings screens.
 // This is the only layer that reads the clock (Date.now), generates ids and rolls dice.
 
 import { react, renderDragon, speechAnchor, speechKeepClear, type WearLook } from '../art'
+import { BACKUP_REMINDER_DAYS } from '../config/backup'
 import { EVOLVES_AT_STAGE, LOOK_CHANGE_MARGIN } from '../config/evolution'
 import { REWARDS } from '../config/rewards'
 import { MOODS } from '../config/mood'
@@ -9,6 +10,7 @@ import { STAGES } from '../config/stages'
 import { STATS } from '../config/stats'
 import { STREAK_CHIP_FROM, STREAKS } from '../config/streaks'
 import { TASKS } from '../config/tasks'
+import { backupDue } from '../game/backup'
 import { dayKey, dayMinutesToClock } from '../game/day'
 import { evolutionLook, lookChange, type Evolution } from '../game/evolution'
 import { createLogEvent, createUndoEvent, undoableLog } from '../game/log'
@@ -27,11 +29,15 @@ import { latestFrozenDay, logEarnsFreeze, overallStreak } from '../game/streaks'
 import type { GameEvent, Item, RewardRoll, Settings, Task, TaskAvailability, Wearing } from '../game/types'
 import { isWorn, toggleWear, wearOnFind, wornItems, type WornItems } from '../game/wearing'
 import { STORAGE_KEY, load, requestPersistence, save } from '../storage'
+import { backupFileName, exportContents, importBackup, type ListableStore } from '../storage/backup'
 import { celebrate } from './celebrate'
 import { createCollectionScreen } from './collection-screen'
 import {
   MOOD_LABELS,
+  IMPORT_REFUSED,
+  SETTINGS,
   TREAT_FLOAT,
+  backupReminderLine,
   freezeUsedLine,
   loggedToast,
   NOTICES,
@@ -49,12 +55,15 @@ import { showItemFound } from './item-found'
 import { createNav, type Route } from './nav'
 import { outfitOf } from './outfit'
 import { watchScrollFade } from './scroll-fade'
+import { createSettingsScreen, type ReadyBackup, type SettingsOutcome } from './settings-screen'
 import { placeSpeech } from './speech'
 import { createToast } from './toast'
 import { createUpdateGate } from './updates'
 import { createWelcome } from './welcome'
 
 const SPEECH_MS = 4000
+/** The backup line stays a little longer, so there's time to tap it. */
+const SPEECH_TAPPABLE_MS = 8000
 
 const EVOLUTION_RULES = { evolvesAt: EVOLVES_AT_STAGE, margin: LOOK_CHANGE_MARGIN }
 
@@ -147,6 +156,29 @@ function haptic(pattern: number | number[] = HAPTIC_LOG) {
   }
 }
 
+/** This device's storage, or undefined if even asking for it throws (e.g. blocked site data). */
+function localStore(): ListableStore | undefined {
+  try {
+    return globalThis.localStorage ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** Saves `text` as a file through the browser's download. Works offline: it's a blob, not a request. */
+function download(doc: Document, text: string, fileName: string) {
+  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }))
+  const a = doc.createElement('a')
+  a.href = url
+  a.download = fileName
+  a.hidden = true
+  doc.body.append(a)
+  a.click()
+  a.remove()
+  // Long enough for the download to start; then free the memory.
+  window.setTimeout(() => URL.revokeObjectURL(url), 30_000)
+}
+
 /** The dice for a log's variable reward. Math.random is plenty for a pet dragon. */
 function rewardRoll(): RewardRoll {
   return { chance: Math.random(), pick: Math.random() }
@@ -202,11 +234,19 @@ export function startApp(doc: Document): App {
     dragonScreen: byId(doc, 'dragon-screen'),
     collectionScreen: byId(doc, 'collection-screen'),
     historyScreen: byId(doc, 'history-screen'),
+    settingsScreen: byId(doc, 'settings-screen'),
     streakChip: byId<HTMLButtonElement>(doc, 'streak-chip'),
   }
   const dragonScreen = createDragonScreen(doc, el.dragonScreen, { tasks: TASKS, stats: STATS, stages: STAGES })
   const collectionScreen = createCollectionScreen(doc, el.collectionScreen, { items: REWARDS.items, onWear: wear })
   const historyScreen = createHistoryScreen(doc, el.historyScreen, { tasks: TASKS, items: REWARDS.items, streaks: STREAKS })
+  const settingsScreen = createSettingsScreen(doc, el.settingsScreen, {
+    stages: STAGES,
+    onExport: exportBackup,
+    onImport: importFile,
+    now: () => Date.now(),
+    reducedMotion: prefersReducedMotion,
+  })
   const refreshTaskFade = watchScrollFade(byId(doc, 'tasks'))
   let route: Route = 'home'
   const toast = createToast(
@@ -221,9 +261,24 @@ export function startApp(doc: Document): App {
 
   // The speech bubble by the dragon: non-blocking, no tap needed, fades on its own.
   let speechTimer: number | undefined
-  function say(text: string) {
+  /** What tapping the bubble does, while it's a tappable one. */
+  let speechTap: (() => void) | null = null
+  function say(text: string, onTap?: () => void) {
     const bubble = el.speech
-    bubble.textContent = text
+    // A tappable line is a real button inside the bubble (the bubble itself stays a
+    // plain live region), sized for a thumb.
+    speechTap = onTap ?? null
+    bubble.classList.toggle('is-tappable', speechTap !== null)
+    if (speechTap) {
+      const button = doc.createElement('button')
+      button.type = 'button'
+      button.className = 'speech-tap'
+      button.textContent = text
+      button.addEventListener('click', tapSpeech)
+      bubble.replaceChildren(button)
+    } else {
+      bubble.textContent = text
+    }
     // Beside the dragon's head, clear of its face, headgear and zzz.
     const area = bubble.parentElement?.getBoundingClientRect()
     const avoid = speechAnchor(el.art)
@@ -246,11 +301,23 @@ export function startApp(doc: Document): App {
     }
     bubble.classList.add('is-showing')
     window.clearTimeout(speechTimer)
-    speechTimer = window.setTimeout(hush, SPEECH_MS)
+    speechTimer = window.setTimeout(hush, speechTap ? SPEECH_TAPPABLE_MS : SPEECH_MS)
   }
   function hush() {
     window.clearTimeout(speechTimer)
     el.speech.classList.remove('is-showing')
+    // The words stay for the fade-out, but the button can't be reached once it's hidden.
+    if (speechTap) {
+      speechTap = null
+      const button = el.speech.querySelector<HTMLButtonElement>('.speech-tap')
+      if (button) button.disabled = true
+    }
+  }
+  function tapSpeech() {
+    const tap = speechTap
+    if (!tap) return
+    hush()
+    tap()
   }
 
   /**
@@ -261,6 +328,10 @@ export function startApp(doc: Document): App {
    * If a streak freeze covered a quiet day since the last log (and the run is still
    * going), the dragon says so instead, once per frozen day. Only one bubble per
    * opening: the cosy line is the hello, so it also uses up a welcome that was due.
+   *
+   * With neither to say, and a backup due, it suggests one (at most once per game
+   * day); tapping that bubble opens Settings. Not while read-only: nothing can be
+   * remembered then, so it would repeat on every open, and the notice says enough.
    */
   function maybeWelcome(now = Date.now()) {
     if (doc.visibilityState !== 'visible' || route !== 'home') return
@@ -273,12 +344,24 @@ export function startApp(doc: Document): App {
       react(el.art, 'perk')
       return
     }
-    if (!welcome.shouldWelcome(mood, lastLogDay)) return
-    const line = welcomeLine(mood, dayKey(now))
-    if (!line) return
-    welcome.markWelcomed(mood, lastLogDay)
-    say(line) // place it first, before the perk-up moves the art
-    react(el.art, 'perk')
+    if (welcome.shouldWelcome(mood, lastLogDay)) {
+      const line = welcomeLine(mood, dayKey(now))
+      if (line) {
+        welcome.markWelcomed(mood, lastLogDay)
+        say(line) // place it first, before the perk-up moves the art
+        react(el.art, 'perk')
+        return
+      }
+    }
+    const today = dayKey(now)
+    if (!readOnly && isBackupDue(now) && welcome.shouldRemindBackup(today)) {
+      welcome.markBackupReminded(today)
+      say(backupReminderLine(today), () => nav.go('settings'))
+    }
+  }
+
+  function isBackupDue(now: number): boolean {
+    return backupDue(data.events, data.settings.lastBackupAt, now, BACKUP_REMINDER_DAYS)
   }
 
   // Gentle notices: shown once per session at most, and dismissible.
@@ -385,6 +468,11 @@ export function startApp(doc: Document): App {
     }
 
     if (route === 'history') historyScreen.render({ events: data.events, settings: data.settings, now })
+    if (route === 'settings') settingsScreen.render({ lastBackupAt: data.settings.lastBackupAt, readOnly, now })
+
+    // A small dot on Settings while a backup is due. Never anything louder. Not while
+    // read-only: a backup can't be recorded then, so the dot could never clear.
+    nav.setDot('settings', !readOnly && isBackupDue(now) ? SETTINGS.tabDotLabel : null)
 
     scheduleRefresh(now)
   }
@@ -414,6 +502,38 @@ export function startApp(doc: Document): App {
   function setWearing(wearing: Wearing) {
     data = { ...data, settings: { ...data.settings, wearing } }
     persist()
+  }
+
+  /**
+   * Downloads a backup. A successful export counts as the latest backup, unless the
+   * app is read-only (then nothing is written, and the stored data goes out untouched).
+   */
+  function exportBackup(): SettingsOutcome {
+    const now = Date.now()
+    const { text } = exportContents(data, readOnly, now, localStore())
+    download(doc, text, backupFileName(now))
+    if (!readOnly) {
+      data = { ...data, settings: { ...data.settings, lastBackupAt: now } }
+      persist()
+    }
+    render(now)
+    return { ok: true, message: SETTINGS.exported }
+  }
+
+  /** Replaces everything with a confirmed backup, after copying what's stored aside. */
+  function importFile(backup: ReadyBackup): SettingsOutcome {
+    if (readOnly) return { ok: false, message: SETTINGS.importPaused }
+    const store = localStore()
+    if (!store) return { ok: false, message: IMPORT_REFUSED.safetyCopy }
+    const now = Date.now()
+    const result = importBackup(data, backup.data, backup.exportedAt, now, store)
+    if (!result.ok) return { ok: false, message: IMPORT_REFUSED[result.reason] }
+    data = result.data
+    homeOutfitHold = null
+    toast.hide()
+    hush()
+    render(now)
+    return { ok: true, message: SETTINGS.imported }
   }
 
   /** A found tile in Collection was tapped: put it on, or take it off. */
@@ -577,6 +697,7 @@ export function startApp(doc: Document): App {
     el.dragonScreen.hidden = next !== 'dragon'
     el.collectionScreen.hidden = next !== 'collection'
     el.historyScreen.hidden = next !== 'history'
+    el.settingsScreen.hidden = next !== 'settings'
     // History opens on this month with today selected.
     if (next === 'history') historyScreen.reset()
     if (from === null) return // the first render happens below

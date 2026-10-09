@@ -40,6 +40,8 @@ Self-care set to 25 XP on 2026-10-05 after simulation: at 15 a Heart dragon was 
 
 XP reflects how hard a task is for me, not how hard it is in general. I should be able to change it.
 
+Decided 2026-10-09: a task's stat is chosen when the task is added and is fixed after that. Changing it would rewrite past stats and the dragon's look. (Milestone 6, slice 3.)
+
 ### Wake-up schedule
 
 Each day of the week has its own wake-up target, or none. This is set in settings.
@@ -50,6 +52,8 @@ Each day of the week has its own wake-up target, or none. This is set in setting
 | Saturday, Sunday | None |
 
 On a day with no target, the "Got up on time" task is hidden. Those days don't break its streak: they're skipped, not missed.
+
+Decided 2026-10-09: an edit to the wake-up schedule applies from the day of the edit on. Past days keep the schedule that was in force at the time, so an edit can never end an existing streak. (Milestone 6, slice 2.)
 
 ### Day boundary
 
@@ -149,13 +153,15 @@ The user can also undo the most recent log, in case of a mis-tap.
 
 Settings include "Export data" (downloads a JSON file) and "Import data". Browser storage can occasionally be cleared (for example if Chrome's site data is wiped), so the app should gently remind me to export if it's been more than 14 days since the last backup.
 
+Decided 2026-10-09: the reminder is the dragon mentioning it in its speech bubble on Home, at most once a day (a welcome back comes first), plus a small dot on the Settings tab. If there's never been a backup, the 14 days (`BACKUP_REMINDER_DAYS`) count from the first log; with no logs it never shows. Import shows what's in the file and asks before replacing anything, and keeps a copy of what was on the phone first.
+
 ## Screens
 
 1. Home: the dragon front and centre with mood and stage, today's tasks as large tap targets underneath, and the XP bar to the next stage.
 2. Dragon: stats, stage history and equipped items.
 3. Collection: items found, with a plain "?" tile for each one not found yet (decided 2026-10-07: items stay a surprise, so no silhouettes).
 4. History: streaks (overall, best, freezes held, wake-up and this week's count for each other task) and a month calendar. Tap a day to see what I logged that day. It's a tab in the bottom bar, and a small streak chip on Home (shown from 2 days) opens it.
-5. Settings: edit tasks, wake-up schedule (per day), dragon name, export/import.
+5. Settings: edit tasks, wake-up schedule (per day), dragon name, export/import. Decided 2026-10-09: it's a fifth tab in the bottom bar.
 
 ## Art and feel
 

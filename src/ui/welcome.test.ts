@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { KeyValueStore } from '../storage'
-import { FREEZE_USED, MOOD_LABELS, WELCOME_BACK, freezeUsedLine, welcomeLine } from './copy'
+import { BACKUP_REMINDER, FREEZE_USED, MOOD_LABELS, WELCOME_BACK, backupReminderLine, freezeUsedLine, welcomeLine } from './copy'
 import { UI_KEY, createWelcome } from './welcome'
 
 class FakeStore implements KeyValueStore {
@@ -170,6 +170,49 @@ describe('streak freeze line ("kept our streak cosy")', () => {
     expect(FREEZE_USED).toContain(freezeUsedLine(DAY))
     const all = FREEZE_USED.join(' ').toLowerCase()
     for (const word of ['missed', 'lost', 'broke', 'forgot', 'where were you', 'finally', 'almost', 'nearly']) {
+      expect(all).not.toContain(word)
+    }
+  })
+})
+
+describe('backup reminder', () => {
+  const TODAY = '2026-10-09'
+
+  it('is said at most once per game day, and again on a later day', () => {
+    const w = createWelcome(() => new FakeStore())
+    expect(w.shouldRemindBackup(TODAY)).toBe(true)
+    w.markBackupReminded(TODAY)
+    expect(w.shouldRemindBackup(TODAY)).toBe(false)
+    expect(w.shouldRemindBackup('2026-10-08')).toBe(false) // an earlier day never comes back
+    expect(w.shouldRemindBackup('2026-10-10')).toBe(true)
+  })
+
+  it('is remembered across reloads beside the other fields, which it leaves alone', () => {
+    const store = new FakeStore()
+    const w = createWelcome(() => store)
+    w.markWelcomed('sleepy', '2026-10-05')
+    w.markBackupReminded(TODAY)
+    expect(JSON.parse(store.map.get(UI_KEY) as string)).toEqual({
+      gapFrom: '2026-10-05',
+      shown: ['sleepy'],
+      backupReminderDay: TODAY,
+    })
+    const later = createWelcome(() => store)
+    expect(later.shouldRemindBackup(TODAY)).toBe(false)
+    expect(later.shouldWelcome('sleepy', '2026-10-05')).toBe(false)
+  })
+
+  it('stays in memory when storage is withheld (read-only)', () => {
+    const w = createWelcome(() => undefined)
+    w.markBackupReminded(TODAY)
+    expect(w.shouldRemindBackup(TODAY)).toBe(false)
+  })
+
+  it('has warm lines, the same one all day, with no guilt', () => {
+    expect(backupReminderLine(TODAY)).toBe(backupReminderLine(TODAY))
+    expect(BACKUP_REMINDER).toContain(backupReminderLine(TODAY))
+    const all = BACKUP_REMINDER.join(' ').toLowerCase()
+    for (const word of ['missed', 'lost', 'lose', 'forgot', 'should', 'must', 'warning', 'risk', 'never']) {
       expect(all).not.toContain(word)
     }
   })

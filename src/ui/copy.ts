@@ -403,3 +403,66 @@ export function historyLogXp(xp: number, treat: number): string {
 
 /** "Found the tiny book". */
 export const historyFound = (name: string): string => `Found the ${midSentence(name)}`
+
+/** Words on the Settings screen. Backups are a cosy precaution, never a warning. */
+export const SETTINGS = {
+  title: 'Settings',
+  backupTitle: 'Backup',
+  backupIntro: "Keep a copy of your dragon somewhere safe, in case this phone's storage is ever cleared.",
+  neverBackedUp: 'No backup yet',
+  export: 'Export backup',
+  import: 'Import backup',
+  /** Under Import while the app can't save on this phone. */
+  importPaused: "Importing is paused while your dragon can't save on this phone.",
+  /** After an export. */
+  exported: 'Backup saved. All snug!',
+  /** After an import. */
+  imported: 'Backup imported. Hello again!',
+  /** The Settings tab's dot, for a screen reader. */
+  tabDotLabel: 'time for a backup',
+} as const
+
+/** "Last backup: 5 Oct", "Last backup: today". */
+export function lastBackupLine(friendly: string | null): string {
+  if (friendly === null) return SETTINGS.neverBackedUp
+  const when = friendly === 'Today' || friendly === 'Yesterday' ? friendly.toLowerCase() : friendly
+  return `Last backup: ${when}`
+}
+
+/** Why a file can't be imported. Gentle, and always says nothing here changed. */
+export const IMPORT_REFUSED = {
+  unreadable: "Your dragon couldn't read that file. Nothing here has changed.",
+  notBackup: "That file doesn't look like a Drag‑on backup. Nothing here has changed.",
+  newerVersion:
+    'That backup is from a newer Drag‑on, so this one can’t open it yet. Nothing here has changed.',
+  /** The current data couldn't be copied aside first, so the import stopped. */
+  safetyCopy: "Your dragon couldn't keep a safe copy of what's here first, so nothing has changed.",
+  /** The copy was kept, but the backup couldn't be saved. */
+  save: "Your dragon couldn't save the backup on this phone, so nothing has changed.",
+} as const
+
+/** The sheet that asks before an import replaces anything. */
+export const IMPORT_CONFIRM = {
+  heading: 'Import this backup?',
+  logs: 'Logs',
+  stage: 'Stage',
+  saved: 'Saved',
+  /** A backup without an export date. */
+  savedUnknown: 'Not recorded',
+  replaces: "It replaces everything on this phone. Your dragon keeps a copy of what's here now, just in case.",
+  confirm: 'Replace with backup',
+  cancel: "Keep what's here",
+} as const
+
+/** Under the summary when some entries in the file couldn't be read. */
+export const importDropped = (n: number): string =>
+  `${n} ${n === 1 ? "entry couldn't" : "entries couldn't"} be read and will be left out.`
+
+/** What the dragon says, at most once a day, when a backup is due. Warm, never a nudge. */
+export const BACKUP_REMINDER: readonly string[] = [
+  'Shall we save a backup of us?',
+  "Shall we tuck a copy of us somewhere safe?",
+]
+
+/** The backup line for game day `dayKey`: the same one all day. */
+export const backupReminderLine = (dayKey: string): string => lineFor(BACKUP_REMINDER, dayKey) ?? BACKUP_REMINDER[0]!

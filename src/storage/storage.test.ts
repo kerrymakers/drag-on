@@ -7,6 +7,7 @@ import {
   STORAGE_KEY,
   defaultData,
   load,
+  parseSave,
   requestPersistence,
   resetPersistenceRequestForTests,
   save,
@@ -306,5 +307,20 @@ describe('requestPersistence', () => {
         },
       }),
     ).toBe(false)
+  })
+})
+
+describe('parseSave (shared by load and import)', () => {
+  it('sorts strings into unreadable, not a save, newer and ok', () => {
+    expect(parseSave('{')).toEqual({ kind: 'unreadable' })
+    expect(parseSave('[1]').kind).toBe('notSave')
+    expect(parseSave('{"schemaVersion":1}').kind).toBe('notSave')
+    expect(parseSave('{"schemaVersion":9,"events":[]}').kind).toBe('newerVersion')
+    expect(parseSave(JSON.stringify(defaultData()))).toMatchObject({ kind: 'ok', dropped: 0, data: defaultData() })
+  })
+
+  it('counts and drops events it cannot read', () => {
+    const raw = JSON.stringify({ ...defaultData(), events: [logEvent, { id: 1 }] })
+    expect(parseSave(raw)).toMatchObject({ kind: 'ok', dropped: 1, data: { events: [logEvent] } })
   })
 })

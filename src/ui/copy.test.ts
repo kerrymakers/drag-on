@@ -5,6 +5,7 @@ import { dragonProgress } from '../game/state'
 import type { GameEvent, Stage } from '../game/types'
 import { COLLECTION, DRAGON_SCREEN, FREEZE_EARNED, ITEM_FOUND, milestoneFound, nextSurprise, UNDONE, UNDONE_ITEM, collectionCount, collectionLine, foundTileLabel, friendlyDay, itemFoundLine, itemFoundSaved, undoneToast, wearToast } from './copy'
 import { ITEMS } from '../config/items'
+import { IMPORT_CONFIRM, IMPORT_REFUSED, SETTINGS, importDropped, lastBackupLine } from './copy'
 import { LOGGED, LOOK_CHANGE, TREAT_FLOAT, loggedToast, LOOK_NAMES, LOOK_REVEAL, STAGE_UP, STAGE_UP_FALLBACK, celebrationCopy, lookLabel, progressLabel } from './copy'
 
 const from = (id: string) => STAGES.find((s) => s.id === id)!.xpFrom
@@ -224,5 +225,27 @@ describe('streak milestone and freeze copy', () => {
   it('never guilt-trips', () => {
     const all = [FREEZE_EARNED, milestoneFound(7).heading, milestoneFound(7).line, nextSurprise(30)]
     for (const text of all) expect(text, text).not.toMatch(/\b(missed|failed|lost|only|should|never|yet to|don't)\b/i)
+  })
+})
+
+describe('settings and backup copy', () => {
+  it('says when the last backup was, in friendly words', () => {
+    expect(lastBackupLine(null)).toBe(SETTINGS.neverBackedUp)
+    expect(lastBackupLine('Today')).toBe('Last backup: today')
+    expect(lastBackupLine('Yesterday')).toBe('Last backup: yesterday')
+    expect(lastBackupLine('5 Oct')).toBe('Last backup: 5 Oct')
+  })
+
+  it('counts left-out entries in the singular and plural', () => {
+    expect(importDropped(1)).toBe("1 entry couldn't be read and will be left out.")
+    expect(importDropped(3)).toBe("3 entries couldn't be read and will be left out.")
+  })
+
+  it('refuses gently and always says nothing changed', () => {
+    for (const line of Object.values(IMPORT_REFUSED)) expect(line).toMatch(/nothing (here )?has changed/i)
+  })
+
+  it('makes clear that importing replaces what is on this phone', () => {
+    expect(IMPORT_CONFIRM.replaces).toMatch(/replaces everything on this phone/)
   })
 })

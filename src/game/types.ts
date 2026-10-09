@@ -53,6 +53,11 @@ export interface Settings {
    * id that isn't found right now, isn't known, or is in the wrong spot shows nothing.
    */
   wearing: Wearing
+  /**
+   * When a backup was last exported (ms since the Unix epoch), or the export time of
+   * a backup that was imported. Absent if there's never been one (older saves too).
+   */
+  lastBackupAt?: number
 }
 
 /** One item id, or null for nothing, per spot on the dragon. */

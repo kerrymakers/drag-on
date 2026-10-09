@@ -1,4 +1,4 @@
-// The bottom tab bar and hash routing (#/, #/dragon, #/collection and #/history, GitHub Pages friendly).
+// The bottom tab bar and hash routing (#/, #/dragon, #/collection, #/history and #/settings, GitHub Pages friendly).
 //
 // History works like a phone app's tabs: going from Home to another tab pushes one
 // history entry, and moving between other tabs replaces it. So Android's back button
@@ -6,7 +6,7 @@
 
 import { ICONS, type IconName } from './icons'
 
-export type Route = 'home' | 'dragon' | 'collection' | 'history'
+export type Route = 'home' | 'dragon' | 'collection' | 'history' | 'settings'
 
 interface Tab {
   route: Route
@@ -21,6 +21,7 @@ export const TABS: readonly Tab[] = [
   { route: 'dragon', hash: '#/dragon', label: 'Dragon', icon: 'dragon' },
   { route: 'collection', hash: '#/collection', label: 'Collection', icon: 'collection' },
   { route: 'history', hash: '#/history', label: 'History', icon: 'calendar' },
+  { route: 'settings', hash: '#/settings', label: 'Settings', icon: 'gear' },
 ]
 
 /** The route for a location hash. Anything unknown (or empty) is Home. */
@@ -107,6 +108,11 @@ export interface Nav {
   readonly route: Route
   /** Goes to a tab exactly as tapping it would (for links inside a screen, like the streak chip). */
   go(to: Route): void
+  /**
+   * Shows a small dot on a tab, with `label` added to its accessible name (e.g.
+   * "Settings, time for a backup"), or takes it away with null.
+   */
+  setDot(route: Route, label: string | null): void
 }
 
 /**
@@ -120,7 +126,7 @@ export function createNav(doc: Document, bar: HTMLElement, onRoute: (route: Rout
     a.className = 'tab'
     a.href = tab.hash
     a.dataset.route = tab.route
-    a.innerHTML = `<span class="tab-icon">${ICONS[tab.icon]}</span><span class="tab-label">${tab.label}</span>`
+    a.innerHTML = `<span class="tab-icon">${ICONS[tab.icon]}<span class="tab-dot" aria-hidden="true" hidden></span></span><span class="tab-label">${tab.label}</span>`
     bar.append(a)
     return a
   })
@@ -183,10 +189,21 @@ export function createNav(doc: Document, bar: HTMLElement, onRoute: (route: Rout
   win.addEventListener('hashchange', fromLocation)
   fromLocation()
 
+  function setDot(to: Route, label: string | null) {
+    const a = links.find((l) => l.dataset.route === to)
+    const tab = TABS.find((t) => t.route === to)
+    const dot = a?.querySelector<HTMLElement>('.tab-dot')
+    if (!a || !tab || !dot) return
+    dot.hidden = label === null
+    if (label === null) a.removeAttribute('aria-label')
+    else a.setAttribute('aria-label', `${tab.label}, ${label}`)
+  }
+
   return {
     get route() {
       return route ?? 'home'
     },
     go,
+    setDot,
   }
 }

@@ -21,6 +21,8 @@ const LABEL: Record<number, [string, string]> = {
   [CURLED]: ['grumpy', 'Curled up'],
 }
 const MOOD_DAYS = [0, startOf('content'), SLEEPY, CURLED]
+// Backed up recently, so the backup reminder stays out of these welcome checks.
+const SETTINGS = { lastBackupAt: NOW.getTime() }
 
 function collectConsole(page: Page) {
   const msgs: string[] = []
@@ -41,14 +43,14 @@ function events(baseXp: number, daysAgo: number, baseStage?: string) {
 }
 async function seed(page: Page, ev: object[], ui?: object) {
   await page.addInitScript(
-    ([d, u]) => {
+    ([d, u, s]) => {
       if (!sessionStorage.getItem('seeded')) {
-        localStorage.setItem('drag-on:v1', JSON.stringify({ schemaVersion: 1, events: d }))
+        localStorage.setItem('drag-on:v1', JSON.stringify({ schemaVersion: 1, events: d, settings: s }))
         if (u) localStorage.setItem('drag-on:ui', JSON.stringify(u))
         sessionStorage.setItem('seeded', '1')
       }
     },
-    [ev, ui ?? null] as const,
+    [ev, ui ?? null, SETTINGS] as const,
   )
 }
 const chip = (page: Page) => page.locator('#mood-chip')
@@ -123,10 +125,10 @@ for (const [w, h] of SIZES) {
         await page.clock.setFixedTime(NOW)
         await page.goto('./')
         for (const d of MOOD_DAYS) {
-          await page.evaluate((ev) => {
-            localStorage.setItem('drag-on:v1', JSON.stringify({ schemaVersion: 1, events: ev }))
+          await page.evaluate(([ev, s]) => {
+            localStorage.setItem('drag-on:v1', JSON.stringify({ schemaVersion: 1, events: ev, settings: s }))
             localStorage.removeItem('drag-on:ui')
-          }, events(baseXp, d))
+          }, [events(baseXp, d), SETTINGS] as const)
           await page.reload()
           const [id, label] = LABEL[d]!
           await expect(chip(page)).toHaveText(label)
@@ -171,10 +173,10 @@ for (const [w, h] of SIZES) {
       await page.goto('./')
       for (const stage of ['whelp', 'juvenile', 'adult', 'elder']) {
         for (const d of [SLEEPY, CURLED]) {
-          await page.evaluate((ev) => {
-            localStorage.setItem('drag-on:v1', JSON.stringify({ schemaVersion: 1, events: ev }))
+          await page.evaluate(([ev, s]) => {
+            localStorage.setItem('drag-on:v1', JSON.stringify({ schemaVersion: 1, events: ev, settings: s }))
             localStorage.removeItem('drag-on:ui')
-          }, events(from(stage) + 100, d, stage))
+          }, [events(from(stage) + 100, d, stage), SETTINGS] as const)
           await page.reload()
           const [id, label] = LABEL[d]!
           await expect(chip(page)).toHaveText(label)
@@ -206,10 +208,10 @@ test('welcome: shows when sleepy or curled up, not happy or content; not repeate
   await page.clock.install({ time: NOW })
   await page.goto('./')
   for (const d of MOOD_DAYS) {
-    await page.evaluate((ev) => {
-      localStorage.setItem('drag-on:v1', JSON.stringify({ schemaVersion: 1, events: ev }))
+    await page.evaluate(([ev, s]) => {
+      localStorage.setItem('drag-on:v1', JSON.stringify({ schemaVersion: 1, events: ev, settings: s }))
       localStorage.removeItem('drag-on:ui')
-    }, events(150, d))
+    }, [events(150, d), SETTINGS] as const)
     await page.reload()
     const showing = await speechShowing(page)
     console.log(`welcome at ${d} days:`, showing, showing ? await page.locator('#speech').textContent() : '')
@@ -413,10 +415,10 @@ test('reduced motion: no hop, zzz drift, wag or pulses; moods still fade', async
   const leaks: string[] = []
   for (const [stage, xp] of [['egg', 50], ['hatchling', 150], ['whelp', 600], ['elder', 7500]] as const) {
     for (const d of MOOD_DAYS) {
-      await page.evaluate((ev) => {
-        localStorage.setItem('drag-on:v1', JSON.stringify({ schemaVersion: 1, events: ev }))
+      await page.evaluate(([ev, s]) => {
+        localStorage.setItem('drag-on:v1', JSON.stringify({ schemaVersion: 1, events: ev, settings: s }))
         localStorage.setItem('drag-on:ui', JSON.stringify({}))
-      }, events(xp, d, stage === 'egg' || stage === 'hatchling' ? undefined : stage))
+      }, [events(xp, d, stage === 'egg' || stage === 'hatchling' ? undefined : stage), SETTINGS] as const)
       await page.reload()
       await page.waitForTimeout(300)
       const running = await page.evaluate(() =>

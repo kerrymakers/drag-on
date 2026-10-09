@@ -86,7 +86,8 @@ const WAKE_TIME = /^([01]\d|2[0-3]):[0-5]\d$/
 /**
  * Fills in anything missing from the defaults. Fields we don't recognise are kept,
  * so data written by a later version survives a round trip. A wake time that isn't
- * a real "HH:MM" becomes null (skipped), never a guessed time.
+ * a real "HH:MM" becomes null (skipped), never a guessed time. `lastBackupAt` is kept
+ * only if it's a finite number.
  */
 function readSettings(v: unknown): Settings {
   const defaults = defaultData().settings
@@ -99,11 +100,14 @@ function readSettings(v: unknown): Settings {
       schedule[day] = typeof t === 'string' && WAKE_TIME.test(t) ? t : null
     }
   }
+  const { lastBackupAt, ...rest } = v
   return {
-    ...v,
+    ...rest,
     wakeSchedule: schedule,
     dragonName: typeof v.dragonName === 'string' ? v.dragonName : defaults.dragonName,
     wearing: readWearing(v.wearing, defaults.wearing),
+    // Older saves have none (never backed up). Anything that isn't a real time is dropped.
+    ...(typeof lastBackupAt === 'number' && Number.isFinite(lastBackupAt) ? { lastBackupAt } : {}),
   }
 }
 
@@ -129,6 +133,50 @@ export interface LoadResult {
 }
 
 /**
+ * What a saved string holds, checked the same way for loading and for importing a
+ * backup file:
+ * - unreadable: not JSON at all.
+ * - notSave: JSON, but not Drag-on save data (no schema version or no events list).
+ * - newerVersion: written by a newer app. `data` is what this version understands of it.
+ * - ok: this version's data. `dropped` counts events that couldn't be read and were left out.
+ * `json` is the parsed value, for fields outside the save data (a backup's exportedAt).
+ */
+export type ParsedSave =
+  | { kind: 'unreadable' }
+  | { kind: 'notSave'; json: unknown }
+  | { kind: 'newerVersion'; data: SaveData; json: Record<string, unknown> }
+  | { kind: 'ok'; data: SaveData; dropped: number; json: Record<string, unknown> }
+
+export function parseSave(raw: string): ParsedSave {
+  let json: unknown
+  try {
+    json = JSON.parse(raw)
+  } catch {
+    return { kind: 'unreadable' }
+  }
+  if (!isObject(json)) return { kind: 'notSave', json }
+  const version = json.schemaVersion
+  if (typeof version === 'number' && version > SCHEMA_VERSION) {
+    const events = Array.isArray(json.events) ? json.events.filter(isEvent) : []
+    return {
+      kind: 'newerVersion',
+      data: { schemaVersion: SCHEMA_VERSION, events, settings: readSettings(json.settings) },
+      json,
+    }
+  }
+  if (version === SCHEMA_VERSION && Array.isArray(json.events)) {
+    const events = json.events.filter(isEvent)
+    return {
+      kind: 'ok',
+      data: { schemaVersion: SCHEMA_VERSION, events, settings: readSettings(json.settings) },
+      dropped: json.events.length - events.length,
+      json,
+    }
+  }
+  return { kind: 'notSave', json }
+}
+
+/**
  * Loads saved data. It never throws and never silently loses anything:
  * - unreadable parts are dropped only after the raw string is copied to `drag-on:corrupt-<now>`;
  * - if that copy can't be written, or the data is from a newer version, the result is read-only.
@@ -142,32 +190,17 @@ export function load(store: KeyValueStore = defaultStore(), now: number = Date.n
   }
   if (raw === null) return { data: defaultData(), readOnly: false, notice: 'new' }
 
-  let json: unknown
-  try {
-    json = JSON.parse(raw)
-  } catch {
-    json = undefined
+  const parsed = parseSave(raw)
+  switch (parsed.kind) {
+    case 'newerVersion':
+      // A newer app wrote this. Show what we understand, but leave it exactly as it is.
+      return { data: parsed.data, readOnly: true, notice: 'newerVersion' }
+    case 'ok':
+      if (parsed.dropped === 0) return { data: parsed.data, readOnly: false, notice: 'ok' }
+      return repair(store, raw, parsed.data, now)
+    default:
+      return repair(store, raw, defaultData(), now)
   }
-
-  const version = isObject(json) ? json.schemaVersion : undefined
-  if (isObject(json) && typeof version === 'number' && version > SCHEMA_VERSION) {
-    // A newer app wrote this. Show what we understand, but leave it exactly as it is.
-    const events = Array.isArray(json.events) ? json.events.filter(isEvent) : []
-    return {
-      data: { schemaVersion: SCHEMA_VERSION, events, settings: readSettings(json.settings) },
-      readOnly: true,
-      notice: 'newerVersion',
-    }
-  }
-
-  if (isObject(json) && version === SCHEMA_VERSION && Array.isArray(json.events)) {
-    const events = json.events.filter(isEvent)
-    const data: SaveData = { schemaVersion: SCHEMA_VERSION, events, settings: readSettings(json.settings) }
-    if (events.length === json.events.length) return { data, readOnly: false, notice: 'ok' }
-    return repair(store, raw, data, now)
-  }
-
-  return repair(store, raw, defaultData(), now)
 }
 
 /** Backs up the raw string, then saves what we could recover. Read-only if the backup fails. */

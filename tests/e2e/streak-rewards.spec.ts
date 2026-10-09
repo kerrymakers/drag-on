@@ -23,7 +23,8 @@ const at = (key: string, hm: string) => new Date(`${key}T${hm}:00+01:00`).getTim
 function seed(a: string, b: string) {
   const events = range(a, b).map((d, i) => ({ id: `e${i}`, type: 'log', taskId: 'gym', timestamp: at(d, '19:00'), xpAwarded: XP('gym') }))
   events.push({ id: 'wake', type: 'log', taskId: 'wake', timestamp: at(b, '06:20'), xpAwarded: XP('wake') })
-  return { schemaVersion: 1, events }
+  // Backed up this morning, so the backup reminder stays out of these speech-bubble checks.
+  return { schemaVersion: 1, events, settings: { lastBackupAt: NOW.getTime() } }
 }
 
 async function fresh(browser: Browser, info: TestInfo, data: object, opts: { scheme?: 'light' | 'dark' } = {}) {

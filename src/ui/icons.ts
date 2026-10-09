@@ -32,6 +32,10 @@ export const ICONS = {
   chevronLeft: svg('<path d="m14.5 6-6 6 6 6"/>'),
   chevronRight: svg('<path d="m9.5 6 6 6-6 6"/>'),
   star: svg('<path d="m12 4.5 2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5-3.6-3.5 5-.7Z"/>'),
+  // A soft cog: a ring with eight short, round teeth.
+  gear: svg(
+    '<circle cx="12" cy="12" r="5.6"/><circle cx="12" cy="12" r="2.2"/><path stroke-width="2.8" d="M12 3.6v1.6M12 18.8v1.6M3.6 12h1.6M18.8 12h1.6M6.06 6.06l1.13 1.13M16.81 16.81l1.13 1.13M6.06 17.94l1.13-1.13M16.81 7.19l1.13-1.13"/>',
+  ),
 } as const
 
 export type IconName = keyof typeof ICONS

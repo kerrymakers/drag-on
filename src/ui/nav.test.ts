@@ -18,6 +18,7 @@ describe('routeFromHash', () => {
     expect(routeFromHash('#/Dragon')).toBe('dragon')
     expect(routeFromHash('#collection/')).toBe('collection')
     expect(routeFromHash('#/History/')).toBe('history')
+    expect(routeFromHash('#/settings')).toBe('settings')
   })
 
   it('round-trips every tab', () => {
@@ -37,6 +38,7 @@ describe('navAction', () => {
 
   it('goes back to Home when the entry was pushed from Home', () => {
     expect(navAction('dragon', 'home', true)).toBe('back')
+    expect(navAction('settings', 'home', true)).toBe('back')
   })
 
   it('replaces when opened straight onto another tab (no Home entry to go back to)', () => {
@@ -60,12 +62,13 @@ describe('navAction', () => {
 })
 
 describe('TABS', () => {
-  it('has Home, Dragon, Collection and History, in that order', () => {
+  it('has Home, Dragon, Collection, History and Settings, in that order', () => {
     expect(TABS.map((t) => [t.route, t.hash, t.label])).toEqual([
       ['home', '#/', 'Home'],
       ['dragon', '#/dragon', 'Dragon'],
       ['collection', '#/collection', 'Collection'],
       ['history', '#/history', 'History'],
+      ['settings', '#/settings', 'Settings'],
     ])
   })
 })

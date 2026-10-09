@@ -79,7 +79,7 @@ test('tab bar: big targets, aria-current, hash routes and the back button', asyn
   await page.clock.install({ time: TUE_0600 })
   await page.goto('./')
   const tabs = page.locator('.tabbar a.tab')
-  await expect(tabs).toHaveCount(4)
+  await expect(tabs).toHaveCount(5)
   for (const i of [0, 1, 2, 3]) {
     const b = await box(page, `.tabbar a.tab >> nth=${i}`)
     expect(b.h).toBeGreaterThanOrEqual(48)

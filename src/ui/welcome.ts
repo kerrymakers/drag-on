@@ -1,7 +1,8 @@
 // "Welcome back": plays at most once per gap per mood level. The first time the app
 // finds the dragon sleepy during a gap, and once more if the same gap reaches curled
 // up. A new log starts a new gap. Also "kept our streak cosy": said once per day a
-// streak freeze covered. State lives under its own UI key, never in the game data,
+// streak freeze covered, and "shall we save a backup?" at most once per game day
+// while a backup is due. State lives under its own UI key, never in the game data,
 // and falls back to memory if storage isn't available.
 
 import type { MoodId } from '../game/types'
@@ -30,6 +31,10 @@ export interface Welcome {
   shouldSayCosy(frozenDay: string | null): boolean
   /** Remember that the cosy line has been said for `frozenDay`. */
   markCosy(frozenDay: string): void
+  /** True if the backup reminder hasn't been said on game day `today` (or a later one). Day keys sort as strings. */
+  shouldRemindBackup(today: string): boolean
+  /** Remember that the backup reminder has been said on `today`. */
+  markBackupReminded(today: string): void
 }
 
 const isMood = (v: unknown): v is MoodId =>
@@ -59,6 +64,8 @@ export function createWelcome(getStore: () => KeyValueStore | undefined): Welcom
   }
   /** The latest frozen day the cosy line has been said for. Day keys sort as strings. */
   let cosyDay: string | null = typeof saved.cosyDay === 'string' ? saved.cosyDay : null
+  /** The game day the backup reminder was last said. */
+  let backupDay: string | null = typeof saved.backupReminderDay === 'string' ? saved.backupReminderDay : null
 
   /** Merge `fields` into the UI key, keeping anything else there. */
   function write(fields: Record<string, unknown>) {
@@ -93,6 +100,13 @@ export function createWelcome(getStore: () => KeyValueStore | undefined): Welcom
       if (cosyDay !== null && frozenDay <= cosyDay) return
       cosyDay = frozenDay
       write({ cosyDay })
+    },
+    shouldRemindBackup(today) {
+      return backupDay === null || today > backupDay
+    },
+    markBackupReminded(today) {
+      backupDay = today
+      write({ backupReminderDay: today })
     },
   }
 }
