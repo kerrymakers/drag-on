@@ -420,7 +420,41 @@ export const SETTINGS = {
   imported: 'Backup imported. Hello again!',
   /** The Settings tab's dot, for a screen reader. */
   tabDotLabel: 'time for a backup',
+  nameTitle: 'Name',
+  /** The name field's label, for a screen reader. */
+  nameLabel: "Your dragon's name",
+  /** Shown in the empty name field: what the app calls the dragon without a name. */
+  namePlaceholder: 'your dragon',
+  wakeTitle: 'Wake-up times',
+  wakeIntro: 'Changes start from today. Days gone by keep the times they had.',
+  /** In place of the time on a day with no wake-up target. */
+  wakeOff: 'Lie-in',
+  /** Beside a card's title, briefly, after a change is saved. */
+  saved: 'Saved',
+  /** Under the name and wake-up cards while the app can't save on this phone. */
+  editsPaused: "Changes are paused while your dragon can't save on this phone.",
 } as const
+
+/** Settings' day names, Monday first. */
+export const WEEKDAY_NAMES = {
+  mon: 'Monday',
+  tue: 'Tuesday',
+  wed: 'Wednesday',
+  thu: 'Thursday',
+  fri: 'Friday',
+  sat: 'Saturday',
+  sun: 'Sunday',
+} as const
+
+/** "Monday wake-up time": the time field's label, for a screen reader. */
+export function wakeTimeLabel(day: string): string {
+  return `${day} wake-up time`
+}
+
+/** "Monday wake-up": the on/off switch's label, for a screen reader. */
+export function wakeSwitchLabel(day: string): string {
+  return `${day} wake-up`
+}
 
 /** "Last backup: 5 Oct", "Last backup: today". */
 export function lastBackupLine(friendly: string | null): string {

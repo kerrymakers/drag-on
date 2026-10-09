@@ -11,6 +11,7 @@ import {
   totalXp,
 } from './state'
 import { at, log, treatLog, undo } from '../testing/helpers'
+import { scheduleOn, withScheduleEdit } from './settings'
 import type { Settings, Stage, Task } from './types'
 
 const task = (id: string): Task => {
@@ -139,6 +140,33 @@ describe('progressToNextStage', () => {
 })
 
 describe('taskAvailability: wake-up', () => {
+  it("takes a change to today's target straight away (06:30 moved to 07:00 at 06:50)", () => {
+    expect(taskAvailability(wake, [], settings, MON('06:50')).canLog).toBe(false)
+    const later = withScheduleEdit(settings, { ...settings.wakeSchedule, mon: '07:00' }, MON('06:50'))
+    expect(taskAvailability(wake, [], later, MON('06:50')).canLog).toBe(true)
+    expect(nextRefreshAt(later, MON('06:50'))).toBe(MON('07:16'))
+    // Switching today off hides it.
+    const off = withScheduleEdit(settings, { ...settings.wakeSchedule, mon: null }, MON('05:00'))
+    expect(taskAvailability(wake, [], off, MON('05:00')).visible).toBe(false)
+  })
+
+  it('reads today through scheduleOn, so a history entry dated in the future (clock skew) waits for its day', () => {
+    // Saved while the phone's clock was ahead: 07:00 from Wed 7 Oct. Today is Mon 5 Oct.
+    const skewed: Settings = {
+      ...settings,
+      wakeSchedule: { ...settings.wakeSchedule, mon: '07:00' },
+      wakeScheduleHistory: [
+        { from: '1970-01-01', schedule: settings.wakeSchedule },
+        { from: '2026-10-07', schedule: { ...settings.wakeSchedule, mon: '07:00' } },
+      ],
+    }
+    // Home uses 06:30 today, the same schedule the wake-up streak judges today by.
+    expect(scheduleOn(skewed, '2026-10-05').mon).toBe('06:30')
+    expect(taskAvailability(wake, [], skewed, MON('06:50')).visible).toBe(false)
+    expect(taskAvailability(wake, [], skewed, MON('06:45')).canLog).toBe(true)
+    expect(nextRefreshAt(skewed, MON('06:00'))).toBe(MON('06:46'))
+  })
+
   it('is loggable from 04:00 up to and including 06:45 on a 06:30 weekday', () => {
     expect(taskAvailability(wake, [], settings, MON('04:00:00')).canLog).toBe(true)
     expect(taskAvailability(wake, [], settings, MON('06:30:00')).canLog).toBe(true)

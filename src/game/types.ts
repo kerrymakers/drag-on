@@ -43,8 +43,24 @@ export type Weekday = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
 /** "HH:MM" wall-clock time in Europe/London, or null for no target that day. */
 export type WakeSchedule = Record<Weekday, string | null>
 
+/** A game day, "YYYY-MM-DD" (see dayKey). */
+export type DayKey = string
+
+/** A wake schedule and the first game day it was in force. */
+export interface ScheduleEntry {
+  from: DayKey
+  schedule: WakeSchedule
+}
+
 export interface Settings {
+  /** The wake schedule in force today (and from the latest history entry on). */
   wakeSchedule: WakeSchedule
+  /**
+   * The schedules in force on earlier days, oldest first, so an edit only applies from
+   * the day it was made (see scheduleOn and withScheduleEdit). Absent until the first
+   * edit, and in older saves: then `wakeSchedule` applies to every day.
+   */
+  wakeScheduleHistory?: ScheduleEntry[]
   /** null means the UI says "your dragon". */
   dragonName: string | null
   /**

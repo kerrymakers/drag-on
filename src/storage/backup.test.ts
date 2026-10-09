@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { withScheduleEdit } from '../game/settings'
 import type { GameEvent } from '../game/types'
 import { at } from '../testing/helpers'
 import {
@@ -82,6 +83,22 @@ describe('export then import', () => {
     const loaded = load(store)
     expect(loaded.notice).toBe('ok')
     expect(loaded.data).toEqual({ ...data, settings: { ...data.settings, lastBackupAt: NOW } })
+  })
+
+  it('carries the wake schedule history both ways', () => {
+    const d = sample()
+    const data: SaveData = {
+      ...d,
+      settings: withScheduleEdit(d.settings, { ...d.settings.wakeSchedule, sat: '08:00' }, NOW),
+    }
+    expect(data.settings.wakeScheduleHistory).toHaveLength(2)
+    const check = readBackup(backupText(data, NOW))
+    expect(check.ok && check.data.settings.wakeScheduleHistory).toEqual(data.settings.wakeScheduleHistory)
+    if (!check.ok) return
+    const store = new FakeStore()
+    importBackup(defaultData(), check.data, check.exportedAt, NOW + 1, store)
+    expect(load(store).data.settings.wakeScheduleHistory).toEqual(data.settings.wakeScheduleHistory)
+    expect(load(store).data.settings.wakeSchedule.sat).toBe('08:00')
   })
 
   it('the export holds the save data plus exportedAt, and nothing else', () => {

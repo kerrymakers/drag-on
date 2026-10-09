@@ -4,6 +4,7 @@ import type { StreakConfig } from '../config/streaks'
 import { TASKS } from '../config/tasks'
 import { at, log, undo } from '../testing/helpers'
 import { instantInDay, shiftDayKey } from './day'
+import { withScheduleEdit } from './settings'
 import {
   firstLogDay,
   latestFrozenDay,
@@ -226,12 +227,48 @@ describe('wakeStreak', () => {
     expect(wakeStreak([], TASKS, none, noonOf(day(30)))).toEqual({ current: 0, best: 0, hasTargets: false })
   })
 
-  it('judges past days by the current schedule, so a new Saturday target can end a run', () => {
+  it('judges every day by the current schedule in a save with no schedule history', () => {
     // Fri, then Sat with no log, then Mon. With weekends off that's a run of 2.
     const events = [wakeOn(day(4)), wakeOn(day(7))]
     expect(wakeStreak(events, TASKS, settings, noonOf(day(7))).current).toBe(2)
     const satTarget: Settings = { ...settings, wakeSchedule: { ...settings.wakeSchedule, sat: '08:00' } }
     expect(wakeStreak(events, TASKS, satTarget, noonOf(day(7)))).toMatchObject({ current: 1, best: 1 })
+  })
+
+  it('keeps a run that skipped past Saturdays when a Saturday target is added today', () => {
+    // Mon to Fri, then Mon to Fri again, with the weekend skipped. Today is the second Sat.
+    const events = [0, 1, 2, 3, 4, 7, 8, 9, 10, 11].map((n) => wakeOn(day(n)))
+    const sat = day(12)
+    const edited = withScheduleEdit(settings, { ...settings.wakeSchedule, sat: '08:00' }, instantInDay(sat, 3 * 60))
+    expect(wakeStreak(events, TASKS, edited, noonOf(sat))).toMatchObject({ current: 10, best: 10 })
+    // Today's new target is pending; not logging it ends the run only once today is over.
+    expect(wakeStreak(events, TASKS, edited, noonOf(day(13)))).toMatchObject({ current: 0, best: 10 })
+    // Logged on time today, it carries on.
+    expect(wakeStreak([...events, wakeOn(sat)], TASKS, edited, noonOf(day(13))).current).toBe(11)
+  })
+
+  it('never changes past days when a target is removed today', () => {
+    // Mon, Tue logged, Wed missed, Thu logged. Today is Fri.
+    const events = [wakeOn(day(0)), wakeOn(day(1)), wakeOn(day(3))]
+    const fri = day(4)
+    const before = wakeStreak(events, TASKS, settings, noonOf(fri))
+    expect(before).toMatchObject({ current: 1, best: 2 })
+    const noWed = withScheduleEdit(settings, { ...settings.wakeSchedule, wed: null }, noonOf(fri))
+    expect(wakeStreak(events, TASKS, noWed, noonOf(fri))).toEqual(before)
+    // Next Wednesday has no target, so it's skipped from here on.
+    const nextWeek = [...events, wakeOn(fri), wakeOn(day(7)), wakeOn(day(8)), wakeOn(day(10))]
+    expect(wakeStreak(nextWeek, TASKS, noWed, noonOf(day(10))).current).toBe(5)
+  })
+
+  it('judges each day by the schedule in force on it after several edits', () => {
+    // Weekdays only, then from Wed 7 Oct a Saturday target too, then from Mon 12 Oct none on Saturday again.
+    const satOn = withScheduleEdit(settings, { ...settings.wakeSchedule, sat: '08:00' }, noonOf(day(2)))
+    const satOff = withScheduleEdit(satOn, settings.wakeSchedule, noonOf(day(7)))
+    // Sat 3 Oct (before the edits, no target) and Sat 10 Oct (target, missed).
+    const events = [wakeOn(shiftDayKey(MON, -3)), wakeOn(day(4)), wakeOn(day(7)), wakeOn(day(8))]
+    expect(wakeStreak(events, TASKS, satOff, noonOf(day(8)))).toMatchObject({ current: 2, best: 2 })
+    // Without the history (old behaviour), Sat 10 Oct would be skipped.
+    expect(wakeStreak(events, TASKS, settings, noonOf(day(8))).current).toBe(3)
   })
 
   it('treats a malformed target as no target', () => {

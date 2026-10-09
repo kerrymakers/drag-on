@@ -7,3 +7,6 @@ export const DEFAULT_SETTINGS: Settings = {
   // Nothing worn to start with. Older saves without `wearing` load as this.
   wearing: { head: null, neck: null, held: null },
 }
+
+/** The longest dragon name, in characters. Longer names are cut to this. */
+export const DRAGON_NAME_MAX = 20

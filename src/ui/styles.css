@@ -12,6 +12,11 @@
   --fill-from: #f7b37d;
   --fill-to: #ee8f5a;
   --tick: #5f8a4c;
+  /* Small green text (Settings' "Saved"): darker than --tick, for 4.5:1 on the card. */
+  --saved: #557d43;
+  /* An off switch's track: clearly a switch against the card (about 1.7:1). */
+  --switch-off: #e3bf9f;
+  --switch-off-knob: #ffffff;
   --treat: #a3305f;
   --treat-bg: #ffe1ec;
   --toast-bg: #4a3328;
@@ -47,6 +52,10 @@
     --fill-from: #e9a06c;
     --fill-to: #f3b98f;
     --tick: #a9d18e;
+    --saved: #a9d18e;
+    --switch-off: #665145;
+    /* Dimmer than the on knob, so an off switch never stands out more than an on one. */
+    --switch-off-knob: #c4ab98;
     --treat: #ffc2d8;
     --treat-bg: #5a2f40;
     --toast-bg: #fbeee2;
@@ -2328,6 +2337,158 @@ button.hs-cell {
   outline-offset: 3px;
 }
 
+/* A card's title with a small "Saved" beside it. */
+.ss-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ss-card-head .ds-card-title {
+  margin-bottom: 0;
+}
+.ss-saved {
+  color: var(--saved);
+  font-size: 0.88rem;
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+.ss-saved.is-showing {
+  opacity: 1;
+}
+
+.ss-name,
+.ss-wake {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ss-input,
+.ss-time {
+  min-height: 48px;
+  border: 2px solid var(--track);
+  border-radius: 16px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+.ss-input {
+  width: 100%;
+  padding: 0 16px;
+}
+.ss-input::placeholder {
+  color: var(--text-soft);
+  font-weight: 500;
+  opacity: 0.8;
+}
+.ss-input:focus-visible,
+.ss-time:focus-visible {
+  outline: 3px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+.ss-input:disabled,
+.ss-time:disabled {
+  opacity: 0.55;
+}
+
+.ss-days {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+.ss-day {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+}
+.ss-day + .ss-day {
+  border-top: 1px solid var(--track);
+}
+.ss-day-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ss-time {
+  flex: 0 0 auto;
+  width: 112px;
+  padding: 0 10px;
+  text-align: center;
+}
+.ss-time::-webkit-calendar-picker-indicator {
+  opacity: 0.6;
+  cursor: pointer;
+}
+.ss-day-off {
+  flex: 0 0 auto;
+  width: 112px;
+  color: var(--text-soft);
+  font-weight: 600;
+  text-align: center;
+}
+
+/* An on/off switch: a soft pill with a sliding knob, in a 44px-tall tap area. */
+.ss-switch {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 48px;
+  margin-right: -6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.ss-switch-track {
+  position: relative;
+  width: 48px;
+  height: 28px;
+  border-radius: 14px;
+  background: var(--switch-off);
+  transition: background-color 160ms ease-out;
+}
+.ss-switch-track::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--switch-off-knob);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  transition: transform 220ms var(--bounce);
+}
+.ss-switch[aria-checked='true'] .ss-switch-track {
+  background: var(--fill-to);
+}
+.ss-switch[aria-checked='true'] .ss-switch-track::after {
+  transform: translateX(20px);
+}
+.ss-switch:focus-visible {
+  outline: none;
+}
+.ss-switch:focus-visible .ss-switch-track {
+  outline: 3px solid var(--accent-strong);
+  outline-offset: 3px;
+}
+.ss-switch:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* Settings' toast floats just above the tab bar; messages here may wrap. */
 .ss-toast-dock {
   position: absolute;
@@ -2420,13 +2581,20 @@ button.hs-cell {
 }
 
 @media (prefers-color-scheme: dark) {
+  /* On: a dark knob on the light peach track. */
+  .ss-switch[aria-checked='true'] .ss-switch-track::after {
+    background: var(--bg);
+  }
   .sheet::backdrop {
     background: rgb(0 0 0 / 0.55);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ss-button {
+  .ss-button,
+  .ss-saved,
+  .ss-switch-track,
+  .ss-switch-track::after {
     transition: none;
   }
   .ss-button:active:not(:disabled) {

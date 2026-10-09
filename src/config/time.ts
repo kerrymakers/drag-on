@@ -17,3 +17,6 @@ export const DEFAULT_WAKE_SCHEDULE: WakeSchedule = {
   sat: null,
   sun: null,
 }
+
+/** The time a day's wake-up target starts at when it's switched on in Settings (with no earlier time to bring back). */
+export const DEFAULT_WAKE_TIME = '06:30'

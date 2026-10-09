@@ -110,7 +110,7 @@ for (const scheme of ['light', 'dark'] as const) {
     await page.waitForTimeout(500)
     await page.screenshot({ path: `${dir}/m4s2-phone-home-${scheme}-${p}.png` })
 
-    // Tab bar: 4 tabs, sizes, spacing, centred.
+    // Tab bar: 5 tabs since M6 (Settings), sizes, spacing, centred.
     const tabs = await page.$$eval('#tabbar a', (els) =>
       els.map((e) => {
         const r = e.getBoundingClientRect()
@@ -119,7 +119,7 @@ for (const scheme of ['light', 'dark'] as const) {
     )
     const bar = await page.locator('#tabbar').boundingBox()
     console.log(p, scheme, 'tabs', JSON.stringify(tabs), 'bar', JSON.stringify(bar))
-    expect(tabs).toHaveLength(4)
+    expect(tabs).toHaveLength(5)
     for (const t of tabs) {
       expect(t.w).toBeGreaterThanOrEqual(44)
       expect(t.h).toBeGreaterThanOrEqual(44)

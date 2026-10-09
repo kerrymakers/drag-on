@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   clockToDayMinutes,
+  isClockTime,
   dayKey,
   dayMinutesToClock,
   daysBetween,
@@ -82,6 +83,13 @@ describe('minutesSinceDayStart', () => {
   it('uses the wall clock on clock-change days', () => {
     expect(minutesSinceDayStart(at('2026-03-29T06:30:00+01:00'))).toBe(150)
     expect(minutesSinceDayStart(at('2026-10-25T06:30:00Z'))).toBe(150)
+  })
+})
+
+describe('isClockTime', () => {
+  it('accepts real HH:MM times only', () => {
+    for (const t of ['00:00', '06:30', '19:59', '23:59']) expect(isClockTime(t)).toBe(true)
+    for (const t of ['24:00', '06:60', '6:30', '06:30:00', 'soon', '', 630, null, undefined]) expect(isClockTime(t)).toBe(false)
   })
 })
 

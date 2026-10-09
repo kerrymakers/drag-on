@@ -136,6 +136,11 @@ test('settings screen: light/dark at both sizes, contrast-ish, fits, normal moti
     for (const scheme of ['light', 'dark'] as const) {
       const { page, context, msgs } = await freshPage(browser, info, w, h, scheme, dueData(), '#/settings')
       await expect(page.locator('#settings-screen')).toBeVisible()
+      // Since M6 slice 2 the Name and Wake-up cards come first, so bring Backup into view.
+      await page.locator('.ss-scroll').evaluate((s) => {
+        const card = s.querySelector('.ss-backup')!
+        s.scrollTo({ top: s.scrollTop + card.getBoundingClientRect().top - s.getBoundingClientRect().top - 12, behavior: 'instant' })
+      })
       await settle(page)
       const g = await page.evaluate(() => {
         const q = (s: string) => document.querySelector<HTMLElement>(s)!

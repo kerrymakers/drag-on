@@ -2,7 +2,9 @@
 // Everything is kept under one key, so a save is a single atomic write.
 
 import { DEFAULT_SETTINGS } from '../config/settings'
-import type { GameEvent, Settings, WakeSchedule, Wearing, Weekday } from '../game/types'
+import type { GameEvent, ScheduleEntry, Settings, WakeSchedule, Wearing } from '../game/types'
+import { isClockTime } from '../game/day'
+import { WEEKDAYS } from '../game/settings'
 import { WEAR_SLOTS } from '../game/wearing'
 
 export const STORAGE_KEY = 'drag-on:v1'
@@ -80,30 +82,68 @@ function readWearing(v: unknown, defaults: Wearing): Wearing {
   return wearing
 }
 
-const WEEKDAYS: readonly Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
-const WAKE_TIME = /^([01]\d|2[0-3]):[0-5]\d$/
+const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * A stored schedule laid over `base`: each day it names is kept if it's a real "HH:MM"
+ * and becomes null (skipped) otherwise, never a guessed time. Days it doesn't name
+ * keep `base`'s.
+ */
+function readSchedule(v: Record<string, unknown>, base: WakeSchedule): WakeSchedule {
+  const schedule: WakeSchedule = { ...base }
+  for (const day of WEEKDAYS) {
+    if (!(day in v)) continue
+    const t = v[day]
+    schedule[day] = isClockTime(t) ? t : null
+  }
+  return schedule
+}
+
+/** Whether a "YYYY-MM-DD" names a real calendar date. */
+function isDayKey(v: unknown): v is string {
+  if (typeof v !== 'string' || !DAY_KEY.test(v)) return false
+  const [y, m, d] = v.split('-').map(Number)
+  const date = new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, d ?? 1))
+  return date.getUTCFullYear() === y && date.getUTCMonth() + 1 === m && date.getUTCDate() === d
+}
+
+/**
+ * The dated schedule history, or undefined if there isn't a usable one (older saves
+ * have none). An entry without a real day key or a schedule object is dropped; a bad
+ * time inside a schedule becomes null, like the current schedule's. A schedule that
+ * leaves a day out has no target that day. Sorted oldest first; of two entries on
+ * the same day, the later one in the list wins.
+ */
+function readScheduleHistory(v: unknown): ScheduleEntry[] | undefined {
+  if (!Array.isArray(v)) return undefined
+  const NONE: WakeSchedule = { mon: null, tue: null, wed: null, thu: null, fri: null, sat: null, sun: null }
+  const byDay = new Map<string, ScheduleEntry>()
+  for (const entry of v) {
+    if (!isObject(entry) || !isDayKey(entry.from) || !isObject(entry.schedule)) continue
+    byDay.set(entry.from, { from: entry.from, schedule: readSchedule(entry.schedule, NONE) })
+  }
+  if (byDay.size === 0) return undefined
+  return [...byDay.values()].sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : 0))
+}
 
 /**
  * Fills in anything missing from the defaults. Fields we don't recognise are kept,
  * so data written by a later version survives a round trip. A wake time that isn't
  * a real "HH:MM" becomes null (skipped), never a guessed time. `lastBackupAt` is kept
- * only if it's a finite number.
+ * only if it's a finite number. The wake schedule history is checked entry by entry
+ * (see readScheduleHistory).
  */
 function readSettings(v: unknown): Settings {
   const defaults = defaultData().settings
   if (!isObject(v)) return defaults
-  const schedule: WakeSchedule = { ...defaults.wakeSchedule }
-  if (isObject(v.wakeSchedule)) {
-    for (const day of WEEKDAYS) {
-      if (!(day in v.wakeSchedule)) continue
-      const t = v.wakeSchedule[day]
-      schedule[day] = typeof t === 'string' && WAKE_TIME.test(t) ? t : null
-    }
-  }
-  const { lastBackupAt, ...rest } = v
+  const schedule = isObject(v.wakeSchedule) ? readSchedule(v.wakeSchedule, defaults.wakeSchedule) : defaults.wakeSchedule
+  const history = readScheduleHistory(v.wakeScheduleHistory)
+  const { lastBackupAt, wakeScheduleHistory: _history, ...rest } = v
   return {
     ...rest,
     wakeSchedule: schedule,
+    // Older saves have none: then the current schedule applies to every day.
+    ...(history ? { wakeScheduleHistory: history } : {}),
     dragonName: typeof v.dragonName === 'string' ? v.dragonName : defaults.dragonName,
     wearing: readWearing(v.wearing, defaults.wearing),
     // Older saves have none (never backed up). Anything that isn't a real time is dropped.

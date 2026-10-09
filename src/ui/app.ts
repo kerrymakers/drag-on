@@ -5,6 +5,8 @@ import { react, renderDragon, speechAnchor, speechKeepClear, type WearLook } fro
 import { BACKUP_REMINDER_DAYS } from '../config/backup'
 import { EVOLVES_AT_STAGE, LOOK_CHANGE_MARGIN } from '../config/evolution'
 import { REWARDS } from '../config/rewards'
+import { DRAGON_NAME_MAX } from '../config/settings'
+import { DEFAULT_WAKE_TIME } from '../config/time'
 import { MOODS } from '../config/mood'
 import { STAGES } from '../config/stages'
 import { STATS } from '../config/stats'
@@ -15,6 +17,7 @@ import { dayKey, dayMinutesToClock } from '../game/day'
 import { evolutionLook, lookChange, type Evolution } from '../game/evolution'
 import { createLogEvent, createUndoEvent, undoableLog } from '../game/log'
 import { foundItems, itemFor, rewardMilestone, treatBonus } from '../game/rewards'
+import { withScheduleEdit } from '../game/settings'
 import {
   nextRefreshAt,
   dragonProgress,
@@ -26,7 +29,7 @@ import {
   wakeDeadline,
 } from '../game/state'
 import { latestFrozenDay, logEarnsFreeze, overallStreak } from '../game/streaks'
-import type { GameEvent, Item, RewardRoll, Settings, Task, TaskAvailability, Wearing } from '../game/types'
+import type { GameEvent, Item, RewardRoll, Settings, Task, TaskAvailability, WakeSchedule, Wearing } from '../game/types'
 import { isWorn, toggleWear, wearOnFind, wornItems, type WornItems } from '../game/wearing'
 import { STORAGE_KEY, load, requestPersistence, save } from '../storage'
 import { backupFileName, exportContents, importBackup, type ListableStore } from '../storage/backup'
@@ -242,6 +245,10 @@ export function startApp(doc: Document): App {
   const historyScreen = createHistoryScreen(doc, el.historyScreen, { tasks: TASKS, items: REWARDS.items, streaks: STREAKS })
   const settingsScreen = createSettingsScreen(doc, el.settingsScreen, {
     stages: STAGES,
+    nameMax: DRAGON_NAME_MAX,
+    defaultWakeTime: DEFAULT_WAKE_TIME,
+    onRename: rename,
+    onSchedule: setSchedule,
     onExport: exportBackup,
     onImport: importFile,
     now: () => Date.now(),
@@ -356,7 +363,10 @@ export function startApp(doc: Document): App {
     const today = dayKey(now)
     if (!readOnly && isBackupDue(now) && welcome.shouldRemindBackup(today)) {
       welcome.markBackupReminded(today)
-      say(backupReminderLine(today), () => nav.go('settings'))
+      say(backupReminderLine(today), () => {
+        nav.go('settings')
+        settingsScreen.revealBackup()
+      })
     }
   }
 
@@ -468,7 +478,15 @@ export function startApp(doc: Document): App {
     }
 
     if (route === 'history') historyScreen.render({ events: data.events, settings: data.settings, now })
-    if (route === 'settings') settingsScreen.render({ lastBackupAt: data.settings.lastBackupAt, readOnly, now })
+    if (route === 'settings') {
+      settingsScreen.render({
+        dragonName: data.settings.dragonName,
+        wakeSchedule: data.settings.wakeSchedule,
+        lastBackupAt: data.settings.lastBackupAt,
+        readOnly,
+        now,
+      })
+    }
 
     // A small dot on Settings while a backup is due. Never anything louder. Not while
     // read-only: a backup can't be recorded then, so the dot could never clear.
@@ -502,6 +520,26 @@ export function startApp(doc: Document): App {
   function setWearing(wearing: Wearing) {
     data = { ...data, settings: { ...data.settings, wearing } }
     persist()
+  }
+
+  /** A new name from Settings (already tidied). Home and Dragon show it from the next render. */
+  function rename(name: string | null) {
+    if (readOnly) return
+    data = { ...data, settings: { ...data.settings, dragonName: name } }
+    persist()
+    render()
+  }
+
+  /**
+   * A new wake schedule from Settings. It applies from today's game day on, so earlier
+   * days keep theirs (withScheduleEdit). Today's change shows on Home straight away:
+   * render rebuilds the task buttons when the wake deadline changes.
+   */
+  function setSchedule(schedule: WakeSchedule) {
+    if (readOnly) return
+    data = { ...data, settings: withScheduleEdit(data.settings, schedule, Date.now()) }
+    persist()
+    render()
   }
 
   /**

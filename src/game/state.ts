@@ -12,6 +12,7 @@ import {
 } from './day'
 import { activeLogs } from './active'
 import { logXp } from './rewards'
+import { scheduleOn } from './settings'
 import type {
   GameEvent,
   MoodId,
@@ -117,7 +118,9 @@ export function countToday(taskId: string, events: readonly GameEvent[], now: nu
  * with a 06:30 target, 06:45:59 counts and 06:46:00 doesn't.
  */
 export function wakeDeadline(settings: Settings, now: number): number | null {
-  const target = settings.wakeSchedule[weekdayOf(dayKey(now))]
+  // Today's schedule, from the same helper the wake-up streak uses (see scheduleOn).
+  const today = dayKey(now)
+  const target = scheduleOn(settings, today)[weekdayOf(today)]
   if (target == null) return null
   const minutes = clockToDayMinutes(target)
   return minutes == null ? null : minutes + WAKE_GRACE_MINUTES

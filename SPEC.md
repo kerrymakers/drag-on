@@ -125,7 +125,7 @@ Added 2026-10-07 after simulation: at 3% with 12 items most users went 6 to 7 we
 ### Streaks
 
 - Show an overall "days with at least one log" streak, plus the best one ever.
-- Wake-up gets its own daily streak. Days with no wake-up target (per the current schedule) are skipped, not missed.
+- Wake-up gets its own daily streak. Days with no wake-up target (per the schedule in force that day) are skipped, not missed.
 - Every other task shows a weekly count instead of a streak: the number of days it was logged this week (Monday to Sunday), and its best week.
 - I earn one streak freeze each time the overall streak reaches a multiple of 7 days (maximum 2 held). A freeze is used automatically when a day ends with no log: the streak carries on, but the frozen day doesn't add to it. With no freeze held, the streak ends quietly. Today never counts as missed while it's still going.
 - Streak milestones (7, 30, 60, 100 days) give a guaranteed rare item, the first time each milestone is reached only. Changed 2026-10-08 after simulation: 100 days was reached by only 10–19% of typical users in a year; 60 gives a reachable step (about half of typical users, ~day 170). Collection completes ~day 180 for a typical user.
@@ -142,7 +142,7 @@ Store an append-only log of events. Work out everything else from it.
 ```
 Task      { id, name, stat, xp, rules, archived }
 Event     { id, taskId, timestamp, xpAwarded, reward?, note? }
-Settings  { wakeSchedule: { mon: "06:30", ..., sat: null, sun: null }, dragonName, ... }
+Settings  { wakeSchedule: { mon: "06:30", ..., sat: null, sun: null }, wakeScheduleHistory?: [{ from: "YYYY-MM-DD", schedule }], dragonName, lastBackupAt?, ... }
 ```
 
 Dragon state (total XP, stats, stage, mood, streaks, inventory) is calculated from the events and config by pure functions. This makes rebalancing safe: change a threshold and the dragon recalculates from history.

@@ -223,6 +223,95 @@ describe('settings', () => {
     expect(s.wakeSchedule.wed).toBe('23:59')
   })
 
+  describe('wake schedule history', () => {
+    const WEEKDAYS_ONLY = { ...DEFAULT_SETTINGS.wakeSchedule }
+    const SAT_TOO = { ...WEEKDAYS_ONLY, sat: '08:00' }
+
+    it('loads older saves without one as no history', () => {
+      expect('wakeScheduleHistory' in loadSettings({ wakeSchedule: WEEKDAYS_ONLY })).toBe(false)
+      expect('wakeScheduleHistory' in loadSettings({ wakeScheduleHistory: 'nope' })).toBe(false)
+      expect('wakeScheduleHistory' in loadSettings({ wakeScheduleHistory: [] })).toBe(false)
+    })
+
+    it('keeps good entries, sorted oldest first', () => {
+      const s = loadSettings({
+        wakeSchedule: SAT_TOO,
+        wakeScheduleHistory: [
+          { from: '2026-10-09', schedule: SAT_TOO },
+          { from: '1970-01-01', schedule: WEEKDAYS_ONLY },
+        ],
+      })
+      expect(s.wakeScheduleHistory).toEqual([
+        { from: '1970-01-01', schedule: WEEKDAYS_ONLY },
+        { from: '2026-10-09', schedule: SAT_TOO },
+      ])
+    })
+
+    it('drops malformed entries: a bad day key or a schedule that is not an object', () => {
+      const s = loadSettings({
+        wakeScheduleHistory: [
+          null,
+          'soon',
+          { from: '2026-10-01' },
+          { from: '2026-10-02', schedule: 'weekdays' },
+          { from: '2026-10-03', schedule: [] },
+          { from: '2026-13-01', schedule: WEEKDAYS_ONLY },
+          { from: '2026-02-30', schedule: WEEKDAYS_ONLY },
+          { from: '9 Oct', schedule: WEEKDAYS_ONLY },
+          { from: 20261009, schedule: WEEKDAYS_ONLY },
+          { schedule: WEEKDAYS_ONLY },
+          { from: '2026-10-05', schedule: SAT_TOO },
+        ],
+      })
+      expect(s.wakeScheduleHistory).toEqual([{ from: '2026-10-05', schedule: SAT_TOO }])
+    })
+
+    it('turns bad times inside a schedule into null, and a missing day into no target', () => {
+      const s = loadSettings({
+        wakeScheduleHistory: [{ from: '2026-10-05', schedule: { mon: '25:00', tue: '07:00', wed: 7 } }],
+      })
+      expect(s.wakeScheduleHistory?.[0]?.schedule).toEqual({
+        mon: null,
+        tue: '07:00',
+        wed: null,
+        thu: null,
+        fri: null,
+        sat: null,
+        sun: null,
+      })
+    })
+
+    it('keeps one entry per day (the later one in the list)', () => {
+      const s = loadSettings({
+        wakeScheduleHistory: [
+          { from: '2026-10-05', schedule: WEEKDAYS_ONLY },
+          { from: '2026-10-05', schedule: SAT_TOO },
+        ],
+      })
+      expect(s.wakeScheduleHistory).toEqual([{ from: '2026-10-05', schedule: SAT_TOO }])
+    })
+
+    it('loads nothing if every entry is malformed', () => {
+      expect('wakeScheduleHistory' in loadSettings({ wakeScheduleHistory: [{ from: 'x', schedule: {} }] })).toBe(false)
+    })
+
+    it('round-trips, with unknown fields in settings still kept', () => {
+      const store = new FakeStore()
+      const settings = {
+        ...defaultData().settings,
+        wakeSchedule: SAT_TOO,
+        wakeScheduleHistory: [
+          { from: '1970-01-01', schedule: WEEKDAYS_ONLY },
+          { from: '2026-10-09', schedule: SAT_TOO },
+        ],
+        theme: 'moss',
+      }
+      save({ ...defaultData(), settings }, store)
+      const loaded = load(store).data.settings
+      expect(loaded).toEqual(settings)
+    })
+  })
+
   it('ignores a non-string dragon name', () => {
     expect(loadSettings({ dragonName: 42 }).dragonName).toBeNull()
   })

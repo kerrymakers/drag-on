@@ -75,6 +75,11 @@ export function clockToDayMinutes(hhmm: string): number | null {
   return toDayMinutes(h * 60 + min)
 }
 
+/** Whether `v` is a real wall-clock "HH:MM" (00:00 to 23:59), the only shape a wake time may have. */
+export function isClockTime(v: unknown): v is string {
+  return typeof v === 'string' && clockToDayMinutes(v) !== null
+}
+
 /** The inverse of clockToDayMinutes: minutes since 04:00 back to a wall-clock "HH:MM". */
 export function dayMinutesToClock(dayMinutes: number): string {
   const m = (((dayMinutes + DAY_START_HOUR * 60) % (24 * 60)) + 24 * 60) % (24 * 60)

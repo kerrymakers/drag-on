@@ -1,26 +1,43 @@
-// The Settings screen. For now it holds Backup (export and import); the dragon's
-// name, the wake-up schedule and the tasks get their own sections in later slices,
-// each a card in the same scrolling column.
+// The Settings screen: the dragon's name, the wake-up times and Backup (export and
+// import), each a card in one scrolling column. The tasks get their own card in a
+// later slice.
+//
+// The name and the wake-up times save as soon as they change, with a small "Saved"
+// beside the card's title. There's no save button and nothing to confirm.
 //
 // Import asks first, in a sheet that says what's in the file. That's fine here: it's
 // nowhere near the logging path, and it replaces everything on the phone.
 
 import { activeLogs } from '../game/active'
-import { dayKey } from '../game/day'
+import { dayKey, isClockTime } from '../game/day'
+import { cleanDragonName, WEEKDAYS } from '../game/settings'
 import { dragonStage } from '../game/state'
-import type { Stage } from '../game/types'
+import type { Stage, WakeSchedule, Weekday } from '../game/types'
 import type { SaveData } from '../storage'
 import { readBackup, type BackupCheck } from '../storage/backup'
-import { IMPORT_CONFIRM, IMPORT_REFUSED, SETTINGS, friendlyDay, importDropped, lastBackupLine } from './copy'
+import {
+  IMPORT_CONFIRM,
+  IMPORT_REFUSED,
+  SETTINGS,
+  WEEKDAY_NAMES,
+  friendlyDay,
+  importDropped,
+  lastBackupLine,
+  wakeSwitchLabel,
+  wakeTimeLabel,
+} from './copy'
 import { watchScrollFade } from './scroll-fade'
 import { createToast } from './toast'
 
 export type ReadyBackup = Extract<BackupCheck, { ok: true }>
 
 export interface SettingsScreenState {
+  dragonName: string | null
+  /** The wake schedule in force today. */
+  wakeSchedule: WakeSchedule
   /** When the last backup was made (or the imported one was exported), if ever. */
   lastBackupAt: number | undefined
-  /** Import is off while the app can't save on this phone. */
+  /** Import, the name and the wake-up times are off while the app can't save on this phone. */
   readOnly: boolean
   now: number
 }
@@ -30,6 +47,14 @@ export type SettingsOutcome = { ok: true; message: string } | { ok: false; messa
 
 export interface SettingsScreenConfig {
   stages: readonly Stage[]
+  /** The longest name allowed (config). */
+  nameMax: number
+  /** The time a day gets when switched on, with no earlier time this session (config). */
+  defaultWakeTime: string
+  /** Save a new name (already tidied; null for none). */
+  onRename(name: string | null): void
+  /** Save a new wake schedule, from today on. */
+  onSchedule(schedule: WakeSchedule): void
   /** Download a backup file. */
   onExport(): SettingsOutcome
   /** Replace this phone's data with a checked backup the user has confirmed. */
@@ -41,7 +66,11 @@ export interface SettingsScreenConfig {
 
 export interface SettingsScreen {
   render(state: SettingsScreenState): void
+  /** Scrolls the Backup card into view (instantly under reduced motion). */
+  revealBackup(): void
 }
+
+const SAVED_MS = 2000
 
 export interface ImportSummary {
   /** Logs that count (undone ones left out). */
@@ -110,8 +139,68 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
   picker.id = 'ss-import-file'
   backup.append(backupTitle, intro, last, exportButton, importButton, paused, status, picker)
 
-  // The name, schedule and task sections go here in later slices.
-  scroller.append(title, backup)
+  // Name
+  const nameCard = el(doc, 'section', 'ds-card ss-name')
+  nameCard.setAttribute('aria-labelledby', 'ss-name-title')
+  const nameHead = el(doc, 'div', 'ss-card-head')
+  const nameTitle = el(doc, 'h2', 'ds-card-title', SETTINGS.nameTitle)
+  nameTitle.id = 'ss-name-title'
+  const nameSaved = savedNote()
+  nameHead.append(nameTitle, nameSaved.el)
+  const nameInput = el(doc, 'input', 'ss-input')
+  nameInput.id = 'ss-name'
+  nameInput.type = 'text'
+  nameInput.placeholder = SETTINGS.namePlaceholder
+  nameInput.autocomplete = 'off'
+  nameInput.spellcheck = false
+  nameInput.setAttribute('autocapitalize', 'words')
+  nameInput.enterKeyHint = 'done'
+  nameInput.setAttribute('aria-label', SETTINGS.nameLabel)
+  nameCard.append(nameHead, nameInput)
+
+  // Wake-up times: a row per day, Monday first.
+  const wakeCard = el(doc, 'section', 'ds-card ss-wake')
+  wakeCard.setAttribute('aria-labelledby', 'ss-wake-title')
+  const wakeHead = el(doc, 'div', 'ss-card-head')
+  const wakeTitle = el(doc, 'h2', 'ds-card-title', SETTINGS.wakeTitle)
+  wakeTitle.id = 'ss-wake-title'
+  const wakeSaved = savedNote()
+  wakeHead.append(wakeTitle, wakeSaved.el)
+  const wakeIntro = el(doc, 'p', 'ss-text', SETTINGS.wakeIntro)
+  const dayList = el(doc, 'ul', 'ss-days')
+  const rows = new Map<Weekday, { time: HTMLInputElement; off: HTMLElement; toggle: HTMLButtonElement }>()
+  for (const day of WEEKDAYS) {
+    const name = WEEKDAY_NAMES[day]
+    const li = el(doc, 'li', 'ss-day')
+    li.dataset.day = day
+    const label = el(doc, 'span', 'ss-day-name', name)
+    label.setAttribute('aria-hidden', 'true')
+    const time = el(doc, 'input', 'ss-time')
+    time.type = 'time'
+    time.id = `ss-wake-${day}`
+    time.setAttribute('aria-label', wakeTimeLabel(name))
+    const off = el(doc, 'span', 'ss-day-off', SETTINGS.wakeOff)
+    off.setAttribute('aria-hidden', 'true')
+    const toggle = button(doc, 'ss-switch', '')
+    toggle.id = `ss-wake-${day}-on`
+    toggle.setAttribute('role', 'switch')
+    toggle.setAttribute('aria-label', wakeSwitchLabel(name))
+    toggle.append(el(doc, 'span', 'ss-switch-track'))
+    li.append(label, time, off, toggle)
+    dayList.append(li)
+    rows.set(day, { time, off, toggle })
+  }
+  wakeCard.append(wakeHead, wakeIntro, dayList)
+  // While nothing can be saved, each card says so rather than pretending to save.
+  const editsPaused = [nameCard, wakeCard].map((card) => {
+    const note = el(doc, 'p', 'ss-note', SETTINGS.editsPaused)
+    note.hidden = true
+    card.append(note)
+    return note
+  })
+
+  // The tasks get a card here in a later slice.
+  scroller.append(title, nameCard, wakeCard, backup)
 
   // A short, warm toast above the tab bar.
   const dock = el(doc, 'div', 'ss-toast-dock')
@@ -143,6 +232,98 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
   }
 
   exportButton.addEventListener('click', () => say(config.onExport()))
+
+  /** A small "Saved" beside a card's title that shows for a moment after each change. */
+  function savedNote() {
+    const note = el(doc, 'span', 'ss-saved', SETTINGS.saved)
+    note.setAttribute('role', 'status')
+    note.setAttribute('aria-live', 'polite')
+    // Empty while hidden, so a screen reader hears it each time it appears.
+    note.textContent = ''
+    let timer: number | undefined
+    return {
+      el: note,
+      show() {
+        window.clearTimeout(timer)
+        note.textContent = SETTINGS.saved
+        note.classList.remove('is-showing')
+        void note.offsetWidth // replay the fade when one save follows another
+        note.classList.add('is-showing')
+        timer = window.setTimeout(() => {
+          note.classList.remove('is-showing')
+          note.textContent = ''
+        }, SAVED_MS)
+      },
+    }
+  }
+
+  // What the screen last showed, so a change knows what it's changing.
+  let shownName: string | null = null
+  let shownSchedule: WakeSchedule | null = null
+  /** The last time each day had this session, brought back when it's switched on again. */
+  const lastTimes = new Map<Weekday, string>()
+
+  function saveName() {
+    const name = cleanDragonName(nameInput.value, config.nameMax)
+    nameInput.value = name ?? ''
+    if (name === shownName) return
+    shownName = name
+    config.onRename(name)
+    nameSaved.show()
+  }
+  nameInput.addEventListener('change', saveName)
+  // A name still being typed when the app is swiped away or hidden is saved too.
+  const saveIfTyping = () => {
+    if (doc.activeElement === nameInput) saveName()
+  }
+  doc.addEventListener('visibilitychange', () => {
+    if (doc.visibilityState === 'hidden') saveIfTyping()
+  })
+  doc.defaultView?.addEventListener('pagehide', saveIfTyping)
+  nameInput.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.isComposing) return
+    e.preventDefault()
+    saveName()
+    nameInput.blur()
+  })
+
+  function saveSchedule(schedule: WakeSchedule) {
+    shownSchedule = schedule
+    showSchedule(schedule)
+    config.onSchedule(schedule)
+    wakeSaved.show()
+  }
+  for (const [day, row] of rows) {
+    row.toggle.addEventListener('click', () => {
+      if (!shownSchedule) return
+      const now = shownSchedule[day]
+      if (now !== null) lastTimes.set(day, now)
+      saveSchedule({ ...shownSchedule, [day]: now === null ? (lastTimes.get(day) ?? config.defaultWakeTime) : null })
+    })
+    row.time.addEventListener('change', () => {
+      if (!shownSchedule) return
+      const value = row.time.value
+      // Cleared (or something odd): put back what's saved rather than guess.
+      if (!isClockTime(value)) {
+        row.time.value = shownSchedule[day] ?? ''
+        return
+      }
+      if (value === shownSchedule[day]) return
+      lastTimes.set(day, value)
+      saveSchedule({ ...shownSchedule, [day]: value })
+    })
+  }
+
+  function showSchedule(schedule: WakeSchedule) {
+    for (const [day, row] of rows) {
+      const target = schedule[day]
+      const on = target !== null
+      row.toggle.setAttribute('aria-checked', String(on))
+      row.time.hidden = !on
+      row.off.hidden = on
+      if (on && row.time.value !== target) row.time.value = target
+    }
+  }
 
   importButton.addEventListener('click', () => {
     status.hidden = true
@@ -226,7 +407,19 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
   }
 
   return {
-    render({ lastBackupAt, readOnly, now }) {
+    render({ dragonName, wakeSchedule, lastBackupAt, readOnly, now }) {
+      // Never rewrite the name while it's being typed.
+      shownName = dragonName
+      if (doc.activeElement !== nameInput) nameInput.value = dragonName ?? ''
+      shownSchedule = { ...wakeSchedule }
+      showSchedule(shownSchedule)
+      nameInput.disabled = readOnly
+      for (const row of rows.values()) {
+        row.time.disabled = readOnly
+        row.toggle.disabled = readOnly
+      }
+      for (const note of editsPaused) note.hidden = !readOnly
+
       last.textContent = lastBackupLine(
         lastBackupAt === undefined ? null : friendlyDay(dayKey(lastBackupAt), dayKey(now)),
       )
@@ -234,6 +427,11 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
       paused.hidden = !readOnly
       if (readOnly) importButton.setAttribute('aria-describedby', paused.id)
       else importButton.removeAttribute('aria-describedby')
+      refreshFade()
+    },
+    revealBackup() {
+      const top = scroller.scrollTop + backup.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 12
+      scroller.scrollTo({ top: Math.max(0, top), behavior: config.reducedMotion() ? 'instant' : 'smooth' })
       refreshFade()
     },
   }

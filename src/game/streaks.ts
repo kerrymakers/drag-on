@@ -1,6 +1,7 @@
 // Streaks, streak freezes and weekly counts, all worked out from the event log by
 // walking game days from the first log to `now`. Nothing here is stored, so undoing a
-// log (or changing the wake schedule) recalculates everything.
+// log recalculates everything. A wake schedule edit applies from its day on (see
+// scheduleOn), so it never changes how an earlier day was judged.
 //
 // Agreed 2026-10-07: only two daily streaks (the overall "any log" one and wake-up),
 // and freezes protect the overall streak only. Other tasks get weekly counts instead,
@@ -9,7 +10,8 @@
 import type { StreakConfig } from '../config/streaks'
 import { activeLogs } from './active'
 import { clockToDayMinutes, dayKey, nextDayKey, shiftDayKey, weekdayOf } from './day'
-import type { GameEvent, LogEvent, Settings, Task, Weekday } from './types'
+import { scheduleOn, WEEKDAYS } from './settings'
+import type { GameEvent, LogEvent, Settings, Task, WakeSchedule, Weekday } from './types'
 
 /**
  * How a game day looks on the History calendar.
@@ -162,20 +164,20 @@ export interface WakeStreak {
   current: number
   /** The longest run ever. */
   best: number
-  /** Whether the current schedule has a target on any day of the week. */
+  /** Whether today's schedule has a target on any day of the week. */
   hasTargets: boolean
 }
 
 /** Whether `weekday` has a usable wake target in the schedule (a malformed time counts as none). */
-function hasTarget(settings: Settings, weekday: Weekday): boolean {
-  const target = settings.wakeSchedule[weekday]
+function hasTarget(schedule: WakeSchedule, weekday: Weekday): boolean {
+  const target = schedule[weekday]
   return target != null && clockToDayMinutes(target) !== null
 }
 
 /**
  * The wake-up streak: days in a row on which a wake-up task (rules.kind 'wakeUp') was
  * logged. Logs only exist when they were in time (see createLogEvent), so every
- * active one counts. Days are judged by the current `settings.wakeSchedule`:
+ * active one counts. Each day is judged by the schedule in force on it (scheduleOn):
  * - a day with a target and a log adds one;
  * - a finished day with a target and no log ends the run quietly;
  * - a day with no target is skipped, neither adding nor ending anything (but a log
@@ -183,8 +185,10 @@ function hasTarget(settings: Settings, weekday: Weekday): boolean {
  * - today, unlogged, is pending.
  * Not protected by freezes. A schedule with no targets at all skips every unlogged
  * day, so the streak simply rests where it was.
- * Past days are judged by the schedule as it is now (the spec's intent): adding a
- * target to a day can end a run on an earlier unlogged day of that weekday.
+ * Decided 2026-10-09: past days keep the schedule they had, so adding a target today
+ * never ends a run on an earlier unlogged day of that weekday, and removing one never
+ * changes an earlier day. Saves with no schedule history judge every day by
+ * `settings.wakeSchedule`.
  */
 export function wakeStreak(
   events: readonly GameEvent[],
@@ -194,8 +198,7 @@ export function wakeStreak(
 ): WakeStreak {
   const today = dayKey(now)
   const wakeIds = new Set(tasks.filter((t) => t.rules.kind === 'wakeUp').map((t) => t.id))
-  const weekdays: readonly Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
-  const hasTargets = weekdays.some((w) => hasTarget(settings, w))
+  const hasTargets = WEEKDAYS.some((w) => hasTarget(scheduleOn(settings, today), w))
   const logged = loggedDays(events, today, wakeIds)
   const first = earliest(logged)
   let current = 0
@@ -205,7 +208,7 @@ export function wakeStreak(
       if (logged.has(d)) {
         current++
         best = Math.max(best, current)
-      } else if (d !== today && hasTarget(settings, weekdayOf(d))) {
+      } else if (d !== today && hasTarget(scheduleOn(settings, d), weekdayOf(d))) {
         current = 0
       }
     }
