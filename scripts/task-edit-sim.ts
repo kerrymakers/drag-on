@@ -5,14 +5,15 @@
 // real evolutionLook/lookChange/statTotals. Task lists are what-ifs built in memory from
 // config/tasks.ts; config files are never changed.
 // Run from the repo root:
-//   npx vite-node scripts/task-edit-sim.ts [days] [runs] [--scenarios=a,b] [--profiles=a,b] [--exact] [--pityDays=N] [--pity=N] [--items=N] [--margin=N]
+//   nice -n 10 npx vite-node scripts/task-edit-sim.ts [days] [runs] [--scenarios=a,b] [--profiles=a,b] [--exact] [--pityDays=N] [--pity=N] [--items=N] [--margin=N]
 // The compact carried log (day markers, finds, last <=pity logs since a find) is the same
 // trick as streak-sim.ts; --exact passes the full log instead, to check they agree.
 import './sim-speedups'
 import {
-  createLogEvent, dayKey, weekdayOf, foundItems, rewardItemId, logXp, stageFor, evolutionLook, lookChange, statTotals,
+  createLogEvent, dayKey, overallStreak, weekdayOf, foundItems, rewardItemId, logXp, stageFor, evolutionLook, lookChange, statTotals,
 } from '../src/game'
 import { addTask, updateTask } from '../src/game/tasks'
+import { daysBetween } from '../src/game/day'
 import type { Evolution, GameEvent, LogEvent, StatId, Task } from '../src/game'
 import { TASKS, EFFORT_LEVELS, TASK_LIMITS } from '../src/config/tasks'
 import { STAGES } from '../src/config/stages'
@@ -207,6 +208,33 @@ function simulate(sc: Scenario, p: Profile, seed: number): Run {
   let lastFindDay = -1
   let logDaysSinceFind = 0 // completed days with a log since the last find
   const pityDaysNow = () => logDaysSinceFind
+  // Speed-up with identical results (--exact skips it), as in streak-sim.ts: the real
+  // streakMilestoneReached walks the whole streak twice per log. Only the first log of a
+  // game day can add to the count, taking it from `current` (through yesterday) to
+  // current + 1, and a milestone fires only if best < m <= current + 1. So at most one
+  // walk per day finds the milestones a log could reach; createLogEvent gets just those,
+  // and none (so no walk at all) otherwise. The walk is reused only while the context
+  // hasn't changed (same game day, no log since). It's skipped when no milestone is in
+  // reach: best never goes down, and current grows by at most 1 a day, so `current` is at
+  // most the last walk's current plus the days since it.
+  let walkKey = ''
+  let lastWalk = { dayKey: '', current: 0, best: 0 } // dayKey '' = no walk yet: always walk
+  const possibleMilestones = (ctx: () => readonly GameEvent[], now: number, todayLogs: readonly LogEvent[]): number[] => {
+    if (STREAKS.milestones.every((m) => m <= lastWalk.best)) return []
+    const day = dayKey(now)
+    if (todayLogs.some((e) => dayKey(e.timestamp) === day)) return []
+    const key = `${day}|${todayLogs.length}`
+    if (walkKey !== key) {
+      if (lastWalk.dayKey !== '') {
+        const most = lastWalk.current + daysBetween(lastWalk.dayKey, day)
+        if (!STREAKS.milestones.some((m) => lastWalk.best < m && m <= most + 1)) return []
+      }
+      walkKey = key
+      const s = overallStreak(ctx(), now, STREAKS)
+      lastWalk = { dayKey: day, current: s.current, best: s.best }
+    }
+    return STREAKS.milestones.filter((m) => lastWalk.best < m && m <= lastWalk.current + 1)
+  }
   for (let i = 0; i < DAYS; i++) {
     const { y, m, d } = cal(i)
     const plan0 = p.plan(i, rng, st)
@@ -246,13 +274,25 @@ function simulate(sc: Scenario, p: Profile, seed: number): Run {
       // Compact carried log, with one XP marker first (on the first logged day, so it adds no
       // streak day and counts before every find) so totalXp and the held stage match.
       const carried = new Set<LogEvent>([...today, ...finds, ...since])
-      const ctx: GameEvent[] = EXACT || finds.length === 0
-        ? events
-        : [{ id: 'xpcarry', type: 'log', taskId: '__xp__', timestamp: events[0]!.timestamp, xpAwarded: xp - [...carried].reduce((s, e) => s + logXp(e), 0), stageReached: stageFor(xp, STAGES).id },
-          ...dayMarkers, ...today.filter((e) => !inCarry.has(e)), ...finds, ...since]
+      // The day markers only matter to the streak walk. Every other check createLogEvent
+      // makes (availability, XP, held stage, finds, pity) ignores them: no XP, reward or
+      // stage, a task id no task has, and they sit before every find. That last part relies
+      // on activeLogs keeping the order events were added (not sorting by timestamp): the
+      // pity count (logsSinceFind) walks back from the end of the array to the last find,
+      // so markers placed before the finds are never counted. So they're only added when a
+      // milestone is in reach (and so the real function walks the streak).
+      const fast = !(EXACT || finds.length === 0)
+      const head: GameEvent[] = fast
+        ? [{ id: 'xpcarry', type: 'log', taskId: '__xp__', timestamp: events[0]!.timestamp, xpAwarded: xp - [...carried].reduce((s, e) => s + logXp(e), 0), stageReached: stageFor(xp, STAGES).id }]
+        : []
+      const tail: GameEvent[] = fast ? [...today.filter((e) => !inCarry.has(e)), ...finds, ...since] : []
+      const withMarkers = (): GameEvent[] => (fast ? [...head, ...dayMarkers, ...tail] : events)
       const roll = { chance: rr(), pick: rr() }
       if (PITY_DAYS !== null && pityDaysNow() >= PITY_DAYS && finds.length < RCFG.items.length) roll.chance = 0
-      const ev = createLogEvent(a.t, ctx, DEFAULT_SETTINGS, a.ts, `e${id++}`, roll, { stages: STAGES, rewards: RCFG, streaks: STREAKS, effortLevels: sc.levels ? EFFORT_LEVELS : NO_LEVELS })
+      const milestones = EXACT ? STREAKS.milestones : possibleMilestones(withMarkers, a.ts, today)
+      const streaks = EXACT ? STREAKS : { ...STREAKS, milestones }
+      const ctx: GameEvent[] = !fast ? events : milestones.length > 0 ? withMarkers() : [...head, ...tail]
+      const ev = createLogEvent(a.t, ctx, DEFAULT_SETTINGS, a.ts, `e${id++}`, roll, { stages: STAGES, rewards: RCFG, streaks, effortLevels: sc.levels ? EFFORT_LEVELS : NO_LEVELS })
       if (!ev) continue
       events.push(ev); today.push(ev); logs++
       xp += logXp(ev)
