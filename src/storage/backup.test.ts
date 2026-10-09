@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { TASK_LIMITS, TASKS } from '../config/tasks'
+import { EFFORT_LEVELS, TASK_LIMITS, TASKS } from '../config/tasks'
 import { withScheduleEdit } from '../game/settings'
 import { addTask, archiveTask, updateTask, withTasks } from '../game/tasks'
 import type { GameEvent } from '../game/types'
@@ -103,17 +103,24 @@ describe('export then import', () => {
     expect(load(store).data.settings.wakeSchedule.sat).toBe('08:00')
   })
 
-  it('carries the edited task list both ways', () => {
+  it('carries the edited task list both ways, effort levels included', () => {
     const d = sample()
-    const tasks = updateTask(archiveTask(TASKS, 'read'), 'gym', { name: 'Lifting', xp: 45 }, TASK_LIMITS)
-    const added = addTask(tasks, { name: 'Call Mum', stat: 'heart', xp: 20, timesADay: 2 }, 'my-1', TASK_LIMITS)!
-    const data: SaveData = { ...d, settings: withTasks(d.settings, added, TASKS) }
+    const tasks = updateTask(archiveTask(TASKS, 'read'), 'gym', { name: 'Lifting', effort: 'effort' }, TASK_LIMITS, EFFORT_LEVELS)
+    const added = addTask(tasks, { name: 'Call Mum', stat: 'heart', effort: 'effort', timesADay: 2 }, 'my-1', TASK_LIMITS, EFFORT_LEVELS)!
+    // An older task with no level, and one with a level from a later version.
+    const old = { id: 'my-old', name: 'Old habit', stat: 'wisdom', xp: 30, rules: { kind: 'oncePerDay' }, archived: false }
+    const later = { ...old, id: 'my-later', effort: 'mega' }
+    const data: SaveData = { ...d, settings: { ...withTasks(d.settings, added, TASKS), tasks: [...withTasks(d.settings, added, TASKS).tasks!, old, later] } }
+    const expected = [...added, old, later]
+    // The level's XP is written onto the task too, so older versions read the same XP.
+    expect(added.find((t) => t.id === 'gym')).toMatchObject({ effort: 'effort', xp: 25 })
+    expect(added.find((t) => t.id === 'my-1')).toMatchObject({ effort: 'effort', xp: 25 })
     const check = readBackup(backupText(data, NOW))
-    expect(check.ok && check.data.settings.tasks).toEqual(added)
+    expect(check.ok && check.data.settings.tasks).toEqual(expected)
     if (!check.ok) return
     const store = new FakeStore()
     importBackup(defaultData(), check.data, check.exportedAt, NOW + 1, store)
-    expect(load(store).data.settings.tasks).toEqual(added)
+    expect(load(store).data.settings.tasks).toEqual(expected)
   })
 
   it('the export holds the save data plus exportedAt, and nothing else', () => {

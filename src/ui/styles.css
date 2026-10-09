@@ -2546,7 +2546,7 @@ button.hs-cell {
 .ss-task-row:focus-visible,
 .ss-small-button:focus-visible,
 .ss-archived-summary:focus-visible,
-.ts-step:focus-visible,
+.ts-effort:focus-visible,
 .ts-segment:focus-visible,
 .ts-stat:focus-visible,
 .ts-archive-button:focus-visible {
@@ -2728,41 +2728,50 @@ button.hs-cell {
 .ts-stat[aria-checked='true'] .ts-stat-icon {
   background: var(--surface);
 }
-.ts-stepper {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+.ts-efforts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
 }
-.ts-step {
-  flex: 0 0 auto;
-  width: 56px;
-  height: 56px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #3b2418;
+.ts-effort {
+  min-height: 68px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 6px;
+  border: 2px solid var(--track);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
   font: inherit;
-  font-size: 1.7rem;
-  font-weight: 800;
-  line-height: 1;
+  text-align: center;
   cursor: pointer;
   touch-action: manipulation;
   transition: transform 160ms var(--bounce);
 }
-.ts-step:active:not(:disabled) {
-  transform: scale(0.92);
+.ts-effort:active {
+  transform: scale(0.96);
 }
-.ts-step:disabled {
-  opacity: 0.4;
-  cursor: default;
+.ts-effort-name {
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
 }
-.ts-xp {
-  flex: 1 1 auto;
-  text-align: center;
-  font-size: 1.4rem;
-  font-weight: 800;
+.ts-effort-xp {
+  color: var(--text-soft);
+  font-size: 0.85rem;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+.ts-effort[aria-checked='true'] {
+  border-color: var(--accent-strong);
+  background: var(--notice-bg);
+}
+.ts-effort[aria-checked='true'] .ts-effort-xp {
+  color: var(--text);
 }
 .ts-segments {
   display: flex;
@@ -2783,6 +2792,15 @@ button.hs-cell {
   font-weight: 800;
   cursor: pointer;
   touch-action: manipulation;
+}
+.ts-segment:disabled {
+  /* Clearly there but clearly off, even outdoors: a dashed outline and a strike-through. */
+  color: var(--text-soft);
+  outline: 2px dashed var(--switch-off);
+  outline-offset: -6px;
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  cursor: default;
 }
 .ts-segment[aria-checked='true'] {
   background: var(--surface);
@@ -2915,7 +2933,7 @@ button.hs-cell {
 @media (prefers-reduced-motion: reduce) {
   .ss-button,
   .ss-task-row,
-  .ts-step,
+  .ts-effort,
   .ss-archived-summary::before,
   .ss-saved,
   .ss-switch-track,
@@ -2924,7 +2942,7 @@ button.hs-cell {
   }
   .ss-button:active:not(:disabled),
   .ss-task-row:active:not(:disabled),
-  .ts-step:active:not(:disabled) {
+  .ts-effort:active {
     transform: none;
   }
   .sheet,

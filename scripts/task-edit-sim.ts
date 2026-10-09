@@ -11,8 +11,9 @@
 import {
   createLogEvent, dayKey, weekdayOf, foundItems, rewardItemId, logXp, stageFor, evolutionLook, lookChange, statTotals,
 } from '../src/game'
+import { addTask, updateTask } from '../src/game/tasks'
 import type { Evolution, GameEvent, LogEvent, StatId, Task } from '../src/game'
-import { TASKS } from '../src/config/tasks'
+import { TASKS, EFFORT_LEVELS, TASK_LIMITS } from '../src/config/tasks'
 import { STAGES } from '../src/config/stages'
 import { STATS } from '../src/config/stats'
 import { DEFAULT_SETTINGS } from '../src/config/settings'
@@ -20,6 +21,9 @@ import { TIME_ZONE } from '../src/config/time'
 import { REWARDS } from '../src/config/rewards'
 import { STREAKS } from '../src/config/streaks'
 import { EVOLVES_AT_STAGE, LOOK_CHANGE_MARGIN } from '../src/config/evolution'
+
+// The sims set XP directly on their what-if tasks, so no effort level overrides it.
+const NO_LEVELS: readonly never[] = []
 
 // Sim-only speed-up: memoise Intl formatToParts per formatter and timestamp. It's a pure
 // function of those, so results are unchanged; dayKey is called millions of times here.
@@ -98,7 +102,29 @@ const BASE6 = () => ['wake', 'gym', 'walk', 'read', 'selfcare', 'avoided'].map((
 const statCycle: StatId[] = ['heart', 'wisdom', 'discipline', 'strength']
 const extras = (n: number, xp: number, times: number) => Array.from({ length: n }, (_, k) => extra(statCycle[k % 4]!, xp, times))
 
-interface Scenario { key: string; name: string; tasks: () => SimTask[]; shiftAt?: number }
+// Effort levels (Milestone 7, slice 1): task lists built through the real updateTask/addTask
+// with the real EFFORT_LEVELS and TASK_LIMITS, then logged with effortLevels: EFFORT_LEVELS,
+// so the XP and times a day are exactly what the app would allow.
+type LevelEdit = { effort: string; times?: number }
+const HOURS: Record<string, number> = { wake: 6, gym: 18, walk: 13, read: 22, selfcare: 20, avoided: 10 }
+function viaApp(edits: Record<string, LevelEdit>, adds: { stat: StatId; effort: string; times: number }[] = []): SimTask[] {
+  let list: Task[] = TASKS.map((t) => ({ ...t }))
+  for (const [id, e] of Object.entries(edits)) {
+    const lvl = EFFORT_LEVELS.find((l) => l.id === e.effort)!
+    list = updateTask(list, id, { effort: e.effort, timesADay: e.times ?? lvl.maxTimesADay }, TASK_LIMITS, EFFORT_LEVELS)
+  }
+  adds.forEach((a, k) => {
+    const next = addTask(list, { name: `Extra ${k}`, stat: a.stat, effort: a.effort, timesADay: a.times }, `my-x${k}`, TASK_LIMITS, EFFORT_LEVELS)
+    if (!next) throw new Error(`addTask refused extra ${k} (cap ${TASK_LIMITS.maxActive}?)`)
+    list = next
+  })
+  return list.map((t, k) => ({ task: t, kind: t.id.startsWith('my-') ? 'extra' : 'base', hour: HOURS[t.id] ?? 8 + ((k - 6) % 6) * 2 }))
+}
+const ALL6 = ['wake', 'gym', 'walk', 'read', 'selfcare', 'avoided']
+const allAt = (effort: string, times?: number) => Object.fromEntries(ALL6.map((id) => [id, { effort, times }]))
+const two = (effort: string, times: number) => [{ stat: 'heart' as StatId, effort, times }, { stat: 'wisdom' as StatId, effort, times }]
+
+interface Scenario { key: string; name: string; tasks: () => SimTask[]; shiftAt?: number; levels?: boolean }
 const SCENARIOS: Scenario[] = [
   { key: 'base', name: 'Current 6 tasks (baseline)', tasks: BASE6 },
   { key: 'plus10', name: 'Every current task +10 XP (wake 40, gym 50, walk 25, read 35, selfcare 35, avoided 25)', tasks: () => [base('wake', 40), base('gym', 50), base('walk', 25), base('read', 35), base('selfcare', 35), base('avoided', 25)] },
@@ -113,6 +139,17 @@ const SCENARIOS: Scenario[] = [
   { key: 'water', name: 'Current + "drank water" 5 XP x3, done almost every slot', tasks: () => [...BASE6(), { ...extra('heart', 5, 3), kind: 'extra', hour: 9 }] },
   { key: 'water15', name: 'Current + "drank water" 15 XP x3, done almost every slot', tasks: () => [...BASE6(), { ...extra('heart', 15, 3), kind: 'extra', hour: 9 }] },
   { key: 'cap8d50', name: 'Worst case, cap 8 and xp x times <= 50: 6 tasks at 50 once, 2 at 15 x3 (avoided 25 x2)', tasks: () => [...['wake', 'gym', 'walk', 'read', 'selfcare'].map((id) => base(id, 50, 1)), base('avoided', 25, 2), extra('heart', 50, 1), extra('wisdom', 15, 3)] },
+  { key: 'Lbase', name: 'LEVELS: built-in tasks with the real effort levels', tasks: () => viaApp({}), levels: true },
+  { key: 'LallHard', name: 'LEVELS: every task (wake too) "Really hard" (40, once)', tasks: () => viaApp(allAt('hard')), levels: true },
+  { key: 'Ladd2', name: 'LEVELS: built-in + 2 new tasks at the default (nudge, once)', tasks: () => viaApp({}, two('nudge', 1)), levels: true },
+  { key: 'Ladd2eff', name: 'LEVELS: built-in + 2 new "Takes effort" tasks, twice a day', tasks: () => viaApp({}, two('effort', 2)), levels: true },
+  { key: 'Lhard8', name: 'LEVELS worst: 8 active, all "Really hard" (40 x1)', tasks: () => viaApp(allAt('hard'), two('hard', 1)), levels: true },
+  { key: 'Lnudge8', name: 'LEVELS worst: 8 active, all "A little nudge" x3 (wake nudge)', tasks: () => viaApp(allAt('nudge'), two('nudge', 3)), levels: true },
+  { key: 'Lnudge8x2', name: 'WHAT-IF: as Lnudge8 but nudge capped at 2 a day', tasks: () => viaApp(allAt('nudge', 2), two('nudge', 2)), levels: true },
+  { key: 'Lwater', name: 'LEVELS: built-in + one easy daily "nudge" x3 habit (e.g. drank water)', tasks: () => viaApp({}, [{ stat: 'heart', effort: 'nudge', times: 3 }]), levels: true },
+  { key: 'Lwaterx2', name: 'WHAT-IF: as Lwater but nudge capped at 2 a day', tasks: () => viaApp({}, [{ stat: 'heart', effort: 'nudge', times: 2 }]), levels: true },
+  { key: 'Leffort8', name: 'LEVELS worst: 8 active, all "Takes effort" x2 (wake effort)', tasks: () => viaApp(allAt('effort'), two('effort', 2)), levels: true },
+  { key: 'Lmax8', name: 'LEVELS ceiling: wake "Really hard", other 7 "Takes effort" x2 (390 XP/day max)', tasks: () => viaApp({ ...allAt('effort'), wake: { effort: 'hard' } }, two('effort', 2)), levels: true },
   { key: 'str3', name: 'Current + 3 Strength tasks at 60 XP, once a day', tasks: () => [...BASE6(), extra('strength', 60, 1), extra('strength', 60, 1), extra('strength', 60, 1)] },
   { key: 'str3shift', name: 'str3 to day 120, then those archived and reads daily (does the look ever change?)', tasks: () => [...BASE6(), extra('strength', 60, 1), extra('strength', 60, 1), extra('strength', 60, 1)], shiftAt: 120 },
 ]
@@ -201,7 +238,7 @@ function simulate(sc: Scenario, p: Profile, seed: number): Run {
         let n: number
         if (t.id === 'avoided') n = Math.min(limit, poisson(plan.avoided, rng))
         else {
-          const pr = s.kind === 'base' ? plan[t.id as 'gym'] : sc.key.startsWith('water') ? plan.easy : plan.extra
+          const pr = s.kind === 'base' ? plan[t.id as 'gym'] : (sc.key.startsWith('water') || sc.key.startsWith('Lwater')) ? plan.easy : plan.extra
           n = 0
           while (n < limit && rng() < pr) n++
         }
@@ -222,7 +259,7 @@ function simulate(sc: Scenario, p: Profile, seed: number): Run {
           ...dayMarkers, ...today.filter((e) => !inCarry.has(e)), ...finds, ...since]
       const roll = { chance: rr(), pick: rr() }
       if (PITY_DAYS !== null && pityDaysNow() >= PITY_DAYS && finds.length < REWARDS.items.length) roll.chance = 0
-      const ev = createLogEvent(a.t, ctx, DEFAULT_SETTINGS, a.ts, `e${id++}`, roll, { stages: STAGES, rewards: RCFG, streaks: STREAKS })
+      const ev = createLogEvent(a.t, ctx, DEFAULT_SETTINGS, a.ts, `e${id++}`, roll, { stages: STAGES, rewards: RCFG, streaks: STREAKS, effortLevels: sc.levels ? EFFORT_LEVELS : NO_LEVELS })
       if (!ev) continue
       events.push(ev); today.push(ev); logs++
       xp += logXp(ev)

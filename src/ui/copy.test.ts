@@ -5,6 +5,7 @@ import { dragonProgress } from '../game/state'
 import type { GameEvent, Stage } from '../game/types'
 import { COLLECTION, DRAGON_SCREEN, FREEZE_EARNED, ITEM_FOUND, milestoneFound, nextSurprise, UNDONE, UNDONE_ITEM, collectionCount, collectionLine, foundTileLabel, friendlyDay, itemFoundLine, itemFoundSaved, undoneToast, wearToast } from './copy'
 import { ITEMS } from '../config/items'
+import { effortChoiceLabel, effortTimesHint, effortXp, legacyTimesHint, legacyXpHint, taskRowLabel } from './copy'
 import { IMPORT_CONFIRM, IMPORT_REFUSED, SETTINGS, importDropped, lastBackupLine } from './copy'
 import { LOGGED, LOOK_CHANGE, TREAT_FLOAT, loggedToast, LOOK_NAMES, LOOK_REVEAL, STAGE_UP, STAGE_UP_FALLBACK, celebrationCopy, lookLabel, progressLabel } from './copy'
 
@@ -247,5 +248,25 @@ describe('settings and backup copy', () => {
 
   it('makes clear that importing replaces what is on this phone', () => {
     expect(IMPORT_CONFIRM.replaces).toMatch(/replaces everything on this phone/)
+  })
+})
+
+describe('effort level copy', () => {
+  it("says why fewer times a day are on offer, from the level's label and cap", () => {
+    expect(effortTimesHint('Really hard', 1)).toBe('Really hard: once a day.')
+    expect(effortTimesHint('Takes effort', 2)).toBe('Takes effort: up to twice a day.')
+    expect(effortTimesHint('Tiny', 3)).toBe('Tiny: up to 3 times a day.')
+  })
+
+  it("an older task's XP and times-a-day lines", () => {
+    expect(legacyXpHint(30)).toBe('Currently 30 XP. Pick a level to change it.')
+    expect(legacyTimesHint(30, 1)).toBe("At 30 XP it's once a day.")
+    expect(legacyTimesHint(20, 2)).toBe("At 20 XP it's up to twice a day.")
+  })
+
+  it('labels the choices and the rows', () => {
+    expect(effortXp(15)).toBe('+15 XP')
+    expect(effortChoiceLabel('A little nudge', 15)).toBe('A little nudge, 15 XP')
+    expect(taskRowLabel('Gym / workout', 'Strength', 'Really hard')).toBe('Gym / workout, Strength, Really hard. Edit')
   })
 })

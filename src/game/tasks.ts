@@ -3,22 +3,20 @@
 //
 // - A task's id and stat never change once it exists (decided 2026-10-09: changing
 //   the stat would rewrite past stats and the dragon's look).
-// - XP edits only affect future logs: each log saves its own XP when it's made.
+// - XP comes from the task's effort level (Milestone 7, see taskXp). Level changes only
+//   affect future logs: each log saves its own XP when it's made.
 // - Tasks are never deleted, only archived. Deleting one would orphan its past logs.
 
 import { cleanText } from './settings'
-import type { Settings, StatId, Task, TaskRules } from './types'
+import type { EffortId, EffortLevel, Settings, StatId, Task, TaskRules } from './types'
 
 /** The bounds task editing works within (config: TASK_LIMITS). */
 export interface TaskLimits {
-  xpMin: number
-  xpMax: number
-  xpStep: number
   /** The longest name, in characters. */
   nameMax: number
-  /** The most "times a day" a task can be set to. */
+  /** The most "times a day" any task can be set to (an effort level may allow fewer). */
   timesADayMax: number
-  /** A task's XP × times a day can't go over this. */
+  /** A task's XP × times a day can't go over this (caps times a day for a task with no level). */
   dailyXpMax: number
   /** The most active (not archived) tasks at once. */
   maxActive: number
@@ -38,7 +36,8 @@ function isRules(v: unknown): v is TaskRules {
 /**
  * Whether a stored entry is a task this version can use: an id and a name that are
  * non-empty strings, one of the four stats, a positive finite XP, rules of a known
- * shape and a true/false `archived`. Fields it doesn't know about don't matter.
+ * shape and a true/false `archived`. Fields it doesn't know about don't matter, and
+ * neither does `effort`: missing or unknown, the stored XP applies (see taskXp).
  */
 export function isReadableTask(v: unknown): v is Task {
   return (
@@ -163,40 +162,48 @@ export function rulesForTimesADay(n: number, limits: Pick<TaskLimits, 'timesADay
   return times === 1 ? { kind: 'oncePerDay' } : { kind: 'maxPerDay', max: times }
 }
 
-type XpLimits = Pick<TaskLimits, 'xpMin' | 'xpMax' | 'xpStep' | 'dailyXpMax'>
-
 /**
- * The most XP a task logged `times` times a day can have: XP × times a day stays
- * within the daily limit, rounded down to the step, and never above the XP maximum
- * or below the minimum. With 50 for both: 50 once a day, 25 twice, 15 three times.
+ * The effort level `id` names, or null for none, or one this version doesn't know
+ * (from a later version, or edited by hand: anything that isn't a known id string).
  */
-export function maxXpFor(times: number, limits: XpLimits): number {
-  const n = Number.isFinite(times) && times >= 1 ? Math.floor(times) : 1
-  const step = limits.xpStep > 0 ? limits.xpStep : 1
-  const byDay = Math.floor(limits.dailyXpMax / n / step) * step
-  return Math.max(limits.xpMin, Math.min(limits.xpMax, byDay))
+export function effortLevel(id: unknown, levels: readonly EffortLevel[]): EffortLevel | null {
+  if (typeof id !== 'string') return null
+  return levels.find((l) => l.id === id) ?? null
 }
 
 /**
- * XP kept within the bounds for a task logged `times` times a day (a whole number;
- * see maxXpFor). Anything that isn't a number gives the minimum.
+ * The XP a log of `task` is worth now: its effort level's XP, or its stored XP if it
+ * has no level or one this version doesn't know.
  */
-export function clampTaskXp(xp: number, times: number, limits: XpLimits): number {
-  if (!Number.isFinite(xp)) return limits.xpMin
-  return Math.min(maxXpFor(times, limits), Math.max(limits.xpMin, Math.round(xp)))
+export function taskXp(task: Task, levels: readonly EffortLevel[]): number {
+  return effortLevel(task.effort, levels)?.xp ?? task.xp
 }
 
 /**
- * The XP stepper's next value: the next multiple of the step up (+1) or down (-1),
- * within the bounds for `times` times a day. A value between steps, or over the
- * bounds (from older data), moves into them first.
+ * The level to show for `task` in Settings (its row, and the choice already made when
+ * its sheet opens): its saved level if this version knows it; otherwise the level
+ * worth exactly its stored XP, so an older task at 15, 25 or 40 XP reads as that
+ * level; otherwise none. Only for showing: saved data isn't changed until the sheet
+ * is saved, and taskXp and maxTimesADay still go by the saved level alone.
  */
-export function stepTaskXp(xp: number, direction: 1 | -1, times: number, limits: XpLimits): number {
-  const step = limits.xpStep > 0 ? limits.xpStep : 1
-  const from = clampTaskXp(xp, times, limits)
-  if (from !== Math.round(xp) && direction < 0 && from < xp) return from
-  const next = direction > 0 ? (Math.floor(from / step) + 1) * step : (Math.ceil(from / step) - 1) * step
-  return clampTaskXp(next, times, limits)
+export function shownEffort(task: Pick<Task, 'xp' | 'effort'>, levels: readonly EffortLevel[]): EffortLevel | null {
+  return effortLevel(task.effort, levels) ?? levels.find((l) => l.xp === task.xp) ?? null
+}
+
+/**
+ * The most times a day `task` can be set to: its effort level's cap; with no known
+ * level, as many as keep its stored XP × times a day within the daily limit (at least
+ * once). Never above the overall limit.
+ */
+export function maxTimesADay(
+  task: Pick<Task, 'xp' | 'effort'>,
+  levels: readonly EffortLevel[],
+  limits: Pick<TaskLimits, 'timesADayMax' | 'dailyXpMax'>,
+): number {
+  const top = Math.max(1, Math.floor(limits.timesADayMax))
+  const level = effortLevel(task.effort, levels)
+  const own = level ? level.maxTimesADay : task.xp > 0 ? limits.dailyXpMax / task.xp : top
+  return Math.min(top, Math.max(1, Math.floor(Number.isFinite(own) ? own : 1)))
 }
 
 /** A task name tidied for saving (trimmed, cut to the limit), or null if blank. */
@@ -208,66 +215,84 @@ export function cleanTaskName(raw: string, limits: Pick<TaskLimits, 'nameMax'>):
 export interface NewTask {
   name: string
   stat: StatId
-  xp: number
+  effort: EffortId
   timesADay: number
 }
 
 /**
  * The list with a new task at the end, or null if it can't be added: a blank name,
- * no room under the active-task cap, or an id already in use. The name is tidied and
- * the XP and times a day kept within bounds, XP × times a day included (maxXpFor).
- * `id` comes from the caller (see newTaskId).
+ * no room under the active-task cap, an id already in use, or an effort level this
+ * version doesn't know. The name is tidied, the XP is the level's, and times a day is
+ * kept within the level's cap. `id` comes from the caller (see newTaskId).
  */
-export function addTask(tasks: readonly Task[], draft: NewTask, id: string, limits: TaskLimits): Task[] | null {
+export function addTask(
+  tasks: readonly Task[],
+  draft: NewTask,
+  id: string,
+  limits: TaskLimits,
+  levels: readonly EffortLevel[],
+): Task[] | null {
   const name = cleanTaskName(draft.name, limits)
-  if (name === null || !hasRoomForTask(tasks, limits) || tasks.some((t) => t.id === id)) return null
+  const level = effortLevel(draft.effort, levels)
+  if (name === null || level === null || !hasRoomForTask(tasks, limits) || tasks.some((t) => t.id === id)) return null
+  const top = maxTimesADay({ xp: level.xp, effort: level.id }, levels, limits)
   const task: Task = {
     id,
     name,
     stat: draft.stat,
-    xp: 0,
-    rules: rulesForTimesADay(draft.timesADay, limits),
+    xp: level.xp,
+    rules: rulesForTimesADay(draft.timesADay, { timesADayMax: top }),
     archived: false,
+    effort: level.id,
   }
-  task.xp = clampTaskXp(draft.xp, timesADay(task) ?? 1, limits)
   return [...tasks, task]
 }
 
 /** What the edit sheet can change. The id and stat are never among them. */
 export interface TaskChanges {
   name?: string
-  xp?: number
+  /** An effort level id. One this version doesn't know is ignored. */
+  effort?: EffortId
   /** Ignored for the wake-up task, whose rules never change. */
   timesADay?: number
 }
 
 /**
- * The list with one task's name, XP or times a day changed. Its id, stat and anything
- * else on it stay as they were. A blank name keeps the old one. XP × times a day is
- * kept within the daily limit: raising times a day lowers the XP to fit if needed. Times a day only
- * rewrites the rules when it's a different number, and never for the wake-up task.
- * An unknown id changes nothing.
+ * The list with one task's name, effort level or times a day changed. Its id, stat and
+ * anything else on it stay as they were. A blank name keeps the old one.
+ *
+ * Picking a level sets the task's `xp` to the level's too, so older versions and
+ * exports read the same XP. Times a day is kept within the cap (see maxTimesADay):
+ * a harder level lowers it to fit. A task with no level keeps its stored XP and times
+ * a day until a level is picked (times a day can still be lowered, or raised as far
+ * as its XP allows). Times a day only rewrites the rules when it's a different
+ * number, and never for the wake-up task. An unknown id changes nothing.
  */
-export function updateTask(tasks: readonly Task[], id: string, changes: TaskChanges, limits: TaskLimits): Task[] {
+export function updateTask(
+  tasks: readonly Task[],
+  id: string,
+  changes: TaskChanges,
+  limits: TaskLimits,
+  levels: readonly EffortLevel[],
+): Task[] {
   return tasks.map((task) => {
     if (task.id !== id) return task
     const next: Task = { ...task }
     if (changes.name !== undefined) next.name = cleanTaskName(changes.name, limits) ?? task.name
-    const current = timesADay(task)
-    let timesChanged = false
-    if (changes.timesADay !== undefined && current !== null) {
-      const rules = rulesForTimesADay(changes.timesADay, limits)
-      const wanted = rules.kind === 'maxPerDay' ? rules.max : 1
-      if (wanted !== current) {
-        next.rules = rules
-        timesChanged = true
-      }
+    const level = changes.effort !== undefined ? effortLevel(changes.effort, levels) : null
+    if (level) {
+      next.effort = level.id
+      next.xp = level.xp
     }
-    // XP × times a day stays within the daily limit: a new XP is kept within it, and
-    // more times a day brings the XP down to fit. Otherwise stored XP is left alone.
-    const times = timesADay(next) ?? 1
-    if (changes.xp !== undefined) next.xp = clampTaskXp(changes.xp, times, limits)
-    else if (timesChanged && next.xp > maxXpFor(times, limits)) next.xp = maxXpFor(times, limits)
+    const current = timesADay(task)
+    if (current === null) return next
+    const top = maxTimesADay(next, levels, limits)
+    let wanted = current
+    if (changes.timesADay !== undefined && Number.isFinite(changes.timesADay)) wanted = Math.round(changes.timesADay)
+    // A newly picked level brings times a day down to fit. Otherwise only a change asked
+    // for is kept in bounds: stored times a day over the cap stays until it's edited.
+    if (level || wanted !== current) wanted = Math.min(top, Math.max(1, wanted))
+    if (wanted !== current) next.rules = rulesForTimesADay(wanted, { timesADayMax: top })
     return next
   })
 }

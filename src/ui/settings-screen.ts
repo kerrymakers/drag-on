@@ -13,7 +13,7 @@ import { dayKey, isClockTime } from '../game/day'
 import { cleanDragonName, WEEKDAYS } from '../game/settings'
 import { dragonStage } from '../game/state'
 import type { NewTask, TaskChanges, TaskLimits } from '../game/tasks'
-import type { Stage, Stat, Task, WakeSchedule, Weekday } from '../game/types'
+import type { EffortId, EffortLevel, Stage, Stat, Task, WakeSchedule, Weekday } from '../game/types'
 import type { SaveData } from '../storage'
 import { readBackup, type BackupCheck } from '../storage/backup'
 import {
@@ -62,8 +62,10 @@ export interface SettingsScreenConfig {
   stats: readonly Stat[]
   /** Bounds for task editing (config). */
   taskLimits: TaskLimits
-  /** A new task's starting XP and times a day (config). */
-  newTask: { xp: number; timesADay: number }
+  /** "How hard is this for you?": the effort levels (config). */
+  effortLevels: readonly EffortLevel[]
+  /** A new task's starting effort level and times a day (config). */
+  newTask: { effort: EffortId; timesADay: number }
   /** Task edits. Each returns whether the change was made. */
   onAddTask(draft: NewTask): boolean
   onUpdateTask(id: string, changes: TaskChanges): boolean
@@ -220,6 +222,7 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
   const tasksCard = createTasksCard(doc, {
     stats: config.stats,
     limits: config.taskLimits,
+    levels: config.effortLevels,
     newTask: config.newTask,
     onAdd: (draft) => config.onAddTask(draft),
     onUpdate: (id, changes) => config.onUpdateTask(id, changes),

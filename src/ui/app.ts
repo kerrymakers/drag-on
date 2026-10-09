@@ -11,7 +11,7 @@ import { MOODS } from '../config/mood'
 import { STAGES } from '../config/stages'
 import { STATS } from '../config/stats'
 import { STREAK_CHIP_FROM, STREAKS } from '../config/streaks'
-import { NEW_TASK_ID_PREFIX, NEW_TASK_TIMES_A_DAY, NEW_TASK_XP, TASK_LIMITS, TASKS } from '../config/tasks'
+import { EFFORT_LEVELS, NEW_TASK_EFFORT, NEW_TASK_ID_PREFIX, NEW_TASK_TIMES_A_DAY, TASK_LIMITS, TASKS } from '../config/tasks'
 import { backupDue } from '../game/backup'
 import { dayKey, dayMinutesToClock } from '../game/day'
 import { evolutionLook, lookChange, type Evolution } from '../game/evolution'
@@ -34,6 +34,7 @@ import {
   archiveTask,
   effectiveTasks,
   newTaskId,
+  taskXp,
   unarchiveTask,
   updateTask,
   withTasks,
@@ -150,7 +151,7 @@ function taskButton(
   }
   const reward = doc.createElement('span')
   reward.className = done ? 'task-tick' : 'task-xp'
-  reward.textContent = done ? '✓ Done' : `+${task.xp} XP`
+  reward.textContent = done ? '✓ Done' : `+${taskXp(task, EFFORT_LEVELS)} XP`
   meta.append(reward)
 
   button.append(label, meta)
@@ -267,7 +268,8 @@ export function startApp(doc: Document): App {
     onSchedule: setSchedule,
     stats: STATS,
     taskLimits: TASK_LIMITS,
-    newTask: { xp: NEW_TASK_XP, timesADay: NEW_TASK_TIMES_A_DAY },
+    effortLevels: EFFORT_LEVELS,
+    newTask: { effort: NEW_TASK_EFFORT, timesADay: NEW_TASK_TIMES_A_DAY },
     onAddTask: addNewTask,
     onUpdateTask: editTask,
     onArchiveTask: archive,
@@ -465,7 +467,7 @@ export function startApp(doc: Document): App {
       a: taskAvailability(task, data.events, data.settings, now),
     })).filter(({ a }) => a.visible)
     const signature = visible
-      .map(({ task, a }) => `${task.id}:${a.canLog}:${a.countToday}/${a.limit}:${task.name}:${task.xp}`)
+      .map(({ task, a }) => `${task.id}:${a.canLog}:${a.countToday}/${a.limit}:${task.name}:${taskXp(task, EFFORT_LEVELS)}`)
       .join('|')
       .concat(`|${wakeDeadline(data.settings, now)}`)
     if (signature !== taskSignature) {
@@ -581,10 +583,10 @@ export function startApp(doc: Document): App {
     return true
   }
   function addNewTask(draft: NewTask): boolean {
-    return setTasks(addTask(tasksOf(data.settings), draft, newTaskId(NEW_TASK_ID_PREFIX, newId()), TASK_LIMITS))
+    return setTasks(addTask(tasksOf(data.settings), draft, newTaskId(NEW_TASK_ID_PREFIX, newId()), TASK_LIMITS, EFFORT_LEVELS))
   }
   function editTask(id: string, changes: TaskChanges): boolean {
-    return setTasks(updateTask(tasksOf(data.settings), id, changes, TASK_LIMITS))
+    return setTasks(updateTask(tasksOf(data.settings), id, changes, TASK_LIMITS, EFFORT_LEVELS))
   }
   function archive(id: string): boolean {
     return setTasks(archiveTask(tasksOf(data.settings), id))
@@ -652,7 +654,7 @@ export function startApp(doc: Document): App {
     const before = data.events
     // The outfit before this log, for any stage-up moment: a find stays a surprise until its card.
     const outfitBefore: WearLook = outfitOf(wornNow(before, data.settings.wearing))
-    const event = createLogEvent(task, data.events, data.settings, now, newId(), rewardRoll(), { stages: STAGES, rewards: REWARDS, streaks: STREAKS })
+    const event = createLogEvent(task, data.events, data.settings, now, newId(), rewardRoll(), { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })
     if (!event) {
       render(now) // the screen was stale (e.g. the wake window just closed)
       return

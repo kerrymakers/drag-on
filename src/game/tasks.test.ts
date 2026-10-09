@@ -3,7 +3,7 @@ import { DEFAULT_SETTINGS } from '../config/settings'
 import { STAGES } from '../config/stages'
 import { STATS } from '../config/stats'
 import { STREAKS } from '../config/streaks'
-import { NEW_TASK_ID_PREFIX, TASK_LIMITS, TASKS } from '../config/tasks'
+import { EFFORT_LEVELS, NEW_TASK_EFFORT, NEW_TASK_ID_PREFIX, TASK_LIMITS, TASKS } from '../config/tasks'
 import { REWARDS } from '../config/rewards'
 import { at, NO_REWARD } from '../testing/helpers'
 import { createLogEvent } from './log'
@@ -14,24 +14,41 @@ import {
   activeTaskCount,
   addTask,
   archiveTask,
-  clampTaskXp,
   cleanTaskName,
   effectiveTasks,
+  effortLevel,
   hasRoomForTask,
   isReadableTask,
-  maxXpFor,
+  maxTimesADay,
   newTaskId,
   rulesForTimesADay,
-  stepTaskXp,
+  shownEffort,
+  taskXp,
   timesADay,
   unarchiveTask,
   updateTask,
   withTasks,
   type TaskLimits,
 } from './tasks'
-import type { GameEvent, Settings, Task } from './types'
+import type { EffortLevel, GameEvent, LogEvent, Settings, Task } from './types'
 
-const LIMITS: TaskLimits = { xpMin: 5, xpMax: 50, xpStep: 5, nameMax: 40, timesADayMax: 3, dailyXpMax: 50, maxActive: 8 }
+const LIMITS: TaskLimits = { nameMax: 40, timesADayMax: 3, dailyXpMax: 50, maxActive: 8 }
+// The levels as agreed on 2026-10-09, fixed here so these tests don't move with config.
+const LEVELS: readonly EffortLevel[] = [
+  { id: 'nudge', label: 'A little nudge', xp: 15, maxTimesADay: 3 },
+  { id: 'effort', label: 'Takes effort', xp: 25, maxTimesADay: 2 },
+  { id: 'hard', label: 'Really hard', xp: 40, maxTimesADay: 1 },
+]
+/** An older task, saved before effort levels: XP and times a day of its own, no level. */
+const legacy = (xp: number, times = 1, extra: Partial<Task> = {}): Task => ({
+  id: 'my-old',
+  name: 'Old habit',
+  stat: 'wisdom',
+  xp,
+  rules: rulesForTimesADay(times, LIMITS),
+  archived: false,
+  ...extra,
+})
 const settings: Settings = { ...DEFAULT_SETTINGS }
 const byId = (tasks: readonly Task[], id: string): Task => {
   const t = tasks.find((x) => x.id === id)
@@ -41,12 +58,12 @@ const byId = (tasks: readonly Task[], id: string): Task => {
 const ids = (tasks: readonly Task[]) => tasks.map((t) => t.id)
 // Fri 9 Oct 2026 (BST): a weekday, so the wake-up task has a target.
 const FRI = (hm: string) => at(`2026-10-09T${hm}:00+01:00`)
-const RULES = { stages: STAGES, rewards: REWARDS, streaks: STREAKS }
+const RULES = { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: LEVELS }
 
-function logAll(tasks: readonly Task[], taps: [string, number][], events: GameEvent[] = []): GameEvent[] {
+function logAll(tasks: readonly Task[], taps: [string, number][], events: GameEvent[] = [], levels = LEVELS): GameEvent[] {
   let out = events
   taps.forEach(([id, time], i) => {
-    const e = createLogEvent(byId(tasks, id), out, settings, time, `e${out.length}-${i}`, NO_REWARD, RULES)
+    const e = createLogEvent(byId(tasks, id), out, settings, time, `e${out.length}-${i}`, NO_REWARD, { ...RULES, effortLevels: levels })
     if (!e) throw new Error(`Could not log ${id}`)
     out = [...out, e]
   })
@@ -60,19 +77,44 @@ describe('config', () => {
 
   it('has every built-in task inside the editing bounds', () => {
     for (const t of TASKS) {
-      expect(t.xp).toBeGreaterThanOrEqual(TASK_LIMITS.xpMin)
-      expect(t.xp).toBeLessThanOrEqual(TASK_LIMITS.xpMax)
       // XP × times a day within the daily limit (wake-up is once a day).
       expect(t.xp * (timesADay(t) ?? 1), t.id).toBeLessThanOrEqual(TASK_LIMITS.dailyXpMax)
-      expect(t.xp, t.id).toBeLessThanOrEqual(maxXpFor(timesADay(t) ?? 1, TASK_LIMITS))
+      expect(timesADay(t) ?? 1, t.id).toBeLessThanOrEqual(maxTimesADay(t, EFFORT_LEVELS, TASK_LIMITS))
       expect(t.name.length).toBeLessThanOrEqual(TASK_LIMITS.nameMax)
     }
     expect(activeTaskCount(TASKS)).toBeLessThanOrEqual(TASK_LIMITS.maxActive)
   })
 
-  it('lets the smallest XP fit the daily limit at the most times a day', () => {
-    // Otherwise maxXpFor would fall back to xpMin and quietly break the daily rule.
-    expect(TASK_LIMITS.xpMin * TASK_LIMITS.timesADayMax).toBeLessThanOrEqual(TASK_LIMITS.dailyXpMax)
+  it('gives a built-in task a level only where it matches its XP exactly', () => {
+    for (const t of TASKS) {
+      if (t.effort === undefined) continue
+      expect(effortLevel(t.effort, EFFORT_LEVELS)?.xp, t.id).toBe(t.xp)
+    }
+    expect(Object.fromEntries(TASKS.map((t) => [t.id, t.effort ?? null]))).toEqual({
+      wake: null,
+      gym: 'hard',
+      walk: 'nudge',
+      read: 'effort',
+      selfcare: 'effort',
+      avoided: 'nudge',
+    })
+  })
+
+  it('has levels that fit the daily limit and the times-a-day limit', () => {
+    expect(new Set(EFFORT_LEVELS.map((l) => l.id)).size).toBe(EFFORT_LEVELS.length)
+    for (const l of EFFORT_LEVELS) {
+      expect(l.xp, l.id).toBeGreaterThan(0)
+      expect(l.maxTimesADay, l.id).toBeGreaterThanOrEqual(1)
+      expect(l.maxTimesADay, l.id).toBeLessThanOrEqual(TASK_LIMITS.timesADayMax)
+      expect(l.xp * l.maxTimesADay, l.id).toBeLessThanOrEqual(TASK_LIMITS.dailyXpMax)
+      expect(l.label.trim(), l.id).not.toBe('')
+    }
+    // Harder levels are worth more, and allow no more times a day.
+    for (let i = 1; i < EFFORT_LEVELS.length; i++) {
+      expect(EFFORT_LEVELS[i]!.xp).toBeGreaterThan(EFFORT_LEVELS[i - 1]!.xp)
+      expect(EFFORT_LEVELS[i]!.maxTimesADay).toBeLessThanOrEqual(EFFORT_LEVELS[i - 1]!.maxTimesADay)
+    }
+    expect(effortLevel(NEW_TASK_EFFORT, EFFORT_LEVELS)).not.toBeNull()
   })
 })
 
@@ -121,15 +163,24 @@ describe('stored entries this version cannot read', () => {
     }
   })
 
+  it('isReadableTask accepts a missing, known or unknown effort level (an unknown one is ignored, not a reason to drop the task)', () => {
+    for (const effort of [undefined, 'nudge', 'mega', 42, null]) {
+      expect(isReadableTask({ ...custom, effort }), String(effort)).toBe(true)
+    }
+    const s: Settings = { ...settings, tasks: [{ ...custom, effort: 'mega' }] }
+    const t = byId(effectiveTasks(s, TASKS), 'my-1')
+    expect(taskXp(t, LEVELS)).toBe(custom.xp)
+  })
+
   it('are left out of the list in use, and carried through every edit untouched, in place', () => {
     const s: Settings = { ...settings, tasks: [later, custom, junk] }
     const tasks = effectiveTasks(s, TASKS)
     expect(ids(tasks)).toEqual(['my-1', ...ids(TASKS)])
     const edits: ((t: readonly Task[]) => Task[] | null)[] = [
-      (t) => updateTask(t, 'my-1', { name: 'Stretch more', xp: 20 }, LIMITS),
+      (t) => updateTask(t, 'my-1', { name: 'Stretch more', effort: 'effort' }, LIMITS, LEVELS),
       (t) => archiveTask(t, 'gym'),
       (t) => unarchiveTask(archiveTask(t, 'my-1'), 'my-1', LIMITS),
-      (t) => addTask(t, { name: 'New', stat: 'wisdom', xp: 15, timesADay: 1 }, 'my-2', LIMITS),
+      (t) => addTask(t, { name: 'New', stat: 'wisdom', effort: 'nudge', timesADay: 1 }, 'my-2', LIMITS, LEVELS),
     ]
     for (const edit of edits) {
       const saved = withTasks(s, edit(tasks)!, TASKS).tasks!
@@ -144,7 +195,7 @@ describe('stored entries this version cannot read', () => {
     const s: Settings = { ...settings, tasks: [custom, dup] }
     const tasks = effectiveTasks(s, TASKS)
     expect(tasks.filter((t) => t.id === 'my-1')).toEqual([custom])
-    const saved = withTasks(s, updateTask(tasks, 'my-1', { name: 'Edited' }, LIMITS), TASKS).tasks!
+    const saved = withTasks(s, updateTask(tasks, 'my-1', { name: 'Edited' }, LIMITS, LEVELS), TASKS).tasks!
     expect(saved[0]).toMatchObject({ name: 'Edited' })
     expect(saved[1]).toBe(dup)
   })
@@ -156,10 +207,10 @@ describe('stored entries this version cannot read', () => {
     expect(ids(tasks).slice(0, 3)).toEqual(['my-1', 'gym', 'read'])
     expect(byId(tasks, 'gym')).toEqual(byId(TASKS, 'gym'))
     // Editing something else keeps the raw entry.
-    const other = withTasks(s, updateTask(tasks, 'read', { xp: 30 }, LIMITS), TASKS).tasks!
+    const other = withTasks(s, updateTask(tasks, 'read', { effort: 'hard' }, LIMITS, LEVELS), TASKS).tasks!
     expect(other[1]).toBe(badGym)
     // Editing the restored task itself replaces it there.
-    const own = withTasks(s, updateTask(tasks, 'gym', { name: 'Lifting' }, LIMITS), TASKS).tasks!
+    const own = withTasks(s, updateTask(tasks, 'gym', { name: 'Lifting' }, LIMITS, LEVELS), TASKS).tasks!
     expect(own[1]).toEqual({ ...byId(TASKS, 'gym'), name: 'Lifting' })
     expect(ids(effectiveTasks({ tasks: own }, TASKS)).slice(0, 3)).toEqual(['my-1', 'gym', 'read'])
   })
@@ -187,38 +238,49 @@ describe('small helpers', () => {
     expect(rulesForTimesADay(Number.NaN, LIMITS)).toEqual({ kind: 'oncePerDay' })
   })
 
-  it('keeps XP within bounds', () => {
-    expect(clampTaskXp(0, 1, LIMITS)).toBe(5)
-    expect(clampTaskXp(999, 1, LIMITS)).toBe(50)
-    expect(clampTaskXp(22.6, 1, LIMITS)).toBe(23)
-    expect(clampTaskXp(Number.NaN, 1, LIMITS)).toBe(5)
+  it('finds an effort level by id; none for a missing, unknown or odd one', () => {
+    expect(effortLevel('hard', LEVELS)).toBe(LEVELS[2])
+    for (const odd of [undefined, null, 'mega', 'Hard', 42, {}]) expect(effortLevel(odd, LEVELS), String(odd)).toBeNull()
   })
 
-  it('keeps XP × times a day within the daily limit, rounded down to the step', () => {
-    expect([1, 2, 3].map((n) => maxXpFor(n, LIMITS))).toEqual([50, 25, 15])
-    expect(clampTaskXp(50, 2, LIMITS)).toBe(25)
-    expect(clampTaskXp(50, 3, LIMITS)).toBe(15)
-    expect(clampTaskXp(20, 2, LIMITS)).toBe(20)
-    // Never below the minimum, even with a tiny daily limit.
-    expect(maxXpFor(3, { ...LIMITS, dailyXpMax: 6 })).toBe(5)
-    // The XP maximum still applies once a day.
-    expect(maxXpFor(1, { ...LIMITS, dailyXpMax: 80 })).toBe(50)
+  it("taskXp: the level's XP when there is one, else the stored XP", () => {
+    expect(taskXp(byId(TASKS, 'gym'), LEVELS)).toBe(40)
+    // The level wins over a stored XP that's out of step (e.g. a level rebalanced in config).
+    expect(taskXp({ ...byId(TASKS, 'walk'), xp: 99 }, LEVELS)).toBe(15)
+    expect(taskXp(byId(TASKS, 'walk'), [{ ...LEVELS[0]!, xp: 20 }])).toBe(20)
+    // No level (an older task, or wake-up), or one this version doesn't know: the stored XP.
+    expect(taskXp(byId(TASKS, 'wake'), LEVELS)).toBe(30)
+    expect(taskXp(legacy(35), LEVELS)).toBe(35)
+    expect(taskXp(legacy(35, 1, { effort: 'mega' }), LEVELS)).toBe(35)
+    expect(taskXp(byId(TASKS, 'gym'), [])).toBe(40)
   })
 
-  it('steps XP by the step, stopping at the bounds for times a day', () => {
-    expect(stepTaskXp(15, 1, 1, LIMITS)).toBe(20)
-    expect(stepTaskXp(15, -1, 1, LIMITS)).toBe(10)
-    expect(stepTaskXp(5, -1, 1, LIMITS)).toBe(5)
-    expect(stepTaskXp(50, 1, 1, LIMITS)).toBe(50)
-    expect(stepTaskXp(25, 1, 2, LIMITS)).toBe(25)
-    expect(stepTaskXp(15, 1, 3, LIMITS)).toBe(15)
-    expect(stepTaskXp(10, 1, 3, LIMITS)).toBe(15)
-    // Between steps (older data): to the nearest step that way.
-    expect(stepTaskXp(33, 1, 1, LIMITS)).toBe(35)
-    expect(stepTaskXp(33, -1, 1, LIMITS)).toBe(30)
-    // Over the limit (older data, or the old 60 cap): down goes to the limit first.
-    expect(stepTaskXp(60, -1, 1, LIMITS)).toBe(50)
-    expect(stepTaskXp(40, -1, 2, LIMITS)).toBe(25)
+  it('shownEffort: the saved level, else the one worth exactly the stored XP, else none', () => {
+    expect(shownEffort(byId(TASKS, 'gym'), LEVELS)?.id).toBe('hard')
+    // A saved level wins over the XP.
+    expect(shownEffort({ ...byId(TASKS, 'walk'), xp: 40 }, LEVELS)?.id).toBe('nudge')
+    // Exact match only.
+    expect(shownEffort(legacy(25), LEVELS)?.id).toBe('effort')
+    expect(shownEffort(legacy(15), LEVELS)?.id).toBe('nudge')
+    for (const xp of [20, 24, 26, 39, 50]) expect(shownEffort(legacy(xp), LEVELS), String(xp)).toBeNull()
+    // Wake-up's 30 XP matches none.
+    expect(shownEffort(byId(TASKS, 'wake'), LEVELS)).toBeNull()
+    // An unknown saved level falls back to the match.
+    expect(shownEffort(legacy(40, 1, { effort: 'mega' }), LEVELS)?.id).toBe('hard')
+    expect(shownEffort(legacy(30, 1, { effort: 'mega' }), LEVELS)).toBeNull()
+    // Only for showing: what a log is worth and the cap still go by the saved level.
+    expect(taskXp(legacy(25, 3), LEVELS)).toBe(25)
+    expect(maxTimesADay(legacy(25, 3), LEVELS, LIMITS)).toBe(2)
+    expect(maxTimesADay(legacy(15, 3), LEVELS, LIMITS)).toBe(3)
+  })
+
+  it("maxTimesADay: the level's cap; with no level, as many as the stored XP allows", () => {
+    expect(['nudge', 'effort', 'hard'].map((effort) => maxTimesADay({ xp: 1, effort }, LEVELS, LIMITS))).toEqual([3, 2, 1])
+    // Never above the overall limit.
+    expect(maxTimesADay({ xp: 15, effort: 'nudge' }, LEVELS, { ...LIMITS, timesADayMax: 2 })).toBe(2)
+    // No level: XP × times a day within the daily limit, at least once.
+    expect([10, 15, 20, 25, 30, 50, 60].map((xp) => maxTimesADay(legacy(xp), LEVELS, LIMITS))).toEqual([3, 3, 2, 2, 1, 1, 1])
+    expect(maxTimesADay(legacy(20, 1, { effort: 'mega' }), LEVELS, LIMITS)).toBe(2)
   })
 
   it('tidies a name: trimmed, cut to the limit by characters, blank is null', () => {
@@ -235,10 +297,10 @@ describe('small helpers', () => {
 })
 
 describe('addTask', () => {
-  const draft = { name: ' Stretch ', stat: 'heart' as const, xp: 15, timesADay: 1 }
+  const draft = { name: ' Stretch ', stat: 'heart' as const, effort: 'nudge', timesADay: 1 }
 
-  it('adds an active task at the end, tidied', () => {
-    const tasks = addTask(TASKS, draft, 'my-1', LIMITS)
+  it("adds an active task at the end, tidied, with its level and the level's XP", () => {
+    const tasks = addTask(TASKS, draft, 'my-1', LIMITS, LEVELS)
     expect(tasks).not.toBeNull()
     expect(ids(tasks!)).toEqual([...ids(TASKS), 'my-1'])
     expect(byId(tasks!, 'my-1')).toEqual({
@@ -248,96 +310,135 @@ describe('addTask', () => {
       xp: 15,
       rules: { kind: 'oncePerDay' },
       archived: false,
+      effort: 'nudge',
     })
   })
 
-  it('maps times a day and keeps XP in bounds', () => {
-    const tasks = addTask(TASKS, { ...draft, xp: 500, timesADay: 3 }, 'my-1', LIMITS)!
-    expect(byId(tasks, 'my-1')).toMatchObject({ xp: 15, rules: { kind: 'maxPerDay', max: 3 } })
-    expect(byId(addTask(TASKS, { ...draft, xp: 40, timesADay: 2 }, 'my-1', LIMITS)!, 'my-1').xp).toBe(25)
-    expect(byId(addTask(TASKS, { ...draft, xp: 50, timesADay: 1 }, 'my-1', LIMITS)!, 'my-1').xp).toBe(50)
+  it("keeps times a day within the level's cap", () => {
+    const add = (effort: string, timesADay: number) => byId(addTask(TASKS, { ...draft, effort, timesADay }, 'my-1', LIMITS, LEVELS)!, 'my-1')
+    expect(add('nudge', 3)).toMatchObject({ xp: 15, rules: { kind: 'maxPerDay', max: 3 } })
+    expect(add('effort', 3)).toMatchObject({ xp: 25, rules: { kind: 'maxPerDay', max: 2 } })
+    expect(add('hard', 3)).toMatchObject({ xp: 40, rules: { kind: 'oncePerDay' } })
+    expect(add('hard', 0)).toMatchObject({ rules: { kind: 'oncePerDay' } })
+  })
+
+  it('refuses an effort level it does not know', () => {
+    expect(addTask(TASKS, { ...draft, effort: 'mega' }, 'my-1', LIMITS, LEVELS)).toBeNull()
   })
 
   it('refuses a blank name or an id already in use', () => {
-    expect(addTask(TASKS, { ...draft, name: '  ' }, 'my-1', LIMITS)).toBeNull()
-    expect(addTask(TASKS, draft, 'gym', LIMITS)).toBeNull()
+    expect(addTask(TASKS, { ...draft, name: '  ' }, 'my-1', LIMITS, LEVELS)).toBeNull()
+    expect(addTask(TASKS, draft, 'gym', LIMITS, LEVELS)).toBeNull()
   })
 
   it('refuses once the active-task cap is reached, and archived tasks do not count', () => {
     let tasks: Task[] = [...TASKS]
-    for (let i = 0; activeTaskCount(tasks) < LIMITS.maxActive; i++) tasks = addTask(tasks, draft, `my-${i}`, LIMITS)!
+    for (let i = 0; activeTaskCount(tasks) < LIMITS.maxActive; i++) tasks = addTask(tasks, draft, `my-${i}`, LIMITS, LEVELS)!
     expect(activeTaskCount(tasks)).toBe(LIMITS.maxActive)
     expect(hasRoomForTask(tasks, LIMITS)).toBe(false)
-    expect(addTask(tasks, draft, 'my-extra', LIMITS)).toBeNull()
+    expect(addTask(tasks, draft, 'my-extra', LIMITS, LEVELS)).toBeNull()
     // Archiving one makes room again.
     const archived = archiveTask(tasks, 'gym')
     expect(hasRoomForTask(archived, LIMITS)).toBe(true)
-    expect(addTask(archived, draft, 'my-extra', LIMITS)).not.toBeNull()
+    expect(addTask(archived, draft, 'my-extra', LIMITS, LEVELS)).not.toBeNull()
   })
 })
 
 describe('updateTask', () => {
-  it('changes the name, XP and times a day', () => {
-    const tasks = updateTask(TASKS, 'walk', { name: ' Long walk ', xp: 20, timesADay: 2 }, LIMITS)
-    expect(byId(tasks, 'walk')).toEqual({
+  const edit = (tasks: readonly Task[], id: string, changes: Parameters<typeof updateTask>[2]) => byId(updateTask(tasks, id, changes, LIMITS, LEVELS), id)
+
+  it("changes the name, level and times a day; the level sets the task's XP too", () => {
+    expect(edit(TASKS, 'walk', { name: ' Long walk ', effort: 'effort', timesADay: 2 })).toEqual({
       ...byId(TASKS, 'walk'),
       name: 'Long walk',
-      xp: 20,
+      effort: 'effort',
+      xp: 25,
       rules: { kind: 'maxPerDay', max: 2 },
     })
     // Back to once a day.
-    expect(byId(updateTask(tasks, 'walk', { timesADay: 1 }, LIMITS), 'walk').rules).toEqual({ kind: 'oncePerDay' })
+    const twice = updateTask(TASKS, 'walk', { timesADay: 2 }, LIMITS, LEVELS)
+    expect(edit(twice, 'walk', { timesADay: 1 }).rules).toEqual({ kind: 'oncePerDay' })
   })
 
   it('never changes the id or stat, even if asked', () => {
     const sneaky = { name: 'x', stat: 'heart', id: 'other' } as unknown as Parameters<typeof updateTask>[2]
-    const t = byId(updateTask(TASKS, 'gym', sneaky, LIMITS), 'gym')
+    const t = edit(TASKS, 'gym', sneaky)
     expect(t.id).toBe('gym')
     expect(t.stat).toBe('strength')
   })
 
-  it('never changes the wake-up task’s rules', () => {
-    const t = byId(updateTask(TASKS, 'wake', { name: 'Up and at it', xp: 35, timesADay: 3 }, LIMITS), 'wake')
-    expect(t).toMatchObject({ name: 'Up and at it', xp: 35, rules: { kind: 'wakeUp' } })
+  it("never changes the wake-up task's rules, but it can have a level", () => {
+    const t = edit(TASKS, 'wake', { name: 'Up and at it', effort: 'hard', timesADay: 3 })
+    expect(t).toMatchObject({ name: 'Up and at it', effort: 'hard', xp: 40, rules: { kind: 'wakeUp' } })
   })
 
-  it('keeps XP × times a day within the daily limit', () => {
-    // More times a day brings the XP down to fit.
-    expect(byId(updateTask(TASKS, 'gym', { timesADay: 3 }, LIMITS), 'gym')).toMatchObject({ xp: 15, rules: { kind: 'maxPerDay', max: 3 } })
-    expect(byId(updateTask(TASKS, 'gym', { timesADay: 2 }, LIMITS), 'gym').xp).toBe(25)
-    // A small XP is left alone.
-    expect(byId(updateTask(TASKS, 'avoided', { timesADay: 3 }, LIMITS), 'avoided').xp).toBe(15)
-    // A new XP is kept within it, for the new times a day if that changes too.
-    expect(byId(updateTask(TASKS, 'avoided', { xp: 45 }, LIMITS), 'avoided').xp).toBe(25)
-    expect(byId(updateTask(TASKS, 'avoided', { xp: 45, timesADay: 1 }, LIMITS), 'avoided').xp).toBe(45)
-    // Wake-up is once a day.
-    expect(byId(updateTask(TASKS, 'wake', { xp: 99, timesADay: 3 }, LIMITS), 'wake').xp).toBe(50)
+  it("keeps times a day within the level's cap", () => {
+    expect(edit(TASKS, 'walk', { timesADay: 9 }).rules).toEqual({ kind: 'maxPerDay', max: 3 })
+    expect(edit(TASKS, 'read', { timesADay: 3 }).rules).toEqual({ kind: 'maxPerDay', max: 2 })
+    expect(edit(TASKS, 'gym', { timesADay: 3 }).rules).toBe(byId(TASKS, 'gym').rules)
+    expect(edit(TASKS, 'walk', { timesADay: 0 }).rules).toEqual({ kind: 'oncePerDay' })
+    expect(edit(TASKS, 'walk', { timesADay: Number.NaN }).rules).toBe(byId(TASKS, 'walk').rules)
   })
 
-  it('leaves stored XP over the limit alone until the XP or times a day is edited', () => {
-    const over: Task = { ...byId(TASKS, 'gym'), xp: 60, rules: { kind: 'maxPerDay', max: 2 } }
-    expect(byId(updateTask([over], 'gym', { name: 'Lifting' }, LIMITS), 'gym').xp).toBe(60)
-    expect(byId(updateTask([over], 'gym', { xp: 60 }, LIMITS), 'gym').xp).toBe(25)
-    expect(byId(updateTask([over], 'gym', { timesADay: 3 }, LIMITS), 'gym').xp).toBe(15)
+  it('a harder level lowers times a day to fit; an easier one leaves it', () => {
+    // Avoided: a little nudge, twice a day.
+    expect(edit(TASKS, 'avoided', { effort: 'hard' })).toMatchObject({ effort: 'hard', xp: 40, rules: { kind: 'oncePerDay' } })
+    expect(edit(TASKS, 'avoided', { effort: 'effort' })).toMatchObject({ xp: 25, rules: { kind: 'maxPerDay', max: 2 } })
+    const thrice = updateTask(TASKS, 'walk', { timesADay: 3 }, LIMITS, LEVELS)
+    expect(edit(thrice, 'walk', { effort: 'effort' })).toMatchObject({ xp: 25, rules: { kind: 'maxPerDay', max: 2 } })
+    // Asking for more times a day than the new level allows gives its cap.
+    expect(edit(TASKS, 'walk', { effort: 'effort', timesADay: 3 }).rules).toEqual({ kind: 'maxPerDay', max: 2 })
+    // Easier never raises times a day by itself.
+    expect(edit(TASKS, 'gym', { effort: 'nudge' })).toMatchObject({ xp: 15, rules: { kind: 'oncePerDay' } })
   })
 
-  it('keeps the old name for a blank one, and keeps XP in bounds', () => {
-    const t = byId(updateTask(TASKS, 'gym', { name: '   ', xp: 0 }, LIMITS), 'gym')
-    expect(t.name).toBe(byId(TASKS, 'gym').name)
-    expect(t.xp).toBe(5)
+  it('ignores an effort level it does not know', () => {
+    expect(edit(TASKS, 'gym', { effort: 'mega' })).toEqual(byId(TASKS, 'gym'))
+    expect(edit(TASKS, 'gym', { effort: 'mega', name: 'Lifting' })).toEqual({ ...byId(TASKS, 'gym'), name: 'Lifting' })
+  })
+
+  it('an older task with no level keeps its XP and times a day until a level is picked', () => {
+    const old = legacy(30)
+    expect(edit([old], 'my-old', { name: 'Still old' })).toEqual({ ...old, name: 'Still old' })
+    // Times a day stays within what its XP allows: 30 XP is once a day.
+    expect(edit([old], 'my-old', { timesADay: 2 })).toEqual(old)
+    expect(edit([legacy(20)], 'my-old', { timesADay: 3 })).toMatchObject({ xp: 20, rules: { kind: 'maxPerDay', max: 2 } })
+    // Picking a level gives it the level's XP, and the level's cap.
+    expect(edit([legacy(20, 2)], 'my-old', { effort: 'hard' })).toMatchObject({ effort: 'hard', xp: 40, rules: { kind: 'oncePerDay' } })
+    expect(edit([old], 'my-old', { effort: 'nudge', timesADay: 3 })).toMatchObject({ effort: 'nudge', xp: 15, rules: { kind: 'maxPerDay', max: 3 } })
+  })
+
+  it('stored values over the limits stay until they are changed', () => {
+    // From before the limits (or edited by hand): 60 XP twice a day.
+    const over = legacy(60, 2)
+    expect(edit([over], 'my-old', { name: 'Big one' })).toMatchObject({ xp: 60, rules: { kind: 'maxPerDay', max: 2 } })
+    expect(edit([over], 'my-old', { timesADay: 2 })).toEqual(over)
+    expect(edit([over], 'my-old', { timesADay: 1 })).toMatchObject({ xp: 60, rules: { kind: 'oncePerDay' } })
+    expect(edit([over], 'my-old', { effort: 'effort' })).toMatchObject({ xp: 25, rules: { kind: 'maxPerDay', max: 2 } })
+    // A level with too many times a day comes into line once anything about times or level changes.
+    const tooMany: Task = { ...byId(TASKS, 'gym'), rules: { kind: 'maxPerDay', max: 3 } }
+    expect(edit([tooMany], 'gym', { name: 'Lifting' }).rules).toEqual({ kind: 'maxPerDay', max: 3 })
+    expect(edit([tooMany], 'gym', { timesADay: 2 }).rules).toEqual({ kind: 'oncePerDay' })
+    expect(edit([tooMany], 'gym', { effort: 'hard' }).rules).toEqual({ kind: 'oncePerDay' })
+  })
+
+  it('an unknown stored level is replaced once a known one is picked', () => {
+    const odd = legacy(30, 1, { effort: 'mega' })
+    expect(edit([odd], 'my-old', { name: 'x' })).toMatchObject({ effort: 'mega', xp: 30 })
+    expect(edit([odd], 'my-old', { effort: 'effort' })).toMatchObject({ effort: 'effort', xp: 25 })
   })
 
   it('leaves rules alone when times a day is unchanged, and keeps unknown fields', () => {
     const odd = { ...byId(TASKS, 'avoided'), rules: { kind: 'maxPerDay', max: 2, extra: 1 }, colour: 'blue' } as Task
-    const t = byId(updateTask([odd], 'avoided', { name: 'Hard thing', timesADay: 2 }, LIMITS), 'avoided')
+    const t = edit([odd], 'avoided', { name: 'Hard thing', timesADay: 2 })
     expect(t.rules).toBe(odd.rules)
     expect((t as Task & { colour?: string }).colour).toBe('blue')
   })
 
   it('changes nothing for an unknown id, and never touches the input', () => {
     const before = structuredClone(TASKS)
-    expect(updateTask(TASKS, 'nope', { name: 'x' }, LIMITS)).toEqual(TASKS)
-    updateTask(TASKS, 'gym', { name: 'x', xp: 10 }, LIMITS)
+    expect(updateTask(TASKS, 'nope', { name: 'x' }, LIMITS, LEVELS)).toEqual(TASKS)
+    updateTask(TASKS, 'gym', { name: 'x', effort: 'nudge', timesADay: 3 }, LIMITS, LEVELS)
     expect(TASKS).toEqual(before)
   })
 })
@@ -386,8 +487,8 @@ describe('archive and unarchive', () => {
   })
 })
 
-describe('editing XP only affects future logs', () => {
-  it('leaves past XP, stats and stage as they were, and the next log uses the new XP', () => {
+describe('changing how hard a task is only affects future logs', () => {
+  it('leaves past XP, stats and stage as they were, and the next log uses the new level', () => {
     // Enough gym logs over several days to hatch.
     const days = ['2026-10-05', '2026-10-06', '2026-10-07']
     let events = logAll(TASKS, days.map((d): [string, number] => ['gym', at(`${d}T18:00:00+01:00`)]))
@@ -395,29 +496,54 @@ describe('editing XP only affects future logs', () => {
     const statsBefore = statTotals(events, TASKS, STATS)
     const stageBefore = dragonStage(events, STAGES)
 
-    const edited = updateTask(TASKS, 'gym', { xp: 5, name: 'Lifting' }, LIMITS)
+    const edited = updateTask(TASKS, 'gym', { effort: 'nudge', name: 'Lifting' }, LIMITS, LEVELS)
     expect(totalXp(events)).toBe(xpBefore)
     expect(statTotals(events, edited, STATS)).toEqual(statsBefore)
     expect(dragonStage(events, STAGES)).toEqual(stageBefore)
 
     events = logAll(edited, [['gym', FRI('18:00')]], events)
-    expect(events.at(-1)).toMatchObject({ taskId: 'gym', xpAwarded: 5 })
-    expect(totalXp(events)).toBe(xpBefore + 5)
+    expect(events.at(-1)).toMatchObject({ taskId: 'gym', xpAwarded: 15 })
+    expect(totalXp(events)).toBe(xpBefore + 15)
+  })
+
+  it("a log saves the level's XP, not the stored XP, and an older task's stored XP", () => {
+    const tasks = [{ ...byId(TASKS, 'read'), xp: 99 }, legacy(35), legacy(20, 1, { id: 'my-odd', effort: 'mega' })]
+    const events = logAll(tasks, [['read', FRI('09:00')], ['my-old', FRI('09:01')], ['my-odd', FRI('09:02')]])
+    expect(events.map((e) => (e as LogEvent).xpAwarded)).toEqual([25, 35, 20])
+  })
+
+  it("rebalancing a level in config changes future logs only: past logs keep the XP they were made with", () => {
+    const events = logAll(TASKS, [['walk', FRI('08:00')]])
+    expect(totalXp(events)).toBe(15)
+    const rebalanced = LEVELS.map((l) => (l.id === 'nudge' ? { ...l, xp: 20 } : l))
+    expect(totalXp(events)).toBe(15)
+    const next = logAll(TASKS, [['avoided', FRI('09:00')]], events, rebalanced)
+    expect(next.at(-1)).toMatchObject({ xpAwarded: 20 })
+    expect(totalXp(next)).toBe(35)
   })
 
   it('a stored list is read the same way after the edit (XP is saved on each log)', () => {
     const events = logAll(TASKS, [['walk', FRI('08:00')]])
-    const s = withTasks(settings, updateTask(TASKS, 'walk', { xp: 50 }, LIMITS), TASKS)
+    const s = withTasks(settings, updateTask(TASKS, 'walk', { effort: 'hard' }, LIMITS, LEVELS), TASKS)
     const tasks = effectiveTasks(s, TASKS)
+    expect(byId(tasks, 'walk')).toMatchObject({ effort: 'hard', xp: 40 })
     expect(statTotals(events, tasks, STATS).find((t) => t.stat.id === 'strength')!.xp).toBe(byId(TASKS, 'walk').xp)
+  })
+
+  it('undoing a log after a level change takes off the XP it was made with', () => {
+    const events = logAll(TASKS, [['walk', FRI('08:00')]])
+    const edited = updateTask(TASKS, 'walk', { effort: 'effort' }, LIMITS, LEVELS)
+    const more = logAll(edited, [['read', FRI('08:05')]], events)
+    const undo: GameEvent = { id: 'u', type: 'undo', targetEventId: events[0]!.id, timestamp: FRI('08:10') }
+    expect(totalXp([...more, undo])).toBe(25)
   })
 })
 
 describe('lowering times a day', () => {
   it('below today’s count just means no more logs today', () => {
-    const tasks = updateTask(TASKS, 'walk', { timesADay: 3 }, LIMITS)
+    const tasks = updateTask(TASKS, 'walk', { timesADay: 3 }, LIMITS, LEVELS)
     const events = logAll(tasks, [['walk', FRI('08:00')], ['walk', FRI('09:00')]])
-    const lowered = byId(updateTask(tasks, 'walk', { timesADay: 1 }, LIMITS), 'walk')
+    const lowered = byId(updateTask(tasks, 'walk', { timesADay: 1 }, LIMITS, LEVELS), 'walk')
     expect(taskAvailability(lowered, events, settings, FRI('10:00'))).toEqual({
       visible: true,
       canLog: false,
@@ -432,11 +558,11 @@ describe('lowering times a day', () => {
 
 describe('a new task', () => {
   it('can be logged, counts under its chosen stat, and shows in the weekly counts', () => {
-    const tasks = addTask(TASKS, { name: 'Call Mum', stat: 'heart', xp: 20, timesADay: 2 }, 'my-1', LIMITS)!
+    const tasks = addTask(TASKS, { name: 'Call Mum', stat: 'heart', effort: 'effort', timesADay: 2 }, 'my-1', LIMITS, LEVELS)!
     const events = logAll(tasks, [['my-1', FRI('09:00')], ['my-1', FRI('19:00')]])
-    expect(events.map((e) => e.type === 'log' && e.xpAwarded)).toEqual([20, 20])
+    expect(events.map((e) => e.type === 'log' && e.xpAwarded)).toEqual([25, 25])
     expect(taskAvailability(byId(tasks, 'my-1'), events, settings, FRI('20:00')).canLog).toBe(false)
-    expect(statTotals(events, tasks, STATS).find((s) => s.stat.id === 'heart')!.xp).toBe(40)
+    expect(statTotals(events, tasks, STATS).find((s) => s.stat.id === 'heart')!.xp).toBe(50)
     expect(weeklyCounts(events, [byId(tasks, 'my-1')], FRI('20:00'), STREAKS)[0]).toMatchObject({ thisWeek: 1 })
   })
 })

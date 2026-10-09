@@ -14,6 +14,9 @@ import { REWARDS } from '../src/config/rewards'
 import { STREAKS } from '../src/config/streaks'
 import type { StreakConfig } from '../src/config/streaks'
 
+// The sims set XP directly on their what-if tasks, so no effort level overrides it.
+const NO_LEVELS: readonly never[] = []
+
 const args = process.argv.slice(2)
 const pos = args.filter((a) => !a.startsWith('--'))
 const DAYS = Number(pos[0] ?? 365)
@@ -152,7 +155,7 @@ function simulate(p: Profile, seed: number): Run {
       const inCarry = new Set<LogEvent>([...finds, ...since])
       const ctx: GameEvent[] = EXACT || finds.length === 0 ? events : [...dayMarkers, ...today.filter((e) => !inCarry.has(e)), ...finds, ...since]
       const roll = { chance: rr(), pick: rr() }
-      const ev = createLogEvent(TASK.get(a.t)!, ctx, DEFAULT_SETTINGS, a.ts, `e${id++}`, roll, { stages: STAGES, rewards: REWARDS, streaks: SCFG })
+      const ev = createLogEvent(TASK.get(a.t)!, ctx, DEFAULT_SETTINGS, a.ts, `e${id++}`, roll, { stages: STAGES, rewards: REWARDS, streaks: SCFG, effortLevels: NO_LEVELS })
       if (!ev) continue
       logged = true
       events.push(ev)

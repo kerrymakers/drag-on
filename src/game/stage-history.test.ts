@@ -7,6 +7,7 @@ import { createLogEvent } from './log'
 import { stageHistory } from './stage-history'
 import { dragonStage } from './state'
 import type { GameEvent, LogEvent, Stage, Task } from './types'
+import { EFFORT_LEVELS } from '../config/tasks'
 
 const STAGES_A: Stage[] = [
   { id: 'egg', name: 'Egg', xpFrom: 0 },
@@ -29,7 +30,7 @@ const chunk = (xp: number): Task => ({
 let n = 0
 /** Logs through createLogEvent, so stageReached is recorded as in the app. */
 function logXp(events: GameEvent[], xp: number, when: number, stages: readonly Stage[] = STAGES_A): GameEvent[] {
-  const e = createLogEvent(chunk(xp), events, DEFAULT_SETTINGS, when, `h${++n}`, NO_REWARD, { stages, rewards: REWARDS, streaks: STREAKS })
+  const e = createLogEvent(chunk(xp), events, DEFAULT_SETTINGS, when, `h${++n}`, NO_REWARD, { stages, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })
   if (!e) throw new Error('refused')
   return [...events, e]
 }

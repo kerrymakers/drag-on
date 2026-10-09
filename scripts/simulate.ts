@@ -40,6 +40,10 @@ import { TIME_ZONE } from '../src/config/time'
 import { REWARDS } from '../src/config/rewards'
 import type { RewardConfig } from '../src/config/rewards'
 import { STREAKS, STREAK_MILESTONES } from '../src/config/streaks'
+
+// The sims set XP directly on their what-if tasks, so no effort level overrides it.
+const NO_LEVELS: readonly never[] = []
+
 // The fast path can't see the whole log, so the real streak milestones are off here
 // (milestones: []); --milestones=first projects them. For measured streaks, freezes and
 // milestone items on the full log, a slower full-log sim is needed (M5 balance check).
@@ -486,7 +490,7 @@ function simulate(profile: Profile, seed: number, rewardCfg: RewardConfig = REWA
           forced = true
         }
       }
-      const ev = createLogEvent(t, todays, DEFAULT_SETTINGS, a.ts, `e${id++}`, roll, { stages: STAGE_LIST, rewards: rewardCfg, streaks: SIM_STREAKS })
+      const ev = createLogEvent(t, todays, DEFAULT_SETTINGS, a.ts, `e${id++}`, roll, { stages: STAGE_LIST, rewards: rewardCfg, streaks: SIM_STREAKS, effortLevels: NO_LEVELS })
       if (!ev) {
         refused[a.taskId] = (refused[a.taskId] ?? 0) + 1
         continue

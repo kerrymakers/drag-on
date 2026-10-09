@@ -8,6 +8,7 @@ import { at, undo, NO_REWARD } from '../testing/helpers'
 import { evolutionLook, lookChange, type Evolution, type EvolutionRules } from './evolution'
 import { createLogEvent } from './log'
 import type { GameEvent, LogEvent, Reward, Stage, StatId, Task } from './types'
+import { EFFORT_LEVELS } from '../config/tasks'
 
 // Small thresholds keep the numbers readable. Juvenile at 100.
 const STAGES_A: Stage[] = [
@@ -39,7 +40,7 @@ let clock = at('2026-10-05T12:00:00+01:00')
 /** Logs through createLogEvent, so stageReached is recorded as in the app. */
 function add(events: GameEvent[], stat: StatId | 'gone', xp: number, stages: readonly Stage[] = STAGES_A): GameEvent[] {
   const task: Task = stat === 'gone' ? { ...taskFor('heart'), id: 'gone' } : taskFor(stat)
-  const e = createLogEvent({ ...task, xp }, events, DEFAULT_SETTINGS, (clock += 1000), `e${++n}`, NO_REWARD, { stages, rewards: REWARDS, streaks: STREAKS })
+  const e = createLogEvent({ ...task, xp }, events, DEFAULT_SETTINGS, (clock += 1000), `e${++n}`, NO_REWARD, { stages, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })
   if (!e) throw new Error('refused')
   return [...events, e]
 }
@@ -293,7 +294,7 @@ describe('evolutionLook with treats', () => {
       (clock += 1000),
       `e${++n}`,
       { chance: REWARDS.rareChance, pick: 0 },
-      { stages: STAGES_A, rewards: { ...REWARDS, treatBonusShare: 10 / 45 }, streaks: STREAKS },
+      { stages: STAGES_A, rewards: { ...REWARDS, treatBonusShare: 10 / 45 }, streaks: STREAKS, effortLevels: EFFORT_LEVELS },
     ) as LogEvent
     expect(treat.reward).toEqual({ kind: 'treat', bonusXp: 10 })
     expect(treat.stageReached).toBe('juvenile')

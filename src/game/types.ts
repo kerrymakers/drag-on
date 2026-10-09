@@ -16,9 +16,34 @@ export interface Task {
   id: string
   name: string
   stat: StatId
+  /**
+   * The XP a log is worth when the task has no effort level (or one this version
+   * doesn't know). With a known level, the level's XP applies (see taskXp). `xp` is
+   * written when a level is picked, so older versions and exports read the same XP;
+   * it isn't updated if a level's XP later changes in config.
+   */
   xp: number
   rules: TaskRules
   archived: boolean
+  /**
+   * How hard the task is for me, an effort level id from config (Milestone 7). Absent
+   * on tasks that predate the levels until one is picked. Stored data may hold an id
+   * (or value) this version doesn't know: it's ignored, never trusted (see taskXp).
+   */
+  effort?: EffortId
+}
+
+/** An effort level id from config, e.g. 'nudge'. */
+export type EffortId = string
+
+/** "How hard is this for you?": one choice for a task, worth a set XP per log. */
+export interface EffortLevel {
+  id: EffortId
+  /** Shown on the choice and on the task's row, e.g. "A little nudge". */
+  label: string
+  xp: number
+  /** The most times a day a task at this level can be logged. */
+  maxTimesADay: number
 }
 
 /** A stage id from config, e.g. 'egg' or 'hatchling'. */

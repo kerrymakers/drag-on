@@ -25,7 +25,7 @@ There is one user (me). There are no accounts, no social features and no monetis
 
 ## Tasks
 
-The task list is editable in settings. I can add, rename, archive and set XP for tasks. Starting tasks:
+The task list is editable in settings. I can add, rename and archive tasks, and say how hard each one is for me, which sets its XP (see the effort picker below; this used to be "set XP"). Starting tasks:
 
 | Task | Stat | Base XP | Rules |
 |------|------|---------|-------|
@@ -38,13 +38,13 @@ The task list is editable in settings. I can add, rename, archive and set XP for
 
 Self-care set to 25 XP on 2026-10-05 after simulation: at 15 a Heart dragon was unreachable even with daily self-care.
 
-XP reflects how hard a task is for me, not how hard it is in general. I should be able to change it.
+XP reflects how hard a task is for me, not how hard it is in general. I should be able to change it (since Milestone 7, by picking an effort level rather than a number).
 
 Decided 2026-10-09: a task's stat is chosen when the task is added and is fixed after that. Changing it would rewrite past stats and the dragon's look. (Milestone 6, slice 3.)
 
-Task editing (Milestone 6, slice 3): in Settings I can rename a task, change its XP and how many times a day it can be logged, add a task (choosing its stat), and archive or unarchive one. Tasks are never deleted, only archived. Archived tasks are hidden from Home and from History's weekly counts, but their past logs still count towards their stat. XP edits apply from the next log; past logs keep the XP they were made with.
+Task editing (Milestone 6, slice 3): in Settings I can rename a task, change its XP and how many times a day it can be logged, add a task (choosing its stat), and archive or unarchive one. Tasks are never deleted, only archived. Archived tasks are hidden from Home and from History's weekly counts, but their past logs still count towards their stat. XP edits apply from the next log; past logs keep the XP they were made with. (The XP stepper is superseded by the effort picker, Milestone 7, slice 1, below.)
 
-Limits set 2026-10-09 after simulation (Milestone 6, slice 3): task XP is 5 to 50 in steps of 5, a task can be logged up to 3 times a day, but its XP × times a day can't go over 50, and at most 8 tasks can be active. A task saved before these limits keeps its XP until I next change its XP or times a day. Raising every task to 60 brought a typical user's Juvenile to ~day 12 and Elder to ~day 69; ten tasks, three times a day at 60, gave Elder by ~day 33 and finished the item collection ~day 90, months before Elder. With these limits the worst case for a typical user is Juvenile ~day 14 and Elder ~day 75, and adding two everyday tasks gives Juvenile ~day 23, Elder ~day 126 and the collection ~day 145. Each stat's XP is a lifetime total, so after months of one stat the look stays put even if habits change (that comes from the totals, not the 10% margin).
+Limits set 2026-10-09 after simulation (Milestone 6, slice 3; the 5–50 XP stepper is superseded by the effort picker below, the other limits still apply): task XP is 5 to 50 in steps of 5, a task can be logged up to 3 times a day, but its XP × times a day can't go over 50, and at most 8 tasks can be active. A task saved before these limits keeps its XP until I next change its XP or times a day. (Replaced by the Milestone 7 rule below: a task with no level keeps its XP until I pick a level.) Raising every task to 60 brought a typical user's Juvenile to ~day 12 and Elder to ~day 69; ten tasks, three times a day at 60, gave Elder by ~day 33 and finished the item collection ~day 90, months before Elder. With these limits the worst case for a typical user is Juvenile ~day 14 and Elder ~day 75, and adding two everyday tasks gives Juvenile ~day 23, Elder ~day 126 and the collection ~day 145. Each stat's XP is a lifetime total, so after months of one stat the look stays put even if habits change (that comes from the totals, not the 10% margin).
 
 ### Wake-up schedule
 
@@ -139,12 +139,26 @@ Decided 2026-10-07: per-task streaks became weekly counts, and freezes protect t
 Decided 2026-10-08: wake-up isn't in History's weekly counts, only in its own "Up on time" streak. It has a schedule, so a weekly count would be ambiguous, and it already has a fair streak.
 Decided 2026-10-08: with one freeze held and two quiet days in a row, the freeze covers the first day and stays spent even though the second day ends the streak. Past days don't change after the fact.
 
+Decided 2026-10-09 (Milestone 7, slice 1): choosing an XP number was too much overhead, so the add/edit sheet's 5–50 XP stepper is replaced by a "How hard is this for you?" picker with three levels. Each level sets the task's XP and the most times a day it can be logged:
+
+| Level | XP | Times a day |
+|-------|----|-------------|
+| A little nudge | 15 | up to 3 |
+| Takes effort | 25 | up to 2 |
+| Really hard | 40 | once |
+
+XP × times a day stays within the existing 50-a-day limit, and the 8-active-task cap is unchanged. Choosing a harder level lowers times a day to fit; an easier one never raises it by itself. New tasks start at "A little nudge", once a day. Task rows in Settings show the level instead of a number. The starting tasks get the level that matches their XP exactly (gym: Really hard; read and self-care: Takes effort; walk and avoiding: A little nudge). The wake-up task (30 XP) has none. This only applies while the task list has never been saved: once I've edited any task, the saved list is used as it is.
+
+A task with no level (the wake-up task, and any task saved before this) keeps its XP and times a day until I pick a level: its row shows its XP (e.g. "30 XP"), the sheet says "Currently 30 XP. Pick a level to change it.", and saving without picking keeps its XP. Its times a day can still be changed as far as its XP allows within the daily limit. This replaces the earlier "keeps its XP until next changed" rule. A task with no level whose XP matches a level exactly (15, 25 or 40) is shown as that level, on its row and already chosen in its sheet, and tapping Done saves that level onto it. Saved data isn't migrated otherwise. When a level is picked its XP is also written onto the task, so exports and older versions read the same XP. A level this version doesn't recognise (from a later version) is ignored and the task's stored XP is used. As before, changes apply from the next log and past logs keep their XP. If an older version of the app (for example a stale cached copy) changes the XP of a task that has a level, this version ignores that XP and uses the level's.
+
+Balance note 2026-10-09 (balance-checker): with the built-in tasks unchanged, a typical user still reaches Juvenile ~day 30 and Elder ~day 164; the worst case with the levels is Juvenile ~day 15 and Elder ~day 83. No level values were changed.
+
 ## Data model
 
 Store an append-only log of events. Work out everything else from it.
 
 ```
-Task      { id, name, stat, xp, rules, archived }
+Task      { id, name, stat, xp, rules, archived, effort? }
 Event     { id, taskId, timestamp, xpAwarded, reward?, note? }
 Settings  { wakeSchedule: { mon: "06:30", ..., sat: null, sun: null }, wakeScheduleHistory?: [{ from: "YYYY-MM-DD", schedule }], dragonName, lastBackupAt?, ... }
 ```

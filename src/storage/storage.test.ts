@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS } from '../config/settings'
-import { TASK_LIMITS, TASKS } from '../config/tasks'
+import { EFFORT_LEVELS, TASK_LIMITS, TASKS } from '../config/tasks'
 import { archiveTask, effectiveTasks, updateTask, withTasks } from '../game/tasks'
 import { totalXp } from '../game/state'
 import type { GameEvent } from '../game/types'
@@ -433,12 +433,22 @@ describe('settings', () => {
       const loaded = load(store).data
       const tasks = effectiveTasks(loaded.settings, TASKS)
       expect(tasks.some((t) => t.id === 'my-later')).toBe(false)
-      const edited = archiveTask(updateTask(tasks, 'my-1', { name: 'Stretch more' }, TASK_LIMITS), 'gym')
+      const edited = archiveTask(updateTask(tasks, 'my-1', { name: 'Stretch more' }, TASK_LIMITS, EFFORT_LEVELS), 'gym')
       save({ ...loaded, settings: withTasks(loaded.settings, edited, TASKS) }, store)
       const again = load(store).data.settings
       expect(again.tasks?.[0]).toEqual(later)
       expect(again.tasks?.[1]).toMatchObject({ id: 'my-1', name: 'Stretch more' })
       expect(effectiveTasks(again, TASKS).find((t) => t.id === 'gym')?.archived).toBe(true)
+    })
+
+    it('a task with an unknown effort level loads, is used at its stored XP, and keeps that level through a save', () => {
+      const odd = { ...good, effort: 'mega' }
+      const store = withRaw(JSON.stringify({ schemaVersion: 1, events: [], settings: { tasks: [odd] } }))
+      const loaded = load(store).data
+      expect(effectiveTasks(loaded.settings, TASKS).find((t) => t.id === 'my-1')).toEqual(odd)
+      const edited = archiveTask(effectiveTasks(loaded.settings, TASKS), 'gym')
+      save({ ...loaded, settings: withTasks(loaded.settings, edited, TASKS) }, store)
+      expect(load(store).data.settings.tasks?.[0]).toEqual(odd)
     })
 
     it('a built-in task it cannot read gets its default back, in its place', () => {

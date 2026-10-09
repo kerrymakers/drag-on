@@ -1,18 +1,33 @@
 // Settings' Tasks card (Milestone 6, slice 3): the active tasks, an "Add a task"
 // button and the archived tasks, folded away. Tapping a task opens a bottom sheet to
-// change its name, XP and times a day, or archive it. Adding uses the same sheet plus
+// change its name, how hard it is (Milestone 7: an effort level, which sets its XP)
+// and times a day, or archive it. Adding uses the same sheet plus
 // a stat picker; the stat is fixed once the task exists.
 //
 // Changes apply on Done, never while typing. Archiving needs no confirmation: it can
 // be undone with Unarchive, and the task's history is kept either way.
 
 import { cutText } from '../game/settings'
-import { cleanTaskName, hasRoomForTask, maxXpFor, stepTaskXp, timesADay, type NewTask, type TaskChanges, type TaskLimits } from '../game/tasks'
-import type { Stat, StatId, Task } from '../game/types'
+import {
+  cleanTaskName,
+  effortLevel,
+  hasRoomForTask,
+  shownEffort,
+  maxTimesADay,
+  timesADay,
+  type NewTask,
+  type TaskChanges,
+  type TaskLimits,
+} from '../game/tasks'
+import type { EffortId, EffortLevel, Stat, StatId, Task } from '../game/types'
 import {
   SETTINGS,
   TASKS_COPY,
-  dailyXpHint,
+  effortChoiceLabel,
+  effortTimesHint,
+  effortXp,
+  legacyTimesHint,
+  legacyXpHint,
   taskAdded,
   taskArchived,
   taskRowLabel,
@@ -27,8 +42,10 @@ import { ICONS } from './icons'
 export interface TasksCardConfig {
   stats: readonly Stat[]
   limits: TaskLimits
-  /** A new task's starting XP and times a day (config). */
-  newTask: { xp: number; timesADay: number }
+  /** "How hard is this for you?": the effort levels (config). */
+  levels: readonly EffortLevel[]
+  /** A new task's starting effort level and times a day (config). */
+  newTask: { effort: EffortId; timesADay: number }
   /** Each returns whether the change was made. */
   onAdd(draft: NewTask): boolean
   onUpdate(id: string, changes: TaskChanges): boolean
@@ -72,23 +89,31 @@ function el<K extends keyof HTMLElementTagNameMap>(doc: Document, tag: K, classN
  * between choices and choose, wrapping at the ends, as native radios do.
  */
 function rovingRadios(buttons: readonly HTMLButtonElement[]) {
-  buttons.forEach((b, i) => {
+  buttons.forEach((b) => {
     b.addEventListener('keydown', (e) => {
+      // Choices that are off right now (e.g. more times a day than a level allows) are skipped.
+      const open = buttons.filter((x) => !x.disabled)
+      const i = open.indexOf(b)
+      const n = open.length
       const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0
-      const to = e.key === 'Home' ? 0 : e.key === 'End' ? buttons.length - 1 : step ? (i + step + buttons.length) % buttons.length : -1
-      if (to < 0) return
+      const to = e.key === 'Home' ? 0 : e.key === 'End' ? n - 1 : step && i >= 0 ? (i + step + n) % n : -1
+      if (to < 0 || n === 0) return
       e.preventDefault()
-      const next = buttons[to]
+      const next = open[to]
       next?.focus()
       next?.click()
     })
   })
 }
 
-/** After the checked state changes: only the checked radio (or the first) is in the Tab order. */
+/**
+ * After the checked state changes: only the checked radio (or the first one that's on)
+ * is in the Tab order.
+ */
 function syncRoving(buttons: readonly HTMLButtonElement[]) {
-  const checked = buttons.findIndex((b) => b.getAttribute('aria-checked') === 'true')
-  buttons.forEach((b, i) => (b.tabIndex = i === (checked < 0 ? 0 : checked) ? 0 : -1))
+  const checked = buttons.findIndex((b) => b.getAttribute('aria-checked') === 'true' && !b.disabled)
+  const stop = checked >= 0 ? checked : buttons.findIndex((b) => !b.disabled)
+  buttons.forEach((b, i) => (b.tabIndex = i === stop ? 0 : -1))
 }
 
 function button(doc: Document, className: string, text = ''): HTMLButtonElement {
@@ -144,11 +169,13 @@ export function createTasksCard(doc: Document, config: TasksCardConfig): TasksCa
     b.dataset.taskId = task.id
     b.disabled = readOnlyNow
     const stat = statName(task.stat)
-    b.setAttribute('aria-label', taskRowLabel(task.name, stat, task.xp))
+    // How hard it is, or its XP for an older task with no level yet.
+    const hardness = shownEffort(task, config.levels)?.label ?? xpValue(task.xp)
+    b.setAttribute('aria-label', taskRowLabel(task.name, stat, hardness))
     const text = el(doc, 'span', 'ss-task-text')
     const meta = el(doc, 'span', 'ss-task-meta')
     meta.setAttribute('aria-hidden', 'true')
-    meta.append(statIcon(task.stat), el(doc, 'span', 'ss-task-stat', stat), el(doc, 'span', 'ss-task-xp', xpValue(task.xp)))
+    meta.append(statIcon(task.stat), el(doc, 'span', 'ss-task-stat', stat), el(doc, 'span', 'ss-task-xp', hardness))
     text.append(el(doc, 'span', 'ss-task-name', task.name), meta)
     const chevron = el(doc, 'span', 'ss-task-chevron')
     chevron.innerHTML = ICONS.chevronRight
@@ -176,7 +203,7 @@ export function createTasksCard(doc: Document, config: TasksCardConfig): TasksCa
     shown = tasks
     readOnlyNow = readOnly
     const room = hasRoomForTask(tasks, config.limits)
-    const sig = JSON.stringify([readOnly, tasks.map((t) => [t.id, t.name, t.stat, t.xp, t.archived])])
+    const sig = JSON.stringify([readOnly, tasks.map((t) => [t.id, t.name, t.stat, t.xp, t.effort ?? null, t.archived])])
     if (sig === signature) return
     signature = sig
     // Rebuilt only when something changed, keeping focus on the same row if it had it.
@@ -223,9 +250,16 @@ export function createTasksCard(doc: Document, config: TasksCardConfig): TasksCa
   function openSheet(task: Task | null) {
     const adding = task === null
     const limits = config.limits
-    let xp = task?.xp ?? config.newTask.xp
+    const levels = config.levels
+    // The chosen level: its saved one, or for an older task the one worth exactly its XP
+    // (saved onto it on Done), else none (it keeps its XP until one is picked).
+    let effort: EffortId | null = task ? (shownEffort(task, levels)?.id ?? null) : config.newTask.effort
+    /** The most times a day for the level chosen (or the task's XP, with none). */
+    const topTimes = () => maxTimesADay({ xp: task?.xp ?? 0, ...(effort !== null ? { effort } : {}) }, levels, limits)
+    const storedTimes = task ? timesADay(task) : null
     const fixedRules = task !== null && timesADay(task) === null
-    let times = task ? (timesADay(task) ?? 1) : config.newTask.timesADay
+    // A level shown for an older task is saved on Done, so its cap shows from the start.
+    let times = Math.min(task ? (timesADay(task) ?? 1) : config.newTask.timesADay, effort !== null ? topTimes() : Infinity)
     let stat: StatId | null = task?.stat ?? null
 
     const sheet = el(doc, 'dialog', 'sheet task-sheet')
@@ -284,40 +318,46 @@ export function createTasksCard(doc: Document, config: TasksCardConfig): TasksCa
       statBlock.append(line)
     }
 
-    // XP stepper
-    const xpField = el(doc, 'div', 'ts-field')
-    const xpLabel = el(doc, 'span', 'ts-label', TASKS_COPY.xpLabel)
-    xpLabel.id = 'task-sheet-xp-label'
-    const stepper = el(doc, 'div', 'ts-stepper')
-    stepper.setAttribute('role', 'group')
-    stepper.setAttribute('aria-labelledby', xpLabel.id)
-    const less = button(doc, 'ts-step', '−')
-    less.id = 'task-sheet-xp-less'
-    less.setAttribute('aria-label', TASKS_COPY.xpLess)
-    const more = button(doc, 'ts-step', '+')
-    more.id = 'task-sheet-xp-more'
-    more.setAttribute('aria-label', TASKS_COPY.xpMore)
-    const xpShown = el(doc, 'output', 'ts-xp')
-    xpShown.id = 'task-sheet-xp'
-    xpShown.setAttribute('aria-live', 'polite')
-    stepper.append(less, xpShown, more)
-    // While XP × times a day is at its daily limit (below the plain XP maximum), a short
-    // line says why + stops there.
-    const xpHint = el(doc, 'p', 'sheet-text ts-note ts-xp-hint')
-    xpHint.id = 'task-sheet-xp-hint'
-    xpHint.setAttribute('aria-live', 'polite')
-    xpField.append(xpLabel, stepper, xpHint)
-    less.addEventListener('click', () => {
-      xp = stepTaskXp(xp, -1, times, limits)
-      update()
-    })
-    more.addEventListener('click', () => {
-      xp = stepTaskXp(xp, 1, times, limits)
-      update()
-    })
+    // How hard is this for you? One level each, worth its XP.
+    const effortField = el(doc, 'div', 'ts-field')
+    const effortLabel = el(doc, 'span', 'ts-label', TASKS_COPY.effortLabel)
+    effortLabel.id = 'task-sheet-effort'
+    const effortGroup = el(doc, 'div', 'ts-efforts')
+    effortGroup.setAttribute('role', 'radiogroup')
+    effortGroup.setAttribute('aria-labelledby', effortLabel.id)
+    const effortButtons = new Map<EffortId, HTMLButtonElement>()
+    for (const level of levels) {
+      const b = button(doc, 'ts-effort')
+      b.setAttribute('role', 'radio')
+      b.dataset.effort = level.id
+      b.setAttribute('aria-label', effortChoiceLabel(level.label, level.xp))
+      b.append(el(doc, 'span', 'ts-effort-name', level.label), el(doc, 'span', 'ts-effort-xp', effortXp(level.xp)))
+      b.addEventListener('click', () => {
+        effort = level.id
+        // A harder level brings times a day down to fit.
+        times = Math.min(times, topTimes())
+        update()
+      })
+      effortGroup.append(b)
+      effortButtons.set(level.id, b)
+    }
+    rovingRadios([...effortButtons.values()])
+    effortField.append(effortLabel, effortGroup)
+    // An older task with no level: what it's worth now, until a level is picked.
+    const legacyHint = el(doc, 'p', 'sheet-text ts-note')
+    legacyHint.id = 'task-sheet-effort-hint'
+    if (task && effort === null) {
+      legacyHint.textContent = legacyXpHint(task.xp)
+      effortGroup.setAttribute('aria-describedby', legacyHint.id)
+      effortField.append(legacyHint)
+    }
 
-    // Times a day: 1 / 2 / 3. Not for the wake-up task (its schedule decides).
+    // Times a day: 1 / 2 / 3. Not for the wake-up task (its schedule decides). A harder
+    // level allows fewer: those choices are off, with a short line saying why.
     const timesField = el(doc, 'div', 'ts-field')
+    const timesHint = el(doc, 'p', 'sheet-text ts-note')
+    timesHint.id = 'task-sheet-times-hint'
+    timesHint.setAttribute('aria-live', 'polite')
     const timesButtons = new Map<number, HTMLButtonElement>()
     if (!fixedRules) {
       const label = el(doc, 'span', 'ts-label', TASKS_COPY.timesLabel)
@@ -332,15 +372,13 @@ export function createTasksCard(doc: Document, config: TasksCardConfig): TasksCa
         b.dataset.times = String(n)
         b.addEventListener('click', () => {
           times = n
-          // More times a day: the XP comes down to fit the daily limit.
-          xp = Math.min(xp, maxXpFor(times, limits))
           update()
         })
         group.append(b)
         timesButtons.set(n, b)
       }
       rovingRadios([...timesButtons.values()])
-      timesField.append(label, group)
+      timesField.append(label, group, timesHint)
     }
 
     // Why Done didn't save, if it couldn't. Stays until the sheet closes.
@@ -355,7 +393,7 @@ export function createTasksCard(doc: Document, config: TasksCardConfig): TasksCa
     cancel.id = 'task-sheet-cancel'
     actions.append(done, cancel)
 
-    body.append(heading, nameField, statBlock, xpField)
+    body.append(heading, nameField, statBlock, effortField)
     if (!fixedRules) body.append(timesField)
     if (!adding) body.append(el(doc, 'p', 'sheet-text ts-next', TASKS_COPY.nextLog))
     body.append(problem, actions)
@@ -380,20 +418,30 @@ export function createTasksCard(doc: Document, config: TasksCardConfig): TasksCa
     doc.body.append(sheet)
 
     function update() {
-      xpShown.textContent = xpValue(xp)
-      const top = maxXpFor(times, limits)
-      less.disabled = stepTaskXp(xp, -1, times, limits) === xp
-      more.disabled = xp >= top
-      const hint = times > 1 && xp >= top && top < limits.xpMax
-      xpHint.textContent = hint ? dailyXpHint(top, times) : ''
-      xpHint.hidden = !hint
-      if (hint) more.setAttribute('aria-describedby', xpHint.id)
-      else more.removeAttribute('aria-describedby')
-      for (const [n, b] of timesButtons) b.setAttribute('aria-checked', String(n === times))
+      const top = topTimes()
+      for (const [n, b] of timesButtons) {
+        b.setAttribute('aria-checked', String(n === times))
+        // An older task's own times a day stays on until a level is picked, even over its cap.
+        b.disabled = n > top && !(effort === null && n === storedTimes)
+      }
+      // An older task already saved over its own cap keeps that choice: no line that
+      // would contradict it.
+      const capped = top < limits.timesADayMax && times <= top
+      const level = effort !== null ? effortLevel(effort, levels) : null
+      timesHint.textContent = !capped ? '' : level ? effortTimesHint(level.label, top) : legacyTimesHint(task?.xp ?? 0, top)
+      timesHint.hidden = !capped
+      const group = timesField.querySelector('[role="radiogroup"]')
+      if (capped) group?.setAttribute('aria-describedby', timesHint.id)
+      else group?.removeAttribute('aria-describedby')
+      // Once a level is picked, "Currently 30 XP" no longer applies.
+      legacyHint.hidden = effort !== null
+      if (effort !== null) effortGroup.removeAttribute('aria-describedby')
+      for (const [id, b] of effortButtons) b.setAttribute('aria-checked', String(id === effort))
       for (const [id, b] of statButtons) b.setAttribute('aria-checked', String(id === stat))
       syncRoving([...timesButtons.values()])
+      syncRoving([...effortButtons.values()])
       syncRoving([...statButtons.values()])
-      done.disabled = blocked || cleanTaskName(name.value, limits) === null || stat === null
+      done.disabled = blocked || cleanTaskName(name.value, limits) === null || stat === null || (adding && effort === null)
     }
 
     /**
@@ -446,15 +494,16 @@ export function createTasksCard(doc: Document, config: TasksCardConfig): TasksCa
       const cleanName = cleanTaskName(name.value, limits)
       if (cleanName === null) return
       if (adding) {
-        if (stat === null) return
-        if (!config.onAdd({ name: cleanName, stat, xp, timesADay: times })) return couldNotSave()
+        if (stat === null || effort === null) return
+        if (!config.onAdd({ name: cleanName, stat, effort, timesADay: times })) return couldNotSave()
         close()
         config.say(taskAdded(cleanName))
         return
       }
       const changes: TaskChanges = {}
       if (cleanName !== task.name) changes.name = cleanName
-      if (xp !== task.xp) changes.xp = xp
+      // Picking a level (a new one, or a first one for an older task) sets its XP.
+      if (effort !== null && effort !== task.effort) changes.effort = effort
       if (!fixedRules && times !== timesADay(task)) changes.timesADay = times
       if (Object.keys(changes).length === 0) return close()
       if (!config.onUpdate(task.id, changes)) return couldNotSave()

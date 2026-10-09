@@ -451,14 +451,12 @@ export const TASKS_COPY = {
   addHeading: 'New task',
   nameLabel: 'Name',
   namePlaceholder: 'What will you do?',
-  xpLabel: 'XP',
-  xpLess: 'Less XP',
-  xpMore: 'More XP',
+  effortLabel: 'How hard is this for you?',
   timesLabel: 'Times a day',
   statLabel: 'Stat',
   /** On the add sheet, under the stat choices. */
   statFixed: "A task's stat can't be changed later.",
-  /** On the edit sheet: XP and times a day never rewrite past logs. */
+  /** On the edit sheet: how hard it is and times a day never rewrite past logs. */
   nextLog: 'Changes count from your next log.',
   done: 'Done',
   cancel: 'Cancel',
@@ -466,17 +464,37 @@ export const TASKS_COPY = {
   archiveNote: 'Its history is kept, and you can bring it back any time.',
 } as const
 
-/** Under the XP stepper at the daily limit: "Up to 15 XP when it's three times a day". */
-export const dailyXpHint = (xp: number, times: number): string =>
-  `Up to ${xp} XP when it's ${times === 2 ? 'twice' : times === 3 ? 'three times' : `${times} times`} a day`
+/** The XP on an effort level's choice, e.g. "+15 XP". */
+export const effortXp = (xp: number): string => `+${xp} XP`
+
+/** An effort level's choice, for a screen reader: "Really hard, 40 XP". */
+export const effortChoiceLabel = (label: string, xp: number): string => `${label}, ${xp} XP`
+
+/** Under the effort choices for an older task with no level yet. */
+export const legacyXpHint = (xp: number): string => `Currently ${xp} XP. Pick a level to change it.`
+
+/** "once a day", "up to twice a day", "up to 3 times a day". */
+const timesCap = (n: number): string => (n <= 1 ? 'once a day' : n === 2 ? 'up to twice a day' : `up to ${n} times a day`)
+
+/**
+ * Under times a day when the chosen level allows fewer than all of them, from the
+ * level's label and cap (config): "Really hard: once a day."
+ */
+export const effortTimesHint = (label: string, times: number): string => `${label}: ${timesCap(times)}.`
+
+/** Under times a day for an older task with no level, when its XP allows fewer. */
+export const legacyTimesHint = (xp: number, times: number): string => `At ${xp} XP it's ${timesCap(times)}.`
 
 /** The edit sheet's line naming a task's stat, e.g. "Counts towards Strength". */
 export const taskStatLine = (stat: string): string => `Counts towards ${stat}`
-/** A task row's label for a screen reader: "Gym / workout, Strength, 40 XP. Edit". */
-export const taskRowLabel = (name: string, stat: string, xp: number): string => `${name}, ${stat}, ${xp} XP. Edit`
+/**
+ * A task row's label for a screen reader: "Gym / workout, Strength, Really hard. Edit"
+ * (or "…, 30 XP. Edit" for an older task with no effort level yet).
+ */
+export const taskRowLabel = (name: string, stat: string, hardness: string): string => `${name}, ${stat}, ${hardness}. Edit`
 /** "Unarchive Gym / workout", for a screen reader. */
 export const unarchiveLabel = (name: string): string => `Unarchive ${name}`
-/** The stepper's value, e.g. "15 XP". */
+/** An older task's XP on its row, e.g. "30 XP". */
 export const xpValue = (xp: number): string => `${xp} XP`
 /** "Once", "Twice", "3 times" a day, for a screen reader on the 1 / 2 / 3 choice. */
 export const timesADayLabel = (n: number): string => (n === 1 ? 'Once a day' : n === 2 ? 'Twice a day' : `${n} times a day`)

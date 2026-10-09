@@ -3,7 +3,7 @@ import { REWARDS } from '../config/rewards'
 import { STREAKS } from '../config/streaks'
 import { DEFAULT_SETTINGS } from '../config/settings'
 import { STAGES } from '../config/stages'
-import { TASKS } from '../config/tasks'
+import { EFFORT_LEVELS, TASKS } from '../config/tasks'
 import { createLogEvent, createUndoEvent, undoableLog } from './log'
 import { foundItems, itemFor, logsSinceFind, rewardMilestone } from './rewards'
 import { dragonStage, stageFor, totalXp } from './state'
@@ -29,14 +29,14 @@ const TUE = (time: string) => at(`2026-10-06T${time}+01:00`)
 
 /** Logs a task and appends it, failing the test if it was refused. */
 function tap(events: GameEvent[], t: Task, now: number, id: string): GameEvent[] {
-  const e = createLogEvent(t, events, settings, now, id, NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS })
+  const e = createLogEvent(t, events, settings, now, id, NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })
   if (!e) throw new Error(`${t.id} refused at ${new Date(now).toISOString()}`)
   return [...events, e]
 }
 
 describe('createLogEvent', () => {
   it('records the task, time, id and current XP', () => {
-    expect(createLogEvent(gym, [], settings, MON('08:00'), 'abc', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS })).toEqual({
+    expect(createLogEvent(gym, [], settings, MON('08:00'), 'abc', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })).toEqual({
       id: 'abc',
       type: 'log',
       taskId: 'gym',
@@ -47,36 +47,52 @@ describe('createLogEvent', () => {
 
   it('refuses a second once-per-day log', () => {
     const events = tap([], gym, MON('08:00'), 'a')
-    expect(createLogEvent(gym, events, settings, MON('09:00'), 'b', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS })).toBeNull()
+    expect(createLogEvent(gym, events, settings, MON('09:00'), 'b', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })).toBeNull()
   })
 
   it('refuses the avoided task once it reaches its daily limit', () => {
     let events: GameEvent[] = []
     for (let i = 0; i < avoidedMax; i++) events = tap(events, avoided, MON('09:00') + i * 60_000, `a${i}`)
-    expect(createLogEvent(avoided, events, settings, MON('12:00'), 'next', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS })).toBeNull()
+    expect(createLogEvent(avoided, events, settings, MON('12:00'), 'next', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })).toBeNull()
   })
 
   it('accepts wake-up at 06:45 and refuses it at 06:46', () => {
-    expect(createLogEvent(wake, [], settings, MON('06:45:00'), 'a', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS })).not.toBeNull()
-    expect(createLogEvent(wake, [], settings, MON('06:46:00'), 'b', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS })).toBeNull()
+    expect(createLogEvent(wake, [], settings, MON('06:45:00'), 'a', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })).not.toBeNull()
+    expect(createLogEvent(wake, [], settings, MON('06:46:00'), 'b', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })).toBeNull()
   })
 
   it('refuses wake-up at 02:00 Tuesday, which is Monday night', () => {
-    expect(createLogEvent(wake, [], settings, TUE('02:00'), 'a', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS })).toBeNull()
+    expect(createLogEvent(wake, [], settings, TUE('02:00'), 'a', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })).toBeNull()
   })
 
   it('refuses wake-up at the weekend', () => {
-    expect(createLogEvent(wake, [], settings, at('2026-10-10T06:00:00+01:00'), 'a', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS })).toBeNull()
+    expect(createLogEvent(wake, [], settings, at('2026-10-10T06:00:00+01:00'), 'a', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })).toBeNull()
   })
 
   it('refuses archived tasks', () => {
-    expect(createLogEvent({ ...gym, archived: true }, [], settings, MON('08:00'), 'a', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS })).toBeNull()
+    expect(createLogEvent({ ...gym, archived: true }, [], settings, MON('08:00'), 'a', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })).toBeNull()
   })
 
   it('uses the task XP at log time, so later XP edits leave old logs alone', () => {
-    const events = tap([], { ...gym, xp: 41 }, MON('08:00'), 'a')
-    const after = tap(events, { ...walk, xp: 99 }, MON('09:00'), 'b')
+    // Tasks with no effort level (older ones): their stored XP.
+    const { effort: _g, ...plainGym } = gym
+    const { effort: _w, ...plainWalk } = walk
+    const events = tap([], { ...plainGym, xp: 41 }, MON('08:00'), 'a')
+    const after = tap(events, { ...plainWalk, xp: 99 }, MON('09:00'), 'b')
     expect(totalXp(after)).toBe(140)
+  })
+
+  it("uses the effort level's XP when the task has one, and an unknown level falls back to the stored XP", () => {
+    const hard = EFFORT_LEVELS.find((l) => l.id === 'hard')!
+    const e = createLogEvent({ ...gym, xp: 41 }, [], settings, MON('08:00'), 'a', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })
+    expect(e?.xpAwarded).toBe(hard.xp)
+    const odd = createLogEvent({ ...gym, xp: 41, effort: 'mega' }, [], settings, MON('08:00'), 'b', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })
+    expect(odd?.xpAwarded).toBe(41)
+  })
+
+  it("works out a treat from the level's XP", () => {
+    const treat = createLogEvent({ ...gym, xp: 1 }, [], settings, MON('08:00'), 'a', { chance: REWARDS.rareChance, pick: 0 }, { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })
+    expect(treat?.reward).toEqual({ kind: 'treat', bonusXp: Math.round(40 * REWARDS.treatBonusShare) })
   })
 })
 
@@ -119,7 +135,7 @@ describe('undo', () => {
   it('lets a task be logged again after its log is undone', () => {
     const events = tap([], gym, MON('08:00'), 'a')
     const u = createUndoEvent(events, MON('08:01'), 'u') as GameEvent
-    expect(createLogEvent(gym, [...events, u], settings, MON('08:02'), 'b', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS })).not.toBeNull()
+    expect(createLogEvent(gym, [...events, u], settings, MON('08:02'), 'b', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })).not.toBeNull()
   })
 
   it('still works at 03:59 for a log from earlier that day', () => {
@@ -169,37 +185,37 @@ describe('createLogEvent rewards', () => {
   const bonus = (t: Task) => Math.round(t.xp * REWARDS.treatBonusShare)
 
   it('saves a treat on the log, keeping xpAwarded as the base XP', () => {
-    const e = createLogEvent(read, [], settings, MON('08:00'), 'a', TREAT, { stages: STAGES, rewards: REWARDS, streaks: STREAKS })
+    const e = createLogEvent(read, [], settings, MON('08:00'), 'a', TREAT, { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })
     expect(e).toMatchObject({ xpAwarded: read.xp, reward: { kind: 'treat', bonusXp: bonus(read) } })
     expect(totalXp([e as GameEvent])).toBe(read.xp + bonus(read))
   })
 
   it('saves no reward key on a roll that brings nothing', () => {
-    const e = createLogEvent(read, [], settings, MON('08:00'), 'a', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS })
+    const e = createLogEvent(read, [], settings, MON('08:00'), 'a', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })
     expect(e).not.toHaveProperty('reward')
   })
 
   it('saves an item on the log in the rare band, with the base XP unchanged', () => {
-    const e = createLogEvent(read, [], settings, MON('08:00'), 'a', { chance: 0, pick: 0 }, { stages: STAGES, rewards: REWARDS, streaks: STREAKS })
+    const e = createLogEvent(read, [], settings, MON('08:00'), 'a', { chance: 0, pick: 0 }, { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })
     expect(e).toMatchObject({ xpAwarded: read.xp, reward: { kind: 'item', itemId: REWARDS.items[0]!.id } })
     expect(totalXp([e as GameEvent])).toBe(read.xp)
   })
 
   it('picks among the items not found yet, from the whole log', () => {
     const RARE = { chance: 0, pick: 0 }
-    let events: GameEvent[] = [createLogEvent(gym, [], settings, MON('08:00'), 'a', RARE, { stages: STAGES, rewards: REWARDS, streaks: STREAKS })!]
-    events = [...events, createLogEvent(read, events, settings, MON('08:01'), 'b', RARE, { stages: STAGES, rewards: REWARDS, streaks: STREAKS })!]
+    let events: GameEvent[] = [createLogEvent(gym, [], settings, MON('08:00'), 'a', RARE, { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })!]
+    events = [...events, createLogEvent(read, events, settings, MON('08:01'), 'b', RARE, { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })!]
     expect(foundItems(events, REWARDS.items).map((f) => f.item.id)).toEqual(REWARDS.items.slice(0, 2).map((i) => i.id))
     // Undo takes the second find away, so the next rare roll can bring it again.
     events = [...events, createUndoEvent(events, MON('08:02'), 'u')!]
     expect(foundItems(events, REWARDS.items)).toHaveLength(1)
-    const again = createLogEvent(read, events, settings, MON('08:03'), 'c', RARE, { stages: STAGES, rewards: REWARDS, streaks: STREAKS })
+    const again = createLogEvent(read, events, settings, MON('08:03'), 'c', RARE, { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })
     expect(again?.reward).toEqual({ kind: 'item', itemId: REWARDS.items[1]!.id })
   })
 
   it('gives no reward when the log is refused', () => {
     const events = tap([], gym, MON('08:00'), 'a')
-    expect(createLogEvent(gym, events, settings, MON('09:00'), 'b', TREAT, { stages: STAGES, rewards: REWARDS, streaks: STREAKS })).toBeNull()
+    expect(createLogEvent(gym, events, settings, MON('09:00'), 'b', TREAT, { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })).toBeNull()
   })
 
   it('records stageReached when the treat bonus is what crosses a threshold', () => {
@@ -208,9 +224,9 @@ describe('createLogEvent rewards', () => {
       { id: 'egg', name: 'Egg', xpFrom: 0 },
       { id: 'hatchling', name: 'Hatchling', xpFrom: hatchAt },
     ]
-    const plain = createLogEvent(gym, [], settings, MON('08:00'), 'a', NO_REWARD, { stages, rewards: REWARDS, streaks: STREAKS })
+    const plain = createLogEvent(gym, [], settings, MON('08:00'), 'a', NO_REWARD, { stages, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })
     expect(plain).not.toHaveProperty('stageReached')
-    const treat = createLogEvent(gym, [], settings, MON('08:00'), 'a', TREAT, { stages, rewards: REWARDS, streaks: STREAKS }) as LogEvent
+    const treat = createLogEvent(gym, [], settings, MON('08:00'), 'a', TREAT, { stages, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS }) as LogEvent
     expect(treat.stageReached).toBe('hatchling')
     // Raising the threshold past the total later doesn't take the stage away.
     const raised = stages.map((s) => (s.id === 'hatchling' ? { ...s, xpFrom: 1000 } : s))
@@ -218,8 +234,8 @@ describe('createLogEvent rewards', () => {
   })
 
   it('takes the bonus away with the log on undo', () => {
-    let events: GameEvent[] = [createLogEvent(gym, [], settings, MON('08:00'), 'a', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS })!]
-    events = [...events, createLogEvent(read, events, settings, MON('08:01'), 'b', TREAT, { stages: STAGES, rewards: REWARDS, streaks: STREAKS })!]
+    let events: GameEvent[] = [createLogEvent(gym, [], settings, MON('08:00'), 'a', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })!]
+    events = [...events, createLogEvent(read, events, settings, MON('08:01'), 'b', TREAT, { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })!]
     expect(totalXp(events)).toBe(gym.xp + read.xp + bonus(read))
     events = [...events, createUndoEvent(events, MON('08:02'), 'u')!]
     expect(totalXp(events)).toBe(gym.xp)
@@ -238,7 +254,7 @@ describe('createLogEvent streak milestones', () => {
   /** Logs `t` on each given day through createLogEvent and appends it. */
   function logDays(days: number[], events: GameEvent[] = [], config = CONFIG, t = gym, roll = NO_REWARD): GameEvent[] {
     for (const n of days) {
-      const e = createLogEvent(t, events, settings, tenOn(n), `d${n}-${events.length}`, roll, { stages: STAGES, rewards: REWARDS, streaks: config })
+      const e = createLogEvent(t, events, settings, tenOn(n), `d${n}-${events.length}`, roll, { stages: STAGES, rewards: REWARDS, streaks: config, effortLevels: EFFORT_LEVELS })
       if (!e) throw new Error(`refused on day ${n}`)
       events = [...events, e]
     }
@@ -250,7 +266,7 @@ describe('createLogEvent streak milestones', () => {
   it('gives the log that first reaches 7 days a guaranteed item, saved with the milestone', () => {
     const six = logDays(range(1, 6))
     expect(six.some((e) => (e as LogEvent).reward)).toBe(false)
-    const seventh = createLogEvent(gym, six, settings, tenOn(7), 'seven', PICK_LAST, { stages: STAGES, rewards: REWARDS, streaks: CONFIG })!
+    const seventh = createLogEvent(gym, six, settings, tenOn(7), 'seven', PICK_LAST, { stages: STAGES, rewards: REWARDS, streaks: CONFIG, effortLevels: EFFORT_LEVELS })!
     const lastItem = REWARDS.items.at(-1)!
     expect(seventh.reward).toEqual({ kind: 'item', itemId: lastItem.id, milestone: 7 })
     expect(itemFor(seventh, REWARDS.items)).toEqual(lastItem)
@@ -262,7 +278,7 @@ describe('createLogEvent streak milestones', () => {
   it('never gives it to a second log the same day', () => {
     const seven = logDays(range(1, 7))
     expect(rewardMilestone(last(seven))).toBe(7)
-    const again = createLogEvent(read, seven, settings, tenOn(7, 5), 'again', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: CONFIG })!
+    const again = createLogEvent(read, seven, settings, tenOn(7, 5), 'again', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: CONFIG, effortLevels: EFFORT_LEVELS })!
     expect(again).not.toHaveProperty('reward')
   })
 
@@ -288,7 +304,7 @@ describe('createLogEvent streak milestones', () => {
     expect(rewardMilestone(last(events))).toBe(7)
     events = [...events, createUndoEvent(events, tenOn(7, 1), 'u')!]
     expect(foundItems(events, REWARDS.items)).toHaveLength(0)
-    const relog = createLogEvent(walk, events, settings, tenOn(7, 2), 'relog', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: CONFIG })!
+    const relog = createLogEvent(walk, events, settings, tenOn(7, 2), 'relog', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: CONFIG, effortLevels: EFFORT_LEVELS })!
     expect(rewardMilestone(relog)).toBe(7)
   })
 
@@ -303,9 +319,9 @@ describe('createLogEvent streak milestones', () => {
     }))
     const six = logDays(range(1, 6), all)
     const TREAT = { chance: REWARDS.rareChance, pick: 0 }
-    const seventh = createLogEvent(gym, six, settings, tenOn(7), 's', TREAT, { stages: STAGES, rewards: REWARDS, streaks: CONFIG })!
+    const seventh = createLogEvent(gym, six, settings, tenOn(7), 's', TREAT, { stages: STAGES, rewards: REWARDS, streaks: CONFIG, effortLevels: EFFORT_LEVELS })!
     expect(seventh.reward).toEqual({ kind: 'treat', bonusXp: Math.round(gym.xp * REWARDS.treatBonusShare) })
-    const plain = createLogEvent(gym, six, settings, tenOn(7), 's', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: CONFIG })!
+    const plain = createLogEvent(gym, six, settings, tenOn(7), 's', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: CONFIG, effortLevels: EFFORT_LEVELS })!
     expect(plain).not.toHaveProperty('reward')
   })
 

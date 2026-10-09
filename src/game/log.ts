@@ -6,17 +6,24 @@ import { dayKey } from './day'
 import { milestoneReward, rollReward } from './rewards'
 import { activeLogs, dragonStage, heldStage, stageFor, taskAvailability } from './state'
 import { streakMilestoneReached } from './streaks'
-import type { GameEvent, LogEvent, RewardRoll, Settings, Stage, Task, UndoEvent } from './types'
+import { taskXp } from './tasks'
+import type { EffortLevel, GameEvent, LogEvent, RewardRoll, Settings, Stage, Task, UndoEvent } from './types'
 
-/** The config a new log is judged by: stage thresholds, reward odds and streak rules. */
+/**
+ * The config a new log is judged by: stage thresholds, reward odds, streak rules and
+ * the effort levels that set a task's XP.
+ */
 export interface LogRules {
   stages: readonly Stage[]
   rewards: RewardConfig
   streaks: StreakConfig
+  effortLevels: readonly EffortLevel[]
 }
 
 /**
  * A new log for `task`, or null if the task's rules don't allow a log right now.
+ * It's worth the task's XP now (see taskXp: its effort level's, else its stored XP),
+ * saved on the log so later edits never change it. A treat is a share of that XP.
  *
  * If the dragon's stage after this log is higher than the highest stage recorded so
  * far, the log records it as `stageReached`, so a later threshold change can't take
@@ -39,14 +46,15 @@ export function createLogEvent(
   now: number,
   id: string,
   roll: RewardRoll,
-  { stages, rewards, streaks }: LogRules,
+  { stages, rewards, streaks, effortLevels }: LogRules,
 ): LogEvent | null {
   if (!taskAvailability(task, events, settings, now).canLog) return null
-  const event: LogEvent = { id, type: 'log', taskId: task.id, timestamp: now, xpAwarded: task.xp }
+  const xp = taskXp(task, effortLevels)
+  const event: LogEvent = { id, type: 'log', taskId: task.id, timestamp: now, xpAwarded: xp }
   const milestone = streakMilestoneReached(events, event, streaks)
   const reward =
     (milestone !== null ? milestoneReward(events, roll, rewards, milestone) : undefined) ??
-    rollReward(task, events, roll, rewards)
+    rollReward(xp === task.xp ? task : { ...task, xp }, events, roll, rewards)
   if (reward) event.reward = reward
   const after = dragonStage([...events, event], stages)
   // With nothing recorded yet, the first stage needs no record.

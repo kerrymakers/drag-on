@@ -1,25 +1,25 @@
-// Settings: editing tasks, on the phone (from M6 slice 3).
-// Screenshots (with SCREENSHOTS=1): tests/screenshots/m6s3-*
+// Settings: editing tasks, on the phone (from M6 slice 3; the effort picker from M7 slice 1).
+// Screenshots (with SCREENSHOTS=1): tests/screenshots/m6s3-*, m7s1-*
 import { test, expect, settle, shot, type Page } from './fixtures'
 import {
+  EFFORT_LEVELS,
   MAX_ACTIVE_TASKS,
+  NEW_TASK_EFFORT,
   NEW_TASK_ID_PREFIX,
-  NEW_TASK_XP,
   TASK_DAILY_XP_MAX,
-  TASK_LIMITS,
   TASK_NAME_MAX,
-  TASK_XP_MAX,
-  TASK_XP_STEP,
   TASKS,
 } from '../../src/config/tasks'
-import { maxXpFor } from '../../src/game/tasks'
-import { SETTINGS, TASKS_COPY, dailyXpHint } from '../../src/ui/copy'
+import { SETTINGS, TASKS_COPY, effortTimesHint, legacyTimesHint, legacyXpHint } from '../../src/ui/copy'
 
 test.use({ timezoneId: 'Europe/London', locale: 'en-GB' })
 // Friday 9 October 2026 (BST), mid-morning: the wake-up window has closed.
 const FRI = (hm: string) => new Date(`2026-10-09T${hm}:00+01:00`)
 const XP = (id: string) => TASKS.find((t) => t.id === id)!.xp
 const NAME = (id: string) => TASKS.find((t) => t.id === id)!.name
+const LEVEL = (id: string) => EFFORT_LEVELS.find((l) => l.id === id)!
+/** A built-in task's effort level. */
+const LEVEL_OF = (id: string) => LEVEL(TASKS.find((t) => t.id === id)!.effort!)
 
 function collectConsole(page: Page) {
   const msgs: string[] = []
@@ -54,6 +54,8 @@ const row = (page: Page, id: string) => page.locator(`.ss-task-row[data-task-id=
 const sheet = (page: Page) => page.locator('dialog.task-sheet')
 const sheetName = (page: Page) => sheet(page).getByRole('textbox', { name: TASKS_COPY.nameLabel })
 const done = (page: Page) => page.locator('#task-sheet-done')
+const effortChoice = (page: Page, id: string) => sheet(page).locator(`.ts-effort[data-effort="${id}"]`)
+const timesChoice = (page: Page, n: number) => sheet(page).locator(`.ts-segment[data-times="${n}"]`)
 
 async function noOverflow(page: Page, scope: string) {
   const r = await page.evaluate((sel) => ({
@@ -83,7 +85,9 @@ test('the Tasks card sits after Name, with a row per task, and its sheets fit, i
   await expect(page.locator('.ss-task-row')).toHaveCount(TASKS.length)
   await expect(row(page, 'gym')).toContainText(NAME('gym'))
   await expect(row(page, 'gym')).toContainText('Strength')
-  await expect(row(page, 'gym')).toContainText(`${XP('gym')} XP`)
+  // How hard it is, not a number.
+  await expect(row(page, 'gym').locator('.ss-task-xp')).toHaveText(LEVEL_OF('gym').label)
+  await expect(row(page, 'gym')).toHaveAttribute('aria-label', `${NAME('gym')}, Strength, ${LEVEL_OF('gym').label}. Edit`)
   // No archived tasks yet, so no Archived section.
   await expect(page.locator('.ss-archived')).toBeHidden()
   await bigEnough(page, ['.ss-task-row', '#ss-add-task'])
@@ -103,9 +107,22 @@ test('the Tasks card sits after Name, with a row per task, and its sheets fit, i
     await expect(sheet(page)).toContainText('Counts towards Discipline')
     await expect(sheet(page)).toContainText(TASKS_COPY.nextLog)
     await expect(sheet(page).getByRole('radio', { name: 'Twice a day' })).toHaveAttribute('aria-checked', 'true')
+    // How hard is this for you? Its level is chosen; each shows its XP.
+    await expect(sheet(page).getByRole('radiogroup', { name: TASKS_COPY.effortLabel })).toBeVisible()
+    await expect(sheet(page).getByRole('radiogroup', { name: TASKS_COPY.effortLabel }).getByRole('radio')).toHaveCount(EFFORT_LEVELS.length)
+    await expect(effortChoice(page, LEVEL_OF('avoided').id)).toHaveAttribute('aria-checked', 'true')
+    for (const l of EFFORT_LEVELS) {
+      await expect(effortChoice(page, l.id)).toContainText(l.label)
+      await expect(effortChoice(page, l.id)).toContainText(`+${l.xp} XP`)
+    }
+    await expect(page.locator('#task-sheet-effort-hint')).toHaveCount(0)
     await expect(page.locator('#task-sheet-archive')).toBeVisible()
     await expect(sheet(page)).toContainText(TASKS_COPY.archiveNote)
-    await bigEnough(page, ['#task-sheet-xp-less', '#task-sheet-xp-more', '.ts-segment', '#task-sheet-done', '#task-sheet-cancel', '#task-sheet-archive', '#task-sheet-name'])
+    await bigEnough(page, ['.ts-effort', '.ts-segment', '#task-sheet-done', '#task-sheet-cancel', '#task-sheet-archive', '#task-sheet-name'])
+    // The three choices sit side by side, all fully on screen.
+    const boxes = await sheet(page).locator('.ts-effort').evaluateAll((bs) => bs.map((b) => b.getBoundingClientRect().toJSON()))
+    expect(new Set(boxes.map((b: DOMRect) => Math.round(b.top))).size).toBe(1)
+    for (const b of boxes) expect(b.right).toBeLessThanOrEqual(page.viewportSize()!.width)
     await settle(page)
     await noOverflow(page, 'dialog.task-sheet')
     await shot(page, `m6s3-edit-sheet-${info.project.name}-${scheme}`)
@@ -115,10 +132,10 @@ test('the Tasks card sits after Name, with a row per task, and its sheets fit, i
     // The add sheet: a stat picker, no archive.
     await page.locator('#ss-add-task').tap()
     await expect(sheet(page)).toBeVisible()
-    await expect(sheet(page).getByRole('radio')).toHaveCount(4 + 3)
+    await expect(sheet(page).getByRole('radio')).toHaveCount(4 + EFFORT_LEVELS.length + 3)
     await expect(sheet(page)).toContainText(TASKS_COPY.statFixed)
     await expect(page.locator('#task-sheet-archive')).toHaveCount(0)
-    await expect(page.locator('#task-sheet-xp')).toHaveText(`${NEW_TASK_XP} XP`)
+    await expect(effortChoice(page, NEW_TASK_EFFORT)).toHaveAttribute('aria-checked', 'true')
     await expect(sheet(page).getByRole('radio', { name: 'Once a day' })).toHaveAttribute('aria-checked', 'true')
     await bigEnough(page, ['.ts-stat'])
     await settle(page)
@@ -131,19 +148,27 @@ test('the Tasks card sits after Name, with a row per task, and its sheets fit, i
   expect(msgs).toEqual([])
 })
 
-test('the wake-up task has no times-a-day choice and keeps its rules', async ({ page }) => {
+test('the wake-up task has no times-a-day choice and keeps its rules; picking a level sets its XP', async ({ page }) => {
   await open(page, FRI('06:00'), null, '#/settings')
+  // It has no level yet, so its row shows its XP.
+  await expect(row(page, 'wake').locator('.ss-task-xp')).toHaveText(`${XP('wake')} XP`)
   await row(page, 'wake').tap()
-  await expect(sheet(page).getByRole('radiogroup')).toHaveCount(0)
-  await page.locator('#task-sheet-xp-more').tap()
+  await expect(sheet(page).getByRole('radiogroup')).toHaveCount(1)
+  await expect(sheet(page).getByRole('radiogroup', { name: TASKS_COPY.timesLabel })).toHaveCount(0)
+  // No level chosen, with a gentle line saying what it's worth now.
+  for (const l of EFFORT_LEVELS) await expect(effortChoice(page, l.id)).toHaveAttribute('aria-checked', 'false')
+  await expect(page.locator('#task-sheet-effort-hint')).toHaveText(legacyXpHint(XP('wake')))
+  await effortChoice(page, 'hard').tap()
+  await expect(page.locator('#task-sheet-effort-hint')).toBeHidden()
   await done(page).tap()
   const wake = (await stored(page)).settings.tasks.find((t: { id: string }) => t.id === 'wake')
-  expect(wake).toMatchObject({ xp: XP('wake') + TASK_XP_STEP, rules: { kind: 'wakeUp' }, stat: 'discipline' })
+  expect(wake).toMatchObject({ effort: 'hard', xp: LEVEL('hard').xp, rules: { kind: 'wakeUp' }, stat: 'discipline' })
+  await expect(row(page, 'wake').locator('.ss-task-xp')).toHaveText(LEVEL('hard').label)
   await tab(page, 'home').tap()
-  await expect(homeTask(page, 'wake')).toContainText(`+${XP('wake') + TASK_XP_STEP} XP`)
+  await expect(homeTask(page, 'wake')).toContainText(`+${LEVEL('hard').xp} XP`)
 })
 
-test('rename a task and change its XP: Home shows it, the next log uses it, the past keeps its XP', async ({ page }) => {
+test('rename a task and change how hard it is: Home shows it, the next log uses it, the past keeps its XP', async ({ page }) => {
   const msgs = collectConsole(page)
   await open(page, FRI('10:00'))
   // A walk before the edit.
@@ -154,25 +179,26 @@ test('rename a task and change its XP: Home shows it, the next log uses it, the 
   await tab(page, 'settings').tap()
   await row(page, 'gym').tap()
   await sheetName(page).fill('  Lifting  ')
-  await page.locator('#task-sheet-xp-more').tap()
-  await page.locator('#task-sheet-xp-more').tap()
-  await expect(page.locator('#task-sheet-xp')).toHaveText(`${XP('gym') + 2 * TASK_XP_STEP} XP`)
+  await effortChoice(page, 'effort').tap()
+  await expect(effortChoice(page, 'effort')).toHaveAttribute('aria-checked', 'true')
+  await expect(effortChoice(page, 'hard')).toHaveAttribute('aria-checked', 'false')
   await done(page).tap()
   await expect(sheet(page)).toHaveCount(0)
   await expect(page.locator('.ss-tasks .ss-saved')).toHaveText(SETTINGS.saved)
   await expect(row(page, 'gym')).toContainText('Lifting')
+  await expect(row(page, 'gym').locator('.ss-task-xp')).toHaveText(LEVEL('effort').label)
   // Focus goes back to the row that was edited.
   await expect(row(page, 'gym')).toBeFocused()
 
-  // The walk's XP down to the minimum step, and Cancel throws a change away.
+  // Cancel throws a change away.
   await row(page, 'walk').tap()
-  await page.locator('#task-sheet-xp-less').tap()
+  await effortChoice(page, 'hard').tap()
   await page.locator('#task-sheet-cancel').tap()
-  await expect(row(page, 'walk')).toContainText(`${XP('walk')} XP`)
+  await expect(row(page, 'walk').locator('.ss-task-xp')).toHaveText(LEVEL_OF('walk').label)
 
   await tab(page, 'home').tap()
   await expect(homeTask(page, 'gym')).toContainText('Lifting')
-  const newXp = XP('gym') + 2 * TASK_XP_STEP
+  const newXp = LEVEL('effort').xp
   await expect(homeTask(page, 'gym')).toContainText(`+${newXp} XP`)
   await homeTask(page, 'gym').tap()
   await expect(page.locator('.toast-name')).toHaveText('Lifting')
@@ -184,7 +210,8 @@ test('rename a task and change its XP: Home shows it, the next log uses it, the 
   ])
   // The first edit stores the whole list; the stat never changes.
   expect(data.settings.tasks.map((t: { id: string }) => t.id)).toEqual(TASKS.map((t) => t.id))
-  expect(data.settings.tasks.find((t: { id: string }) => t.id === 'gym')).toMatchObject({ name: 'Lifting', stat: 'strength' })
+  // The level's XP is written onto the task too, for older versions and exports.
+  expect(data.settings.tasks.find((t: { id: string }) => t.id === 'gym')).toMatchObject({ name: 'Lifting', stat: 'strength', effort: 'effort', xp: newXp })
 
   // It all lasts.
   await page.reload()
@@ -290,34 +317,37 @@ test('add a task, log it in one tap, and it lasts', async ({ page }) => {
   await expect(done(page)).toBeDisabled()
   await sheet(page).getByRole('radio', { name: 'Heart' }).tap()
   await expect(sheet(page).getByRole('radio', { name: 'Heart' })).toHaveAttribute('aria-checked', 'true')
+  await effortChoice(page, 'effort').tap()
   await sheet(page).getByRole('radio', { name: 'Twice a day' }).tap()
-  await page.locator('#task-sheet-xp-more').tap()
   await done(page).tap()
   await expect(sheet(page)).toHaveCount(0)
   await expect(page.locator('.ss-toast')).toContainText('Call Mum is on Home now')
+  const xp = LEVEL('effort').xp
 
   const task = (await stored(page)).settings.tasks.at(-1)
   expect(task).toMatchObject({
     name: 'Call Mum',
     stat: 'heart',
-    xp: NEW_TASK_XP + TASK_XP_STEP,
+    effort: 'effort',
+    xp,
     rules: { kind: 'maxPerDay', max: 2 },
     archived: false,
   })
   expect(task.id.startsWith(NEW_TASK_ID_PREFIX)).toBe(true)
   await expect(row(page, task.id)).toContainText('Heart')
+  await expect(row(page, task.id).locator('.ss-task-xp')).toHaveText(LEVEL('effort').label)
 
   await tab(page, 'home').tap()
   const button = homeTask(page, task.id)
   await expect(button).toContainText('Call Mum')
   await button.tap()
   await expect(button).toContainText('1/2')
-  await expect(page.locator('#xp-total')).toHaveText(String(NEW_TASK_XP + TASK_XP_STEP))
+  await expect(page.locator('#xp-total')).toHaveText(String(xp))
   await page.reload()
   await expect(page.locator('#tabbar a').first()).toBeVisible()
   await expect(homeTask(page, task.id)).toContainText('1/2')
   await tab(page, 'dragon').tap()
-  await expect(page.locator('.stat[data-stat="heart"] .stat-value')).toHaveText(String(NEW_TASK_XP + TASK_XP_STEP))
+  await expect(page.locator('.stat[data-stat="heart"] .stat-value')).toHaveText(String(xp))
   await tab(page, 'history').tap()
   await expect(page.locator('.hs-week')).toContainText('Call Mum')
   expect(msgs).toEqual([])
@@ -486,26 +516,124 @@ test("if saving stops while a sheet is open, Done keeps the sheet and says why",
   await expect(page.locator('#ss-tasks-title')).toBeFocused()
 })
 
-test('more times a day brings the XP down to fit, with a warm hint, and + stops there', async ({ page }) => {
+test('a harder level lowers times a day to fit, with a warm hint, and the extra choices are off', async ({ page }, info) => {
   await open(page, FRI('10:00'), null, '#/settings')
   await row(page, 'walk').tap()
-  for (let i = 0; i < 20 && (await page.locator('#task-sheet-xp-more').isEnabled()); i++) await page.locator('#task-sheet-xp-more').tap()
-  await expect(page.locator('#task-sheet-xp')).toHaveText(`${TASK_XP_MAX} XP`)
-  await expect(page.locator('#task-sheet-xp-hint')).toBeHidden()
-  await sheet(page).getByRole('radio', { name: '3 times a day' }).tap()
-  await expect(page.locator('#task-sheet-xp')).toHaveText(`${maxXpFor(3, TASK_LIMITS)} XP`)
-  await expect(page.locator('#task-sheet-xp-hint')).toHaveText(dailyXpHint(maxXpFor(3, TASK_LIMITS), 3))
-  await expect(page.locator('#task-sheet-xp-more')).toBeDisabled()
-  await sheet(page).getByRole('radio', { name: 'Twice a day' }).tap()
-  // Fewer times a day never raises the XP by itself, but + works again.
-  await expect(page.locator('#task-sheet-xp')).toHaveText(`${maxXpFor(3, TASK_LIMITS)} XP`)
-  await expect(page.locator('#task-sheet-xp-hint')).toBeHidden()
-  await page.locator('#task-sheet-xp-more').tap()
-  await page.locator('#task-sheet-xp-more').tap()
-  await expect(page.locator('#task-sheet-xp')).toHaveText(`${maxXpFor(2, TASK_LIMITS)} XP`)
-  await expect(page.locator('#task-sheet-xp-hint')).toHaveText(dailyXpHint(maxXpFor(2, TASK_LIMITS), 2))
+  // A little nudge: all three are on, no hint.
+  await timesChoice(page, 3).tap()
+  await expect(timesChoice(page, 3)).toHaveAttribute('aria-checked', 'true')
+  await expect(page.locator('#task-sheet-times-hint')).toBeHidden()
+
+  await effortChoice(page, 'hard').tap()
+  await expect(timesChoice(page, 1)).toHaveAttribute('aria-checked', 'true')
+  await expect(timesChoice(page, 2)).toBeDisabled()
+  await expect(timesChoice(page, 3)).toBeDisabled()
+  await expect(page.locator('#task-sheet-times-hint')).toHaveText(effortTimesHint(LEVEL('hard').label, LEVEL('hard').maxTimesADay))
+  await settle(page)
+  await noOverflow(page, 'dialog.task-sheet')
+  await shot(page, `m7s1-hard-${info.project.name}`, { of: 'dialog.task-sheet .sheet-card' })
+
+  // Easier again: more choices come back, but times a day doesn't go up by itself.
+  await effortChoice(page, 'effort').tap()
+  await expect(timesChoice(page, 1)).toHaveAttribute('aria-checked', 'true')
+  await expect(timesChoice(page, 2)).toBeEnabled()
+  await expect(timesChoice(page, 3)).toBeDisabled()
+  await expect(page.locator('#task-sheet-times-hint')).toHaveText(effortTimesHint(LEVEL('effort').label, LEVEL('effort').maxTimesADay))
+  await timesChoice(page, 2).tap()
+  // Arrow keys skip the choice that's off.
+  await timesChoice(page, 2).focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(timesChoice(page, 1)).toBeFocused()
+  await expect(timesChoice(page, 1)).toHaveAttribute('aria-checked', 'true')
+  await page.keyboard.press('ArrowLeft')
+  await expect(timesChoice(page, 2)).toHaveAttribute('aria-checked', 'true')
   await done(page).tap()
   const walk = (await stored(page)).settings.tasks.find((t: { id: string }) => t.id === 'walk')
-  expect(walk).toMatchObject({ xp: maxXpFor(2, TASK_LIMITS), rules: { kind: 'maxPerDay', max: 2 } })
+  expect(walk).toMatchObject({ effort: 'effort', xp: LEVEL('effort').xp, rules: { kind: 'maxPerDay', max: 2 } })
   expect(walk.xp * 2).toBeLessThanOrEqual(TASK_DAILY_XP_MAX)
+})
+
+test('an older task with no level keeps its XP until a level is picked', async ({ page }, info) => {
+  const msgs = collectConsole(page)
+  const old = { id: `${NEW_TASK_ID_PREFIX}old`, name: 'Practise piano', stat: 'wisdom', xp: 30, rules: { kind: 'oncePerDay' }, archived: false }
+  await open(page, FRI('10:00'), { schemaVersion: 1, events: [], settings: { tasks: [...TASKS, old] } }, '#/settings')
+  await expect(row(page, old.id).locator('.ss-task-xp')).toHaveText('30 XP')
+  await row(page, old.id).tap()
+  for (const l of EFFORT_LEVELS) await expect(effortChoice(page, l.id)).toHaveAttribute('aria-checked', 'false')
+  // Nothing chosen: the first choice is the Tab stop.
+  expect(await sheet(page).locator('.ts-effort').evaluateAll((bs) => bs.map((b) => (b as HTMLElement).tabIndex))).toEqual([0, -1, -1])
+  await expect(page.locator('#task-sheet-effort-hint')).toHaveText(legacyXpHint(30))
+  // At 30 XP it's once a day.
+  await expect(timesChoice(page, 2)).toBeDisabled()
+  await expect(page.locator('#task-sheet-times-hint')).toHaveText(legacyTimesHint(30, 1))
+  await settle(page)
+  await noOverflow(page, 'dialog.task-sheet')
+  await shot(page, `m7s1-legacy-${info.project.name}`, { of: 'dialog.task-sheet .sheet-card' })
+  // Saving without picking keeps its XP.
+  await sheetName(page).fill('Practise piano daily')
+  await done(page).tap()
+  let saved = (await stored(page)).settings.tasks.find((t: { id: string }) => t.id === old.id)
+  expect(saved).toEqual({ ...old, name: 'Practise piano daily' })
+  await tab(page, 'home').tap()
+  await expect(homeTask(page, old.id)).toContainText('+30 XP')
+
+  // Picking a level gives it the level's XP and times a day choices.
+  await tab(page, 'settings').tap()
+  await row(page, old.id).tap()
+  await effortChoice(page, 'nudge').tap()
+  await expect(page.locator('#task-sheet-effort-hint')).toBeHidden()
+  await expect(timesChoice(page, 3)).toBeEnabled()
+  await expect(page.locator('#task-sheet-times-hint')).toBeHidden()
+  await timesChoice(page, 3).tap()
+  await done(page).tap()
+  saved = (await stored(page)).settings.tasks.find((t: { id: string }) => t.id === old.id)
+  expect(saved).toMatchObject({ effort: 'nudge', xp: LEVEL('nudge').xp, rules: { kind: 'maxPerDay', max: 3 } })
+  await expect(row(page, old.id).locator('.ss-task-xp')).toHaveText(LEVEL('nudge').label)
+  await tab(page, 'home').tap()
+  await expect(homeTask(page, old.id)).toContainText(`+${LEVEL('nudge').xp} XP`)
+  await homeTask(page, old.id).tap()
+  await expect(page.locator('#xp-total')).toHaveText(String(LEVEL('nudge').xp))
+  expect(msgs).toEqual([])
+})
+
+test('an older task whose XP matches a level shows as that level, and Done saves it', async ({ page }) => {
+  // An M6-era save: the built-in tasks stored without levels, plus one at 25 XP three times a day.
+  const plain = TASKS.map(({ effort: _e, ...t }) => t)
+  const thrice = { id: `${NEW_TASK_ID_PREFIX}t`, name: 'Stretch', stat: 'strength', xp: 25, rules: { kind: 'maxPerDay', max: 3 }, archived: false }
+  await open(page, FRI('10:00'), { schemaVersion: 1, events: [], settings: { tasks: [...plain, thrice] } }, '#/settings')
+  await expect(row(page, 'gym').locator('.ss-task-xp')).toHaveText(LEVEL('hard').label)
+  // Wake-up's 30 XP matches no level.
+  await expect(row(page, 'wake').locator('.ss-task-xp')).toHaveText('30 XP')
+  await row(page, 'gym').tap()
+  await expect(effortChoice(page, 'hard')).toHaveAttribute('aria-checked', 'true')
+  await expect(page.locator('#task-sheet-effort-hint')).toHaveCount(0)
+  // Done with nothing else changed saves the level.
+  await done(page).tap()
+  let tasks = (await stored(page)).settings.tasks
+  expect(tasks.find((t: { id: string }) => t.id === 'gym')).toMatchObject({ effort: 'hard', xp: LEVEL('hard').xp, rules: { kind: 'oncePerDay' } })
+  // 25 XP three times a day shows as Takes effort, at its cap of twice a day, and saves that.
+  await row(page, thrice.id).tap()
+  await expect(effortChoice(page, 'effort')).toHaveAttribute('aria-checked', 'true')
+  await expect(timesChoice(page, 2)).toHaveAttribute('aria-checked', 'true')
+  await expect(timesChoice(page, 3)).toBeDisabled()
+  await done(page).tap()
+  tasks = (await stored(page)).settings.tasks
+  expect(tasks.find((t: { id: string }) => t.id === thrice.id)).toMatchObject({ effort: 'effort', xp: 25, rules: { kind: 'maxPerDay', max: 2 } })
+  // Cancel saves nothing.
+  await row(page, 'walk').tap()
+  await page.locator('#task-sheet-cancel').tap()
+  tasks = (await stored(page)).settings.tasks
+  expect(tasks.find((t: { id: string }) => t.id === 'walk').effort).toBeUndefined()
+})
+
+test('an older task saved over its own cap keeps its times a day, with no contradicting hint', async ({ page }) => {
+  const over = { id: `${NEW_TASK_ID_PREFIX}o`, name: 'Big one', stat: 'heart', xp: 30, rules: { kind: 'maxPerDay', max: 2 }, archived: false }
+  await open(page, FRI('10:00'), { schemaVersion: 1, events: [], settings: { tasks: [...TASKS, over] } }, '#/settings')
+  await row(page, over.id).tap()
+  await expect(timesChoice(page, 2)).toHaveAttribute('aria-checked', 'true')
+  await expect(timesChoice(page, 2)).toBeEnabled()
+  await expect(page.locator('#task-sheet-times-hint')).toBeHidden()
+  // Lowering it brings the hint back, and 2 is now off.
+  await timesChoice(page, 1).tap()
+  await expect(page.locator('#task-sheet-times-hint')).toHaveText(legacyTimesHint(30, 1))
 })
