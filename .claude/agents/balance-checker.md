@@ -10,9 +10,13 @@ You don't change config values. You report and recommend; the user decides.
 
 ## How
 
-Write a simulation script at `scripts/simulate.ts` (or update the existing one). It must import the real game functions from `src/game/` and the real values from `src/config/`, so it tests what the app actually does. Use a fixed random seed so results are repeatable.
+Start with `npm run balance` (about 1.5 minutes). It runs `scripts/simulate.ts` for keen, typical and patchy, then `scripts/streak-sim.ts`, both at 100 runs. Both scripts import the real game functions from `src/game/` and the real values from `src/config/`, with fixed seeds.
 
-For streaks, freezes and streak milestone items, use `scripts/streak-sim.ts` (it passes the full event log to the real `createLogEvent`, which `simulate.ts`'s fast path can't). Run `npx vite-node scripts/streak-sim.ts [days] [runs] [--profiles=...] [--ms=...] [--freeze=N] [--max=N]`.
+Only add `--twins` (treat comparison), `--profiles=all`, `--exact` or more runs when a question needs them. Don't rewrite `simulate.ts` unless a new mechanic needs it; when it does, keep its existing structure and seeds.
+
+For streaks, freezes and streak milestone items, use `scripts/streak-sim.ts` (it runs the real streak and milestone logic through `createLogEvent`, which `simulate.ts`'s fast path can't; `--exact` passes the full event log to check the fast path agrees). Run `nice -n 10 npx vite-node scripts/streak-sim.ts [days] [runs] [--profiles=...] [--ms=...] [--freeze=N] [--max=N]`.
+
+The user works on this Mac while sims run: always run them under `nice -n 10`, one at a time, never in parallel.
 
 Simulate at least 180 days for three types of user:
 

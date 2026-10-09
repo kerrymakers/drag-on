@@ -1,6 +1,9 @@
 // Balance simulation for Drag-on.
 //
-// Run with:  npx vite-node scripts/simulate.ts [days] [runs] [--exact]
+// Run with:  nice -n 10 npx vite-node scripts/simulate.ts [days] [runs] [--twins] [--profiles=all|a,b] [--exact]
+//   Defaults: 365 days, 100 runs, profiles keen,typical,patchy, no twins (part of `npm run balance`).
+//   --twins          also run each seed's no-treat twin (doubles the time) for the treat comparison lines
+//   --profiles=all   all 12 profiles; --profiles=a,b only those keys (see ALL_PROFILES)
 //   --exact  passes the full event log to createLogEvent instead of the fast
 //            carry-forward summary (slow; use with few runs to check they agree).
 //
@@ -16,8 +19,8 @@
 //
 //   - treats: the real rollReward() via createLogEvent with config/rewards.ts; bonus XP
 //     counted by the real totalXp/statTotals (logXp). Reward rolls use their own RNG
-//     stream, so each run is paired with a no-treat twin (same behaviour, treatChance 0)
-//     to measure exactly how much treats change stage days and looks.
+//     stream, so with --twins each run is paired with a no-treat twin (same behaviour,
+//     treatChance 0) to measure exactly how much treats change stage days and looks.
 //   - rare items: the real rollReward() picks among the items not found yet (config/items.ts),
 //     and the real foundItems() counts them (checked at the end of every run). The days
 //     items are found and the day the collection is complete are reported. Once every item
@@ -28,6 +31,7 @@
 //   - overall streak, streak freezes (1 per 7-day streak, max 2), milestone items (STREAK_MILESTONES).
 //     Milestone items are counted separately and don't come out of config/items.ts here.
 
+import './sim-speedups'
 import { createLogEvent, rollReward, dayKey, dragonStage, evolutionLook, foundItems, lookChange, moodFor, rewardItemId, statTotals, totalXp, weekdayOf } from '../src/game'
 import type { Evolution, GameEvent, LogEvent, MoodId, StatId, Task } from '../src/game'
 import { EVOLVES_AT_STAGE, LOOK_CHANGE_MARGIN } from '../src/config/evolution'
@@ -50,7 +54,7 @@ const NO_LEVELS: readonly never[] = []
 const SIM_STREAKS = { ...STREAKS, milestones: [] as number[] }
 
 const DAYS = Number(process.argv[2] ?? 365)
-const RUNS = Number(process.argv[3] ?? 300)
+const RUNS = Number(process.argv[3] ?? 100)
 // Optional what-if, applied in memory only (config files are never changed):
 // Variants set absolute values, never relative ones, so they can't double-apply.
 //   --variant=evo     avoided = 15xp max 2/day, read = 25xp (now the real config, so a no-op)
@@ -58,7 +62,8 @@ const RUNS = Number(process.argv[3] ?? 300)
 //   --variant=rare6   rare item chance 3% -> 6% (projection)
 //   --variant=heart20 / heart25  selfcare XP 15 -> 20 / 25
 //   --margin=N       look rule what-if: overrides LOOK_CHANGE_MARGIN with N% (in memory only)
-//   --profiles=a,b   only run profiles whose key is listed (see PROFILES)
+//   --profiles=a,b   only run profiles whose key is listed (see ALL_PROFILES); all = every profile;
+//                    default keen,typical,patchy
 //   --variant=mood35  sleepy from 3 days, grumpy from 5 (instead of config/mood.ts)
 // Item pacing what-ifs (in memory only):
 //   --rare=N         rare chance N% (overrides config)
@@ -70,12 +75,13 @@ const RUNS = Number(process.argv[3] ?? 300)
 //   --milestones=first|repeat  PROJECTION of M5: streak milestones (STREAK_MILESTONES) take a guaranteed
 //                    item from the same pool (via the real rollReward with a forced rare roll).
 //                    first = each milestone once ever; repeat = every time a streak reaches it.
-//   --no-twins       skip the no-treat twin runs (faster; treat comparison lines are skipped)
+//   --twins          also run the no-treat twins (twice the time; adds the treat comparison lines)
 const VARIANT = process.argv.find((a) => a.startsWith('--variant='))?.split('=')[1] ?? null
 const EXACT = process.argv.includes('--exact')
 const MARGIN_ARG = process.argv.find((a) => a.startsWith('--margin='))?.split('=')[1]
 const MARGIN = MARGIN_ARG === undefined ? LOOK_CHANGE_MARGIN : Number(MARGIN_ARG) / 100
-const PROFILE_FILTER = process.argv.find((a) => a.startsWith('--profiles='))?.split('=')[1]?.split(',') ?? null
+const PROFILES_ARG = process.argv.find((a) => a.startsWith('--profiles='))?.split('=')[1] ?? 'keen,typical,patchy'
+const PROFILE_FILTER = PROFILES_ARG === 'all' ? null : PROFILES_ARG.split(',')
 // Chance the app is opened (at 12:00) on a day with no log. Log days always count as an open.
 const PEEK_CHANCE = 0.3
 const MOOD_LIST =
@@ -111,7 +117,7 @@ if (PITY_ARG === 'off' || PITY_DAYS !== null) REWARD_CFG.itemPityLogs = 0
 else if (PITY_ARG?.endsWith('l')) REWARD_CFG.itemPityLogs = Number(PITY_ARG.slice(0, -1))
 else if (PITY_ARG !== undefined) throw new Error(`--pity=${PITY_ARG}: use Nl, Nd or off`)
 const MILESTONE_MODE = (process.argv.find((a) => a.startsWith('--milestones='))?.split('=')[1] ?? null) as 'first' | 'repeat' | null
-const NO_TWINS = process.argv.includes('--no-twins')
+const TWINS = process.argv.includes('--twins')
 if (EXACT && MILESTONE_MODE) throw new Error('--exact is not supported with --milestones')
 const NO_TREATS: RewardConfig = { ...REWARD_CFG, treatChance: 0 }
 // Stage thresholds what-if: --stages=100,500,1300,3500,7000
@@ -705,7 +711,7 @@ console.log(`Tasks: ${TASK_LIST.map((t) => `${t.id} ${t.xp}xp/${t.stat}${t.rules
 
 for (const p of PROFILES) {
   const runs = Array.from({ length: RUNS }, (_, k) => simulate(p, BASE_SEED + k * 7919))
-  const twins = NO_TWINS ? runs : Array.from({ length: RUNS }, (_, k) => simulate(p, BASE_SEED + k * 7919, NO_TREATS))
+  const twins = !TWINS ? runs : Array.from({ length: RUNS }, (_, k) => simulate(p, BASE_SEED + k * 7919, NO_TREATS))
   console.log(`=== ${p.name} ===`)
   const xp180 = runs.map((r) => r.xpByDay[179] ?? NaN)
   const xpEnd = runs.map((r) => r.xpByDay[DAYS - 1]!)
@@ -780,7 +786,8 @@ for (const p of PROFILES) {
     `Longest wait between two stage-ups (measured): median ${med(runs.map((r) => r.longestGapStagesOnly))} days`,
   )
   console.log('-- treats (measured, real rollReward) --')
-  if (!NO_TWINS) {
+  if (!TWINS) console.log('(no-treat twin comparison skipped; add --twins)')
+  if (TWINS) {
     console.log('Paired with no-treat twin (same logs, treatChance 0): stage day median no-treat -> treats, days saved p10/median/p90')
     for (const s of STAGE_LIST.slice(1)) {
       const pairs = runs
@@ -804,6 +811,8 @@ for (const p of PROFILES) {
     const heartTwin = twins.filter((r) => r.looksSeen.includes('heart')).length
     const heartReal = runs.filter((r) => r.looksSeen.includes('heart')).length
     console.log(`  Ever a Heart look: ${r1((heartTwin / RUNS) * 100)}% -> ${r1((heartReal / RUNS) * 100)}%`)
+  }
+  {
     // Frequency as felt by the user.
     const perActive = mean(runs.map((r) => r.rewards.treats / Math.max(1, r.activeDays)))
     const dayShare = mean(runs.map((r) => r.treatDays.filter(Boolean).length / Math.max(1, r.activeDays)))
@@ -837,6 +846,8 @@ for (const p of PROFILES) {
     console.log(
       `  Longest run of log days without a treat: median ${med(runs.map(drought))}, p90 ${pct(runs.map(drought), 90)} | logs per treat ${r1(mean(runs.map(droughtLogs)))} | bonus XP/run ${Math.round(mean(runs.map((r) => r.treatXp)))}`,
     )
+  }
+  if (TWINS) {
     // A few named seeds, to show how different two players' journeys look.
     const show = runs.slice(0, 6).map((r, k) => {
       const ds = STAGE_LIST.slice(1).map((s) => `${r.stageDay[s.id] ?? '-'}(${twins[k]!.stageDay[s.id] ?? '-'})`)

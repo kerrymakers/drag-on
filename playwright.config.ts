@@ -19,10 +19,11 @@ export default defineConfig({
   testDir: 'tests',
   testMatch: FULL ? ['e2e/**/*.spec.ts', 'phone/**/*.spec.ts'] : ['e2e/**/*.spec.ts'],
   // Each test gets its own browser context (and so its own storage) against one static
-  // preview server, so tests don't share state and can run side by side. Four workers
-  // rather than one per core, so animation timing isn't starved of CPU.
+  // preview server, so tests don't share state and can run side by side. Two workers
+  // everywhere (not one per core), so animation timing isn't starved of CPU and the Mac
+  // stays usable for other work while tests run (the npm scripts also run them under nice).
   fullyParallel: true,
-  workers: process.env.CI ? 2 : 4,
+  workers: 2,
   reporter: 'list',
   use: {
     baseURL: `http://localhost:${PORT}/drag-on/`,

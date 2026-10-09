@@ -1,7 +1,8 @@
 // Milestone 5 streak balance sim. Uses the real createLogEvent (with STREAKS), overallStreak,
 // rollReward/milestoneReward, foundItems. Config is never changed; what-ifs are in memory.
 // Run from the repo root:
-//   npx vite-node scripts/streak-sim.ts [days] [runs] [--exact] [--freeze=N] [--max=N] [--ms=7,30,60,100] [--profiles=a,b]
+//   nice -n 10 npx vite-node scripts/streak-sim.ts [days] [runs] [--exact] [--freeze=N] [--max=N] [--ms=7,30,60,100] [--profiles=a,b]
+import './sim-speedups'
 import {
   createLogEvent, dayKey, weekdayOf, overallStreak, foundItems, rewardItemId, rewardMilestone, logXp, stageFor,
 } from '../src/game'
@@ -20,7 +21,7 @@ const NO_LEVELS: readonly never[] = []
 const args = process.argv.slice(2)
 const pos = args.filter((a) => !a.startsWith('--'))
 const DAYS = Number(pos[0] ?? 365)
-const RUNS = Number(pos[1] ?? 200)
+const RUNS = Number(pos[1] ?? 100)
 const EXACT = args.includes('--exact')
 const arg = (k: string) => args.find((a) => a.startsWith(`--${k}=`))?.split('=')[1]
 const SCFG: StreakConfig = {
@@ -129,7 +130,27 @@ function simulate(p: Profile, seed: number): Run {
   let collectionDay: number | null = null
   const stageDay: Record<string, number | null> = Object.fromEntries(STAGES.map((s) => [s.id, null]))
   let id = 0
+  // Speed-up with identical results (--exact skips it): the real streakMilestoneReached
+  // walks the whole streak twice per log. Only the first log of a day can add to the
+  // count, taking it from `current` (through yesterday) to current + 1, and a milestone
+  // fires only if best < m <= current + 1. So one walk per day (only while a milestone is
+  // still unreached) finds the milestones this log could possibly reach; createLogEvent
+  // gets just those, and none (so no walk at all, see streakMilestoneReached) otherwise.
+  // The real function still decides; the end-of-run checks compare against the full log.
+  let dayIndex = 0
+  let walkedDay = -1
+  let dayWalk = { current: 0, best: 0 }
+  const possibleMilestones = (ctx: readonly GameEvent[], now: number, dayAlreadyLogged: boolean): number[] => {
+    if (dayAlreadyLogged || SCFG.milestones.every((m) => m <= dayWalk.best)) return []
+    if (walkedDay !== dayIndex) {
+      walkedDay = dayIndex
+      const s = overallStreak(ctx, now, SCFG)
+      dayWalk = { current: s.current, best: s.best }
+    }
+    return SCFG.milestones.filter((m) => dayWalk.best < m && m <= dayWalk.current + 1)
+  }
   for (let i = 0; i < DAYS; i++) {
+    dayIndex = i
     const { y, m, d } = cal(i)
     const plan = p.plan(i, rng, st)
     const noon = londonInstant(y, m, d, 12, 0)
@@ -155,7 +176,8 @@ function simulate(p: Profile, seed: number): Run {
       const inCarry = new Set<LogEvent>([...finds, ...since])
       const ctx: GameEvent[] = EXACT || finds.length === 0 ? events : [...dayMarkers, ...today.filter((e) => !inCarry.has(e)), ...finds, ...since]
       const roll = { chance: rr(), pick: rr() }
-      const ev = createLogEvent(TASK.get(a.t)!, ctx, DEFAULT_SETTINGS, a.ts, `e${id++}`, roll, { stages: STAGES, rewards: REWARDS, streaks: SCFG, effortLevels: NO_LEVELS })
+      const streaks = EXACT ? SCFG : { ...SCFG, milestones: possibleMilestones(ctx, a.ts, today.length > 0) }
+      const ev = createLogEvent(TASK.get(a.t)!, ctx, DEFAULT_SETTINGS, a.ts, `e${id++}`, roll, { stages: STAGES, rewards: REWARDS, streaks, effortLevels: NO_LEVELS })
       if (!ev) continue
       logged = true
       events.push(ev)

@@ -400,6 +400,16 @@ describe('streakMilestoneReached', () => {
   it('is null with no milestones configured', () => {
     expect(reach(logsOn(...range(1, 6)), 7, { ...CONFIG, milestones: [] })).toBeNull()
   })
+
+  it("doesn't read the log at all with no milestones configured", () => {
+    const untouchable = new Proxy([] as GameEvent[], {
+      get() {
+        throw new Error('events were read')
+      },
+    })
+    expect(streakMilestoneReached(untouchable, log(gym, noon(7)), { ...CONFIG, milestones: [] })).toBeNull()
+    expect(() => streakMilestoneReached(untouchable, log(gym, noon(7)), CONFIG)).toThrow('events were read')
+  })
 })
 
 describe('logEarnsFreeze', () => {

@@ -117,6 +117,8 @@ export function streakMilestoneReached(
   log: LogEvent,
   config: StreakConfig,
 ): number | null {
+  // Nothing to reach, so skip the two full streak walks (the balance sims run with none).
+  if (config.milestones.length === 0) return null
   const now = log.timestamp
   const before = overallStreak(events, now, config)
   const after = overallStreak([...events, log], now, config)

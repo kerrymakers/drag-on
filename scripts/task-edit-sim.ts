@@ -8,6 +8,7 @@
 //   npx vite-node scripts/task-edit-sim.ts [days] [runs] [--scenarios=a,b] [--profiles=a,b] [--exact] [--pityDays=N] [--pity=N] [--items=N] [--margin=N]
 // The compact carried log (day markers, finds, last <=pity logs since a find) is the same
 // trick as streak-sim.ts; --exact passes the full log instead, to check they agree.
+import './sim-speedups'
 import {
   createLogEvent, dayKey, weekdayOf, foundItems, rewardItemId, logXp, stageFor, evolutionLook, lookChange, statTotals,
 } from '../src/game'
@@ -24,19 +25,6 @@ import { EVOLVES_AT_STAGE, LOOK_CHANGE_MARGIN } from '../src/config/evolution'
 
 // The sims set XP directly on their what-if tasks, so no effort level overrides it.
 const NO_LEVELS: readonly never[] = []
-
-// Sim-only speed-up: memoise Intl formatToParts per formatter and timestamp. It's a pure
-// function of those, so results are unchanged; dayKey is called millions of times here.
-const memo = new WeakMap<Intl.DateTimeFormat, Map<number, Intl.DateTimeFormatPart[]>>()
-const rawParts = Intl.DateTimeFormat.prototype.formatToParts
-Intl.DateTimeFormat.prototype.formatToParts = function (this: Intl.DateTimeFormat, d?: Date | number) {
-  if (typeof d !== 'number') return rawParts.call(this, d)
-  let m = memo.get(this)
-  if (!m) memo.set(this, (m = new Map()))
-  let v = m.get(d)
-  if (!v) m.set(d, (v = rawParts.call(this, d)))
-  return v
-}
 
 const args = process.argv.slice(2)
 const pos = args.filter((a) => !a.startsWith('--'))

@@ -9,8 +9,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
-    "test:e2e:full": "E2E_FULL=1 playwright test --workers=2",
+    "test:e2e": "nice -n 10 playwright test",
+    "test:e2e:full": "E2E_FULL=1 nice -n 10 playwright test",
+    "balance": "nice -n 10 vite-node scripts/simulate.ts && nice -n 10 vite-node scripts/streak-sim.ts",
     "icons": "pwa-assets-generator"
   },
   "devDependencies": {
