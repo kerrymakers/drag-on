@@ -27,7 +27,10 @@ export interface RewardConfig {
 export const RARE_CHANCE = 0.03
 export const TREAT_CHANCE = 0.2
 export const TREAT_BONUS_SHARE = 0.5
-/** Added 2026-10-07 after simulation, with the pool growing from 12 to 18 items. */
+/**
+ * Added 2026-10-07 after simulation, with the pool growing from 12 to 18 items.
+ * Kept at 30 when the pool grew to 24 on 2026-10-09 (see SPEC).
+ */
 export const ITEM_PITY_LOGS = 30
 
 export const REWARDS: RewardConfig = {

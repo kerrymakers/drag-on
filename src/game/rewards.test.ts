@@ -199,6 +199,23 @@ describe('the item config', () => {
       expect(['head', 'neck', 'held'], i.id).toContain(i.slot)
     }
   })
+
+  it('keeps every saved id and the pick order: new items are only ever appended', () => {
+    expect(ITEMS.map((i) => i.id)).toEqual([
+      'bow', 'beanie', 'crown', 'flower', 'scarf', 'bell', 'bandana', 'pendant', 'book', 'gem', 'teacup', 'lantern',
+      // Added 2026-10-07.
+      'partyhat', 'acorn', 'bowtie', 'shells', 'mushroom', 'balloon',
+      // Added 2026-10-09.
+      'sunhat', 'beret', 'garland', 'moon', 'teddy', 'cookie',
+    ])
+  })
+
+  it('has the same number of items for each spot', () => {
+    const count = (slot: string) => ITEMS.filter((i) => i.slot === slot).length
+    expect(count('head')).toBe(8)
+    expect(count('neck')).toBe(8)
+    expect(count('held')).toBe(8)
+  })
 })
 
 describe('rewardItemId and itemFor', () => {

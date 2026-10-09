@@ -142,6 +142,79 @@ const DRAWINGS: Record<string, string> = {
     <path d="M32 42 C20 32 8 26 8 16 C8 8 14 4 20 4 C26 4 30 8 32 12 C34 8 38 4 44 4 C50 4 56 8 56 16 C56 26 44 32 32 42 Z" fill="#f59ab3" />
     <path d="M29 42 L35 42 L32 46 Z" fill="#ef7f9f" />
     <path d="M15 12 C16 10 18 9 20 9" fill="none" stroke="var(--item-shine)" stroke-width="3" />`,
+  sunhat: `
+    <ellipse cx="32" cy="45" rx="28" ry="7" fill="#f6dc9c" />
+    <path d="M10 46.5 C14 48.5 18 49.5 22 50 M42 50 C46 49.5 50 48.5 54 46.5" fill="none" stroke-width="1.6" />
+    <path d="M18 44 C18 26 24 18 32 18 C40 18 46 26 46 44 C40 47 24 47 18 44 Z" fill="#f3cf7e" />
+    <path d="M18.3 37 C24 40 40 40 45.7 37 L46 43.6 C40 46.6 24 46.6 18 43.6 Z" fill="#8fc7e8" />
+    <circle cx="39" cy="40" r="4.5" fill="#f59ab3" />
+    <circle cx="39" cy="40" r="1.6" fill="#ffd36b" stroke="none" />
+    <path d="M24 27 C25 24 27 22 30 21" fill="none" stroke="var(--item-shine)" />`,
+  beret: `
+    <path d="M33 8 C33.5 10 33.5 12 33 15" fill="none" stroke-width="3.5" />
+    <path d="M6 34 C6 22 20 14 34 14 C50 14 60 24 58 33 C56 41 44 44 32 44 C20 44 6 41 6 34 Z" fill="#b9a3e3" />
+    <rect x="16" y="41" width="32" height="10" rx="5" fill="#9d86cf" />
+    <path d="M14 27 C17 22 22 19 28 18" fill="none" stroke="var(--item-shine)" />`,
+  garland: `
+    <path d="M6 14 C16 34 48 34 58 14" fill="none" stroke="#8fc79a" stroke-width="5" />
+    <path d="M6 14 C16 34 48 34 58 14" fill="none" stroke-width="1.5" />
+    <g fill="#a8d5ba" stroke-width="1.6">
+      <ellipse cx="11" cy="25" rx="4.5" ry="2.6" transform="rotate(40 11 25)" />
+      <ellipse cx="24.5" cy="32.5" rx="4.5" ry="2.6" transform="rotate(15 24.5 32.5)" />
+      <ellipse cx="39.5" cy="32.5" rx="4.5" ry="2.6" transform="rotate(-15 39.5 32.5)" />
+      <ellipse cx="53" cy="25" rx="4.5" ry="2.6" transform="rotate(-40 53 25)" />
+    </g>
+    <circle cx="6" cy="14" r="5.5" fill="#fffaf2" />
+    <circle cx="17" cy="25.3" r="6.5" fill="#c7a2e0" />
+    <circle cx="47" cy="25.3" r="6.5" fill="#c7a2e0" />
+    <circle cx="58" cy="14" r="5.5" fill="#fffaf2" />
+    <circle cx="32" cy="29" r="8" fill="#f59ab3" />
+    <g fill="#ffd36b" stroke="none">
+      <circle cx="6" cy="14" r="2" />
+      <circle cx="17" cy="25.3" r="2.4" />
+      <circle cx="32" cy="29" r="3" />
+      <circle cx="47" cy="25.3" r="2.4" />
+      <circle cx="58" cy="14" r="2" />
+    </g>
+    <path d="M27 25 C28 23.5 29.5 22.5 31 22.3" fill="none" stroke="var(--item-shine)" stroke-width="2" />`,
+  moon: `
+    <path d="M10 10 C14 26 22 32 32 34" fill="none" stroke-width="2" />
+    <path d="M54 10 C50 26 42 32 35 33.6" fill="none" stroke-width="2" />
+    <circle cx="34" cy="33.6" r="2.4" fill="#f2899a" />
+    <path d="M36 35.6 A12 12 0 1 0 36 58.4 A14 14 0 0 1 36 35.6 Z" fill="#ffe39a" />
+    <path d="M26 38.5 C28 37 30 36.3 32 36" fill="none" stroke="var(--item-shine)" />
+    <path d="M23.5 46 C24.5 47.5 26.5 47.5 27.5 46" fill="none" stroke-width="1.6" />
+    <circle cx="45" cy="44" r="1.8" fill="#ffd36b" stroke="none" />
+    <circle cx="48" cy="52" r="1.3" fill="#ffd36b" stroke="none" />`,
+  teddy: `
+    <circle cx="22" cy="56" r="5" fill="#d9a87c" />
+    <circle cx="42" cy="56" r="5" fill="#d9a87c" />
+    <ellipse cx="32" cy="46" rx="14" ry="12" fill="#d9a87c" />
+    <ellipse cx="32" cy="48" rx="7" ry="6" fill="#f2d7bd" stroke="none" />
+    <circle cx="20" cy="14" r="6" fill="#d9a87c" />
+    <circle cx="44" cy="14" r="6" fill="#d9a87c" />
+    <circle cx="20" cy="14" r="2.5" fill="#f2c9a5" stroke="none" />
+    <circle cx="44" cy="14" r="2.5" fill="#f2c9a5" stroke="none" />
+    <circle cx="32" cy="25" r="14" fill="#d9a87c" />
+    <ellipse cx="32" cy="30.5" rx="6" ry="4.5" fill="#f2d7bd" />
+    <ellipse cx="32" cy="29" rx="2.2" ry="1.6" fill="var(--item-line)" stroke="none" />
+    <circle cx="26" cy="22.5" r="1.7" fill="var(--item-line)" stroke="none" />
+    <circle cx="38" cy="22.5" r="1.7" fill="var(--item-line)" stroke="none" />
+    <path d="M32 40 L25 36 L25 44 Z M32 40 L39 36 L39 44 Z" fill="#f59ab3" />`,
+  cookie: `
+    <path d="M52.7 24.5 A22 22 0 1 1 39.5 11.3 A5 5 0 0 0 46.1 17.9 A5 5 0 0 0 52.7 24.5 Z" fill="#e8b878" />
+    <g fill="#7a4a30" stroke="none">
+      <ellipse cx="23" cy="24" rx="2.6" ry="2.2" />
+      <ellipse cx="36" cy="28" rx="2.4" ry="2" />
+      <ellipse cx="21" cy="39" rx="2.4" ry="2" />
+      <ellipse cx="33" cy="44" rx="2.6" ry="2.2" />
+      <ellipse cx="45" cy="36" rx="2.4" ry="2" />
+    </g>
+    <g fill="#e8b878" stroke-width="1.6">
+      <circle cx="56" cy="12" r="1.8" />
+      <circle cx="51" cy="7" r="1.4" />
+    </g>
+    <path d="M15 26 C16 21 19 17 23 14.5" fill="none" stroke="var(--item-shine)" />`,
 }
 
 /** The soft "?" for an item not found yet (and for an id with no drawing). */

@@ -179,6 +179,23 @@ describe('item art', () => {
     expect(unknownItemSvg()).toContain('>?<')
   })
 
+  it('draws the 2026-10-09 items in a 64 grid tile, with shared outlines for light and dark mode', () => {
+    for (const id of ['sunhat', 'beret', 'garland', 'moon', 'teddy', 'cookie']) {
+      expect(ITEMS.some((i) => i.id === id), id).toBe(true)
+      const svg = itemSvg(id)
+      expect(svg, id).toContain('class="item-svg"')
+      expect(svg, id).toContain('stroke="var(--item-line)"')
+      expect(svg, id).not.toContain('NaN')
+      expect(svg, id).not.toContain('undefined')
+      // Every number in the drawing stays on the 64 grid (colours and rotation angles aside).
+      const body = svg.replace(/^<svg[^>]*>/, '').replace(/#[0-9a-f]+/gi, '').replace(/rotate\(-?\d+/g, '')
+      for (const n of body.match(/-?\d+(\.\d+)?/g) ?? []) {
+        expect(Number(n), `${id} ${n}`).toBeGreaterThanOrEqual(0)
+        expect(Number(n), `${id} ${n}`).toBeLessThanOrEqual(64)
+      }
+    }
+  })
+
   it('draws each item differently', () => {
     const bodies = ITEMS.map((i) => itemSvg(i.id).replace(/data-item="[^"]*"/, ''))
     expect(new Set(bodies).size).toBe(ITEMS.length)
@@ -240,6 +257,21 @@ describe('worn items', () => {
         expect(svg.lastIndexOf('class="hd-'), `${stage} ${look}`).toBeLessThan(svg.indexOf('data-worn'))
         for (const id of ['crown', 'scarf', 'book']) {
           expect(svg.indexOf(`data-worn="${id}"`), `${stage} ${look} ${id}`).toBeGreaterThan(lastStagePart)
+        }
+      }
+    }
+  })
+
+  it('wears the 2026-10-09 items together on every stage and look', () => {
+    for (const outfit of [
+      { head: 'sunhat', neck: 'garland', held: 'teddy' },
+      { head: 'beret', neck: 'moon', held: 'cookie' },
+    ]) {
+      for (const [stage, art] of Object.entries(STAGES_ART)) {
+        for (const look of art.looks ? ALL_LOOKS : (['neutral'] as const)) {
+          const svg = art.draw(look, outfit)
+          for (const id of Object.values(outfit)) expect(svg, `${stage} ${look} ${id}`).toContain(`data-worn="${id}"`)
+          expect(svg, `${stage} ${look}`).not.toContain('NaN')
         }
       }
     }

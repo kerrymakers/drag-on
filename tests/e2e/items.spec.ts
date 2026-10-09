@@ -195,6 +195,36 @@ test('Collection with nothing found: friendly empty state and "?" tiles', async 
 })
 
 for (const scheme of ['light', 'dark'] as const) {
+  test(`Collection with every item found (${scheme}): each tile has its own drawing and its name fits`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme })
+    const t = Date.parse('2026-10-05T09:00:00+01:00')
+    const events = ITEMS.map((item, k) => ({
+      id: `a${k}`,
+      type: 'log',
+      taskId: 'avoided',
+      timestamp: t + k * 3_600_000,
+      xpAwarded: 15,
+      reward: { kind: 'item', itemId: item.id },
+    }))
+    await seed(page, events)
+    await setUp(page, null)
+    await page.getByRole('link', { name: 'Collection' }).click()
+    const screen = page.locator('#collection-screen')
+    await expect(screen.locator('.cs-count')).toHaveText(`${ITEMS.length} of ${ITEMS.length} found`)
+    await expect(screen.locator('.cs-line')).toHaveText('Every one found! Your dragon is delighted.')
+    await expect(screen.locator('.item-tile.is-unknown')).toHaveCount(0)
+    await expect(screen.locator('.item-tile.is-found')).toHaveCount(ITEMS.length)
+    for (const item of ITEMS) await expect(screen.locator(`.item-tile.is-found svg[data-item="${item.id}"]`), item.id).toHaveCount(1)
+    const g = await page.evaluate(() => ({
+      docW: document.documentElement.scrollWidth,
+      vw: window.innerWidth,
+      nameOverflow: [...document.querySelectorAll<HTMLElement>('.item-tile-name')].filter((n) => n.scrollWidth > n.clientWidth + 1).map((n) => n.textContent),
+    }))
+    expect(g.docW).toBeLessThanOrEqual(g.vw)
+    expect(g.nameOverflow).toEqual([])
+    await shot(page, `m7s3-collection-all-${scheme}-${test.info().project.name}`, { settled: true })
+  })
+
   test(`Collection layout (${scheme}): 3 columns, big enough tiles, no sideways scroll`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme })
     const t = Date.parse('2026-10-05T09:00:00+01:00')

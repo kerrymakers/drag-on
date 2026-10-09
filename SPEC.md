@@ -126,13 +126,15 @@ Each log rolls for a surprise. The result is decided at the moment of logging an
 
 Added 2026-10-07 after simulation: at 3% with 12 items most users went 6 to 7 weeks without an item at some point; with 18 items and a 30-log rule the longest gap is about 3 weeks and the collection completes around day 204 for a typical user, about 6 weeks after Elder. With streak milestone items (Milestone 5, simulated 2026-10-08) it completes around day 180.
 
+Added 2026-10-09 (Milestone 7, slice 3): the pool grew from 18 to 24 items, 8 for each spot. New items are only ever appended, so saved finds and the relative order of earlier items don't change. The odds are unchanged. Balance check 2026-10-09 (24 items, 30-log rule kept): with the built-in tasks a typical user completes the collection around day 259 (Elder ~day 164), so the last items keep arriving after Elder; a keen user ~day 96, a patchy one ~day 333 (about half finish within a year). With heavy logging (8 nudge tasks, 3 times a day) the collection completes ~day 150 against Elder ~day 167, so the empty stretch before Elder fell from about 8 weeks to about 2.5. The longest stretch with nothing new for a typical user is still about 3 weeks; that's set by the 30-log rule, not the pool size, and a days-based rule is a possible later change. A rule of 20, 25 or 40 logs was tried and was worse overall.
+
 ### Streaks
 
 - Show an overall "days with at least one log" streak, plus the best one ever.
 - Wake-up gets its own daily streak. Days with no wake-up target (per the schedule in force that day) are skipped, not missed.
 - Every other task shows a weekly count instead of a streak: the number of days it was logged this week (Monday to Sunday), and its best week.
 - I earn one streak freeze each time the overall streak reaches a multiple of 7 days (maximum 2 held). A freeze is used automatically when a day ends with no log: the streak carries on, but the frozen day doesn't add to it. With no freeze held, the streak ends quietly. Today never counts as missed while it's still going.
-- Streak milestones (7, 30, 60, 100 days) give a guaranteed rare item, the first time each milestone is reached only. Changed 2026-10-08 after simulation: 100 days was reached by only 10–19% of typical users in a year; 60 gives a reachable step (about half of typical users, ~day 170). Collection completes ~day 180 for a typical user.
+- Streak milestones (7, 30, 60, 100 days) give a guaranteed rare item, the first time each milestone is reached only. Changed 2026-10-08 after simulation: 100 days was reached by only 10–19% of typical users in a year; 60 gives a reachable step (about half of typical users, ~day 170). Collection completed ~day 180 for a typical user with 18 items; see the 2026-10-09 note above for 24 items.
 
 Decided 2026-10-07: per-task streaks became weekly counts, and freezes protect the overall streak only. A daily gym streak would reset on every rest day, which reads as a telling-off and goes against the no-guilt principle. Weekly counts reward showing up without punishing rest. A streak that ends reads as a fresh start, never a loss.
 

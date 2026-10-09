@@ -26,4 +26,11 @@ export const ITEMS: readonly Item[] = [
   { id: 'shells', name: 'Shell necklace', slot: 'neck' },
   { id: 'mushroom', name: 'Little mushroom', slot: 'held' },
   { id: 'balloon', name: 'Heart balloon', slot: 'held' },
+  // Added 2026-10-09 (pool 18 -> 24). Appended, so earlier ids and pick order are unchanged.
+  { id: 'sunhat', name: 'Straw sun hat', slot: 'head' },
+  { id: 'beret', name: 'Comfy beret', slot: 'head' },
+  { id: 'garland', name: 'Flower garland', slot: 'neck' },
+  { id: 'moon', name: 'Moon charm', slot: 'neck' },
+  { id: 'teddy', name: 'Tiny teddy', slot: 'held' },
+  { id: 'cookie', name: 'Warm cookie', slot: 'held' },
 ]

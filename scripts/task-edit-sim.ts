@@ -5,7 +5,7 @@
 // real evolutionLook/lookChange/statTotals. Task lists are what-ifs built in memory from
 // config/tasks.ts; config files are never changed.
 // Run from the repo root:
-//   npx vite-node scripts/task-edit-sim.ts [days] [runs] [--scenarios=a,b] [--profiles=a,b] [--exact] [--pityDays=N] [--margin=N]
+//   npx vite-node scripts/task-edit-sim.ts [days] [runs] [--scenarios=a,b] [--profiles=a,b] [--exact] [--pityDays=N] [--pity=N] [--items=N] [--margin=N]
 // The compact carried log (day markers, finds, last <=pity logs since a find) is the same
 // trick as streak-sim.ts; --exact passes the full log instead, to check they agree.
 import {
@@ -53,7 +53,11 @@ const EVO_RULES = { evolvesAt: EVOLVES_AT_STAGE, margin: arg('margin') !== undef
 // What-if (sim only): --pityDays=N turns the real 30-log rule off and instead forces an
 // item on the next log once N days with a log have passed with no item (forced rare roll).
 const PITY_DAYS = arg('pityDays') ? Number(arg('pityDays')) : null
-const RCFG = PITY_DAYS === null ? REWARDS : { ...REWARDS, itemPityLogs: 0 }
+// What-if (sim only): --pity=N uses the real rule with N logs; --items=N trims the pool to
+// its first N items (e.g. 18 to compare with the pre-M7-slice-3 pool). In memory only.
+const PITY_LOGS = arg('pity') !== undefined ? Number(arg('pity')) : REWARDS.itemPityLogs
+const ITEM_N = arg('items') !== undefined ? Number(arg('items')) : REWARDS.items.length
+const RCFG = { ...REWARDS, items: REWARDS.items.slice(0, ITEM_N), itemPityLogs: PITY_DAYS === null ? PITY_LOGS : 0 }
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0
@@ -187,6 +191,7 @@ interface Run {
   xp: number; logs: number; activeDays: number; treats: number; treatXp: number
   itemDays: number[]; collectionDay: number | null
   newThingGap180: number; shortestStageGap: number
+  newThingGapAll: number; itemGapMax: number; noveltyEnd: number
   look: string; firstLook: string | null; lookChanges: number; shiftLookDay: number | null
   topShare: number
 }
@@ -258,7 +263,7 @@ function simulate(sc: Scenario, p: Profile, seed: number): Run {
         : [{ id: 'xpcarry', type: 'log', taskId: '__xp__', timestamp: events[0]!.timestamp, xpAwarded: xp - [...carried].reduce((s, e) => s + logXp(e), 0), stageReached: stageFor(xp, STAGES).id },
           ...dayMarkers, ...today.filter((e) => !inCarry.has(e)), ...finds, ...since]
       const roll = { chance: rr(), pick: rr() }
-      if (PITY_DAYS !== null && pityDaysNow() >= PITY_DAYS && finds.length < REWARDS.items.length) roll.chance = 0
+      if (PITY_DAYS !== null && pityDaysNow() >= PITY_DAYS && finds.length < RCFG.items.length) roll.chance = 0
       const ev = createLogEvent(a.t, ctx, DEFAULT_SETTINGS, a.ts, `e${id++}`, roll, { stages: STAGES, rewards: RCFG, streaks: STREAKS, effortLevels: sc.levels ? EFFORT_LEVELS : NO_LEVELS })
       if (!ev) continue
       events.push(ev); today.push(ev); logs++
@@ -266,11 +271,11 @@ function simulate(sc: Scenario, p: Profile, seed: number): Run {
       if (ev.reward && (ev.reward as { kind?: string }).kind === 'treat') { treats++; treatXp += logXp(ev) - ev.xpAwarded }
       if (rewardItemId(ev) !== null) {
         itemDays.push(i + 1)
-        if (itemDays.length === REWARDS.items.length) collectionDay = i + 1
+        if (itemDays.length === RCFG.items.length) collectionDay = i + 1
         finds.push(ev); since.length = 0; lastFindDay = i; logDaysSinceFind = 0
       } else {
         since.push(ev)
-        if (since.length > REWARDS.itemPityLogs + 1) since.shift()
+        if (since.length > Math.max(1, RCFG.itemPityLogs) + 1) since.shift()
       }
     }
     if (today.length && lastFindDay !== i) logDaysSinceFind++
@@ -285,7 +290,7 @@ function simulate(sc: Scenario, p: Profile, seed: number): Run {
       evo = next
     }
   }
-  if (foundItems(events, REWARDS.items).length !== itemDays.length) throw new Error('find mismatch')
+  if (foundItems(events, RCFG.items).length !== itemDays.length) throw new Error('find mismatch')
   const totals = statTotals(events, sts.map((s) => s.task), STATS)
   const sum = totals.reduce((s, t) => s + t.xp, 0)
   const top = Math.max(...totals.map((t) => t.xp))
@@ -295,7 +300,18 @@ function simulate(sc: Scenario, p: Profile, seed: number): Run {
   const all = [0, ...[...itemDays, ...stageDays].filter((x) => x <= 180).sort((a, b) => a - b), Math.min(180, collectionDay ?? 180)]
   let gap = 0
   for (let k = 1; k < all.length; k++) gap = Math.max(gap, all[k]! - all[k - 1]!)
+  // Whole run: longest stretch with no new stage or item until both run out (collection and
+  // Elder, or the end of the run if either never happens), and longest stretch between finds.
+  const elderDay = stageDay[STAGES[STAGES.length - 1]!.id]
+  const noveltyEnd = Math.min(DAYS, Math.max(collectionDay ?? DAYS, elderDay ?? DAYS))
+  const allW = [0, ...[...itemDays, ...stageDays].filter((x) => x <= noveltyEnd).sort((a, b) => a - b), noveltyEnd]
+  let gapAll = 0
+  for (let k = 1; k < allW.length; k++) gapAll = Math.max(gapAll, allW[k]! - allW[k - 1]!)
+  const itW = [0, ...itemDays, collectionDay ?? DAYS]
+  let itemGapMax = 0
+  for (let k = 1; k < itW.length; k++) itemGapMax = Math.max(itemGapMax, itW[k]! - itW[k - 1]!)
   return {
+    newThingGapAll: gapAll, itemGapMax, noveltyEnd,
     stageDay, xp, logs, activeDays, treats, treatXp, itemDays, collectionDay, newThingGap180: gap, shortestStageGap,
     look: evo.look, firstLook, lookChanges, shiftLookDay, topShare: sum ? top / sum : 0,
   }
@@ -307,7 +323,7 @@ const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.le
 const r1 = (n: number) => Math.round(n * 10) / 10
 const dist = (xs: Record<string, number>) => Object.entries(xs).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ')
 
-console.log(`Task edit sim: ${DAYS} days x ${RUNS} runs${EXACT ? ' (exact)' : ''}${PITY_DAYS !== null ? `; WHAT-IF pity by ${PITY_DAYS} log days (30-log rule off)` : ''}; stages ${STAGES.map((s) => s.xpFrom).join('/')}; treat ${REWARDS.treatChance} x${REWARDS.treatBonusShare}; rare ${REWARDS.rareChance}, pity ${REWARDS.itemPityLogs}, ${REWARDS.items.length} items; milestones ${STREAKS.milestones.join('/')}\n`)
+console.log(`Task edit sim: ${DAYS} days x ${RUNS} runs${EXACT ? ' (exact)' : ''}${PITY_DAYS !== null ? `; WHAT-IF pity by ${PITY_DAYS} log days (30-log rule off)` : ''}; stages ${STAGES.map((s) => s.xpFrom).join('/')}; treat ${REWARDS.treatChance} x${REWARDS.treatBonusShare}; rare ${REWARDS.rareChance}, pity ${RCFG.itemPityLogs}, ${RCFG.items.length} items; milestones ${STREAKS.milestones.join('/')}\n`)
 for (const sc of SCENARIOS.filter((s) => !SF || SF.includes(s.key))) {
   console.log(`=== ${sc.name} [${sc.key}] ===`)
   for (const p of PROFILES.filter((x) => !PF || PF.includes(x.key))) {
@@ -318,6 +334,9 @@ for (const sc of SCENARIOS.filter((s) => !SF || SF.includes(s.key))) {
     for (const r of runs) looks[r.firstLook ?? 'none'] = (looks[r.firstLook ?? 'none'] ?? 0) + 1
     console.log(`  ${p.name.padEnd(8)} hatch ${sd('hatchling')}, whelp ${sd('whelp')}, juv ${sd('juvenile')}, adult ${sd('adult')}, elder ${sd('elder')} | XP/active day ${Math.round(mean(runs.map((r) => r.xp / Math.max(1, r.activeDays))))}, logs/active day ${r1(mean(runs.map((r) => r.logs / Math.max(1, r.activeDays))))}`)
     console.log(`           treats/wk ${r1(mean(runs.map((r) => r.treats / (DAYS / 7))))} (${Math.round(mean(runs.map((r) => r.treatXp / r.xp)) * 100)}% of XP) | items by d30/90 ${med(runs.map((r) => r.itemDays.filter((x) => x <= 30).length))}/${med(runs.map((r) => r.itemDays.filter((x) => x <= 90).length))}, collection ${cd.length ? med(cd) : '-'}${cd.length < RUNS ? ` (${Math.round(cd.length / RUNS * 100)}%)` : ''} | longest gap w/o stage or item to d180 ${med(runs.map((r) => r.newThingGap180))} | shortest stage-to-stage ${med(runs.map((r) => r.shortestStageGap))}d`)
+    const el = runs.map((r) => r.stageDay[STAGES[STAGES.length - 1]!.id]).filter((x): x is number => x != null)
+    const lead = runs.filter((r) => r.collectionDay != null && r.stageDay[STAGES[STAGES.length - 1]!.id] != null).map((r) => r.collectionDay! - r.stageDay[STAGES[STAGES.length - 1]!.id]!)
+    console.log(`           collection p10/50/90 ${cd.length ? `${pct(cd, 10)}/${pct(cd, 50)}/${pct(cd, 90)}` : '-'} vs elder ${el.length ? med(el) : '-'} (collection minus elder, median ${lead.length ? med(lead) : '-'}) | longest gap w/o stage or item, whole run med/p90 ${med(runs.map((r) => r.newThingGapAll))}/${pct(runs.map((r) => r.newThingGapAll), 90)} | longest gap between finds med/p90 ${med(runs.map((r) => r.itemGapMax))}/${pct(runs.map((r) => r.itemGapMax), 90)}`)
     console.log(`           first look: ${dist(looks)} | look changes/run ${r1(mean(runs.map((r) => r.lookChanges)))} | top stat share ${Math.round(mean(runs.map((r) => r.topShare)) * 100)}%${sc.shiftAt !== undefined ? ` | look changed after shift: ${runs.filter((r) => r.shiftLookDay != null).length}/${RUNS}, day ${med(runs.map((r) => r.shiftLookDay).filter((x): x is number => x != null))}` : ''}`)
   }
   console.log('')
