@@ -6,6 +6,8 @@
   --surface-done: #fbeee0;
   --text: #4a3328;
   --text-soft: #7d6152;
+  /* The dragon's name sits on the sky (see .scene): a little deeper, so it reads on every sky. */
+  --text-on-sky: #5e4538;
   --accent: #f6b98a;
   --accent-strong: #a65624;
   --track: #f6e2cf;
@@ -46,6 +48,7 @@
     --surface-done: #33271f;
     --text: #fbeee2;
     --text-soft: #d6bfae;
+    --text-on-sky: #e4d0c1;
     --accent: #e8a173;
     --accent-strong: #f3b98f;
     --track: #45362d;
@@ -122,10 +125,29 @@ body {
  */
 .home {
   --dragon-min: 96px;
+  position: relative;
   display: grid;
   grid-template-rows: auto minmax(var(--dragon-min), 1fr) auto minmax(0, auto);
   row-gap: 10px;
   padding: 12px var(--space) 0;
+}
+
+/* The scene (src/art/scene.ts): a rounded window of sky and hills behind the heading
+   and the dragon (the first two rows), and the ground under the dragon. */
+.home > .scene {
+  position: absolute;
+  /* Explicit end lines: for an absolutely placed item, an auto end means the padding edge. */
+  grid-row: 1 / 3;
+  grid-column: 1 / 2;
+  inset: -6px -8px 0;
+  border-radius: var(--radius-lg);
+}
+.home > .top {
+  position: relative;
+  z-index: 1;
+}
+.home > .top .dragon-name {
+  color: var(--text-on-sky);
 }
 
 /* Notice */
@@ -261,11 +283,12 @@ body {
   border-radius: 3px;
 }
 .speech[data-tail='down']::after {
-  left: calc(50% - 7px);
+  left: calc(var(--tail-x, 50%) - 7px);
   bottom: -6px;
 }
+/* --tail-x: set when the bubble sits to one side, so the tail still points at the head. */
 .speech[data-tail='up']::after {
-  left: calc(50% - 7px);
+  left: calc(var(--tail-x, 50%) - 7px);
   top: -6px;
 }
 .speech[data-tail='right']::after {
@@ -280,7 +303,7 @@ body {
   transform-origin: 50% 100%;
 }
 .speech[data-tail='up'] {
-  transform-origin: 50% 0%;
+  transform-origin: var(--tail-x, 50%) 0%;
 }
 .speech[data-tail='right'] {
   transform-origin: 100% 20%;
@@ -309,12 +332,15 @@ body {
   min-height: 0;
 }
 
-.dragon-art {
+.dragon-art,
+.scene-floor {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.dragon-art {
   cursor: pointer;
   touch-action: manipulation;
   -webkit-user-select: none;
@@ -323,9 +349,18 @@ body {
 
 /* On short screens, keep a little air between the heading and the tallest stages. */
 @media (max-height: 720px) {
-  .dragon-art {
+  .dragon-art,
+  .scene-floor {
     top: 10px;
   }
+}
+/* The floor takes the same box as the drawing (.dragon-react), so the ground meets the feet. */
+.scene-floor {
+  pointer-events: none;
+}
+.scene-floor > svg {
+  max-width: 82%;
+  max-height: 340px;
 }
 
 .dragon-art:focus {
@@ -335,6 +370,11 @@ body {
 .dragon-art .dragon-react {
   max-width: 82%;
   max-height: 340px;
+}
+/* Above the floor, in the same spot; the nest's lip (.scene-front) above that. */
+.dragon-art,
+.scene-front {
+  z-index: 1;
 }
 
 /* Growth bar */

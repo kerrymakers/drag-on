@@ -65,14 +65,50 @@ export function minutesSinceDayStart(timestamp: number): number {
   return toDayMinutes(c.hour * 60 + c.minute)
 }
 
-/** Converts a wall-clock "HH:MM" into minutes since the 04:00 day start, or null if malformed. */
-export function clockToDayMinutes(hhmm: string): number | null {
+/**
+ * The London wall clock at an instant, for things that follow the real clock rather than
+ * the game day (the sky on Home): the calendar date (month 1-12), how many days that
+ * month has, whole minutes since midnight (0 to 1439), and how far the clock is ahead
+ * of GMT in minutes (0, or 60 in BST).
+ */
+export function londonClock(timestamp: number): {
+  year: number
+  month: number
+  day: number
+  daysInMonth: number
+  minutes: number
+  aheadOfGmt: number
+} {
+  const c = wallClock(timestamp)
+  return {
+    year: c.year,
+    month: c.month,
+    day: c.day,
+    daysInMonth: daysInMonth(c.year, c.month),
+    minutes: c.hour * 60 + c.minute,
+    aheadOfGmt: Math.round(offsetAt(timestamp) / 60_000),
+  }
+}
+
+/** Days in a calendar month (month 1-12). */
+export function daysInMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate()
+}
+
+/** A wall-clock "HH:MM" as minutes since midnight (0 to 1439), or null if malformed. */
+export function clockMinutes(hhmm: string): number | null {
   const m = /^(\d{2}):(\d{2})$/.exec(hhmm)
   if (!m) return null
   const h = Number(m[1])
   const min = Number(m[2])
   if (h > 23 || min > 59) return null
-  return toDayMinutes(h * 60 + min)
+  return h * 60 + min
+}
+
+/** Converts a wall-clock "HH:MM" into minutes since the 04:00 day start, or null if malformed. */
+export function clockToDayMinutes(hhmm: string): number | null {
+  const m = clockMinutes(hhmm)
+  return m === null ? null : toDayMinutes(m)
 }
 
 /** Whether `v` is a real wall-clock "HH:MM" (00:00 to 23:59), the only shape a wake time may have. */

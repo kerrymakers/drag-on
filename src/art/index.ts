@@ -12,6 +12,7 @@ import type { WearLook, WearSlot } from './parts'
 export { EVOLVED_LOOKS, type EvolutionLook } from './looks'
 export { hasItemArt, itemSvg, unknownItemSvg } from './items'
 export type { WearLook, WearSlot } from './parts'
+export { renderScene, SKY_LOOKS, type SceneLook, type SkyLook } from './scene'
 
 /** Visual only, not balancing: how far toward hatching the egg shows each crack. */
 export const CRACK_SMALL_AT = 0.5
@@ -120,7 +121,13 @@ export function renderDragon(container: HTMLElement, look: DragonLook): void {
   }
   const mood = look.mood ?? 'content'
   const drawing = wrap.querySelector('.dragon-svg')
-  if (drawing && drawing.getAttribute('data-mood') !== mood) drawing.setAttribute('data-mood', mood)
+  if (drawing && drawing.getAttribute('data-mood') !== mood) {
+    drawing.setAttribute('data-mood', mood)
+    // The speech keep-clear box covers where the head can reach in this mood.
+    const box = drawing.querySelector('.dragon-head-box')
+    const xywh = box?.getAttribute(`data-box-${mood}`)?.split(' ')
+    if (box && xywh?.length === 4) (['x', 'y', 'width', 'height'] as const).forEach((a, i) => box.setAttribute(a, xywh[i]!))
+  }
 }
 
 /**
@@ -141,6 +148,17 @@ export function speechAnchor(container: HTMLElement): DOMRect | null {
   const right = Math.max(...rects.map((r) => r.right))
   const bottom = Math.max(...rects.map((r) => r.bottom))
   return new DOMRect(left, top, right - left, bottom - top)
+}
+
+/**
+ * For a drawing whose keep-clear box leaves no room below it (the egg), the on-screen
+ * part a speech bubble may overlap at its bottom edge. Null for the dragon stages.
+ */
+export function speechLowerPart(container: HTMLElement): { top: number; bottom: number } | null {
+  const part = container.querySelector('.speech-lower-part')
+  if (!part) return null
+  const r = part.getBoundingClientRect()
+  return { top: r.top, bottom: r.bottom }
 }
 
 /**

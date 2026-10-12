@@ -17,6 +17,7 @@ export const WHELP: Anchors = {
   },
   neckY: 292,
   wingRoot: [180, 300],
+  ear: 'M146 204 C114 190 104 162 110 140 C132 156 148 172 158 190 Z',
 }
 
 export const WHELP_SCALE = 0.9
@@ -41,7 +42,7 @@ export function whelpSvg(uid: string, wearing?: WearLook): string {
     <ellipse class="hd-skin" cx="200" cy="468" rx="38" ry="20" />
     <ellipse class="hd-skin" cx="312" cy="468" rx="38" ry="20" />
     <g class="dragon-head dg-head-move">
-    ${earPair('M146 204 C114 190 104 162 110 140 C132 156 148 172 158 190 Z')}
+    ${earPair(WHELP.ear!)}
     ${pair('hd-horn', 'M188 130 C166 86 180 50 210 38 C206 68 210 96 226 118 Z')}
     <path class="hd-horn" d="M240 112 L250 88 L260 112 Z" />
     <ellipse class="hd-skin" cx="256" cy="208" rx="114" ry="98" />
@@ -70,6 +71,7 @@ export const JUVENILE: Anchors = {
   },
   neckY: 248,
   wingRoot: [186, 282],
+  ear: 'M166 166 C136 156 124 132 128 110 C148 124 164 138 174 154 Z',
 }
 
 const JUVENILE_LOOK: LookAnchors = { snoutTop: 180, forehead: 112, flower: [212, 100], wingSpots: [[92, 214], [134, 238]], size: 1 }
@@ -97,7 +99,7 @@ export function juvenileSvg(uid: string, look: EvolutionLook = 'neutral', wearin
     <ellipse class="hd-skin" cx="314" cy="470" rx="42" ry="20" />
     ${pair('hd-claw', 'M170 474 L166 486 M190 478 L188 490 M210 478 L210 490')}
     <g class="dragon-head dg-head-move">
-    ${earPair('M166 166 C136 156 124 132 128 110 C148 124 164 138 174 154 Z')}
+    ${earPair(JUVENILE.ear!)}
     ${pair('hd-horn', 'M194 112 C168 66 176 28 210 12 C204 48 210 78 226 100 Z')}
     <path class="hd-horn" d="M238 96 L248 70 L258 96 Z" />
     <path class="hd-horn" d="M256 92 L266 68 L276 92 Z" />
@@ -128,6 +130,7 @@ export const ADULT: Anchors = {
   },
   neckY: 212,
   wingRoot: [194, 256],
+  ear: 'M180 136 C152 128 138 106 140 86 C160 98 176 112 186 126 Z',
 }
 
 const ADULT_LOOK: LookAnchors = { snoutTop: 148, forehead: 84, flower: [218, 84], wingSpots: [[78, 146], [124, 180]], size: 1 }
@@ -158,7 +161,7 @@ export function adultSvg(uid: string, look: EvolutionLook = 'neutral', wearing?:
     <ellipse class="hd-skin" cx="318" cy="472" rx="46" ry="21" />
     ${pair('hd-claw', 'M162 476 L158 489 M184 480 L182 493 M206 480 L206 493')}
     <g class="dragon-head dg-head-move">
-    ${earPair('M180 136 C152 128 138 106 140 86 C160 98 176 112 186 126 Z')}
+    ${earPair(ADULT.ear!)}
     ${pair('hd-horn', 'M200 92 C164 52 166 12 202 -4 C198 34 206 62 224 82 Z')}
     ${pair('hd-horn', 'M186 112 C170 98 164 82 168 66 C180 78 190 90 198 104 Z')}
     <path class="hd-horn" d="M246 70 L256 44 L266 70 Z" />
@@ -189,6 +192,7 @@ export const ELDER: Anchors = {
   },
   neckY: 210,
   wingRoot: [196, 246],
+  ear: 'M180 130 C150 122 136 98 138 78 C160 92 176 106 186 120 Z',
 }
 
 const ELDER_LOOK: LookAnchors = { snoutTop: 146, forehead: 88, flower: [216, 80], wingSpots: [[72, 124], [118, 158]], size: 1 }
@@ -219,7 +223,7 @@ export function elderSvg(uid: string, look: EvolutionLook = 'neutral', wearing?:
     <ellipse class="hd-skin" cx="320" cy="474" rx="48" ry="21" />
     ${pair('hd-claw', 'M158 478 L154 491 M182 482 L180 495 M206 482 L206 495')}
     <g class="dragon-head dg-head-move">
-    ${earPair('M180 130 C150 122 136 98 138 78 C160 92 176 106 186 120 Z')}
+    ${earPair(ELDER.ear!)}
     ${pair('hd-horn', 'M204 90 C150 70 128 24 150 -6 C160 32 182 58 222 76 Z')}
     ${pair('hd-horn', 'M188 110 C168 100 158 84 160 66 C174 78 186 90 196 102 Z')}
     <ellipse class="hd-skin" cx="256" cy="136" rx="90" ry="74" />

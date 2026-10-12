@@ -109,15 +109,38 @@ describe('placeSpeech', () => {
       expect(placeSpeech(area, head, measure).tail).toBe('up')
     })
 
-    it('moves beside the head, narrower, rather than cover a neck or held item', () => {
+    it('moves aside below the head, still pointing at it, rather than cover a neck or held item', () => {
       const p = placeSpeech(area, head, measure, [neck, held])
       const bubble = toPage(area, p)
       expect(overlaps(bubble, neck)).toBe(false)
       expect(overlaps(bubble, held)).toBe(false)
       expect(overlaps(bubble, head)).toBe(false)
       expect(inside(bubble, area)).toBe(true)
-      expect(['left', 'right']).toContain(p.tail)
       expect(p.compact).toBe(false)
+      expect(p.tail).toBe('up')
+      expect(bubble.top).toBeGreaterThanOrEqual(head.bottom + 10)
+      // Wide enough to read: never squeezed to a column of single words.
+      expect(bubble.right - bubble.left).toBeGreaterThanOrEqual(110)
+      // The tail sits under the head, not in the bubble's middle.
+      const tailAt = p.tailAt ?? (bubble.right - bubble.left) / 2
+      expect(bubble.left + tailAt).toBeGreaterThan(head.left)
+      expect(bubble.left + tailAt).toBeLessThan(head.right)
+      expect(tailAt).toBeGreaterThanOrEqual(18)
+      expect(tailAt).toBeLessThanOrEqual(bubble.right - bubble.left - 18)
+    })
+
+    it('only goes beside the head in a narrow bubble when nothing below is clear, and never under 110px', () => {
+      // 115px to the left of the head: too little for the usual 120, enough for 110.
+      const wide = { left: 141, top: 113, right: 283, bottom: 253 }
+      const short = { ...area, bottom: wide.bottom + 30 }
+      const p = placeSpeech(short, wide, measure, [neck, held])
+      const bubble = toPage(short, p)
+      expect(p.tail).toBe('right')
+      expect(bubble.right - bubble.left).toBeGreaterThanOrEqual(110)
+      expect(overlaps(bubble, wide)).toBe(false)
+      // With only 101px, it doesn't squeeze in at all.
+      const q = placeSpeech({ ...short, left: 30 }, wide, measure, [neck, held])
+      expect(q.maxWidth).toBeGreaterThanOrEqual(110)
     })
 
     it('still goes below the head when that spot is clear of what is worn', () => {
@@ -146,5 +169,56 @@ describe('placeSpeech', () => {
         for (const w of c.worn) expect(overlaps(bubble, w)).toBe(false)
       }
     })
+  })
+
+  describe('with a lower part (the egg)', () => {
+    // Measured on Home: the egg's keep-clear box (cap to middle) and its base.
+    const phone = { area: { left: 16, top: 77, right: 394, bottom: 418 }, head: { left: 98, top: 95, right: 312, bottom: 257 }, lower: { top: 293, bottom: 381 } }
+    const narrow = { area: { left: 16, top: 77, right: 344, bottom: 299 }, head: { left: 104, top: 79, right: 256, bottom: 195 }, lower: { top: 220, bottom: 283 } }
+
+    it('sits across the bottom edge of the base, never over the middle, pointing up', () => {
+      for (const c of [phone, narrow]) {
+        const p = placeSpeech(c.area, c.head, measure, [], c.lower)
+        const bubble = toPage(c.area, p)
+        expect(p.tail).toBe('up')
+        expect(inside(bubble, c.area)).toBe(true)
+        expect(overlaps(bubble, c.head)).toBe(false)
+        expect(bubble.top).toBeGreaterThanOrEqual(c.lower.top)
+        expect(bubble.top).toBeLessThan(c.lower.bottom)
+      }
+    })
+
+    it("sits on the base, its bottom on the part's bottom, leaving the nest below in view", () => {
+      const p = placeSpeech(phone.area, phone.head, measure, [], phone.lower)
+      const { height } = measure(p.maxWidth)
+      expect(phone.area.top + p.top + height).toBe(phone.lower.bottom)
+    })
+
+    it('still prefers above the egg when there is room', () => {
+      const tall = { ...phone.area, top: 0 }
+      expect(placeSpeech(tall, phone.head, measure, [], phone.lower).tail).toBe('down')
+    })
+
+    it('falls back to compact text at the bottom of a very short area', () => {
+      const area = { left: 16, top: 77, right: 344, bottom: 200 }
+      const head = { left: 104, top: 79, right: 256, bottom: 150 }
+      const p = placeSpeech(area, head, measure, [], { top: 175, bottom: 196 })
+      expect(p.compact).toBe(true)
+      expect(p.tail).toBe('up')
+      expect(inside(toPage(area, p), area)).toBe(true)
+      expect(overlaps(toPage(area, p), head)).toBe(false)
+    })
+  })
+
+  it('fits a bubble beside the head when the space there is a fraction of a pixel', () => {
+    // The room left of the head is 119.99px, and a bubble asked for that measures a
+    // whole 120px; nothing fits above or below.
+    const area = { left: 16, top: 77, right: 394, bottom: 270 }
+    const head = { left: 145.99, top: 83, right: 305, bottom: 231 }
+    const whole = (maxWidth: number, compact: boolean) => ({ width: Math.ceil(maxWidth), height: compact ? 61 : 98 })
+    const p = placeSpeech(area, head, whole)
+    expect(p.compact).toBe(false)
+    expect(p.tail).toBe('right')
+    expect(area.left + p.left + Math.ceil(p.maxWidth)).toBeLessThanOrEqual(head.left - 10)
   })
 })

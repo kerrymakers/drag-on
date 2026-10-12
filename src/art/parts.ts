@@ -3,6 +3,7 @@
 // look can recolour a stage and add features (looks.ts) without redrawing it.
 
 import { wornItemBox, wornItemSvg } from './items'
+import { MOOD_MOTION, MOTION_MOODS, headReach, shapeBoxes, type Box } from './motion'
 
 /**
  * Mirrors a path drawn on the left across the centre line (x = 256).
@@ -107,6 +108,8 @@ export interface Anchors {
   neckY: number
   /** Where the left back wing joins the body; it flicks about this point (mirrored for the right). */
   wingRoot: readonly [number, number]
+  /** The left ear frill's path, for stages with ears (drawn with earPair, mirrored for the right). */
+  ear?: string
 }
 
 /** The spots an item can be worn in. Kept in the art's own words, not imported from game code. */
@@ -130,9 +133,15 @@ export interface WearSpot {
 /**
  * An invisible rectangle marking the area a speech bubble must not cover. With
  * `followsPose`, CSS moves it with the mood posture (curled up sits lower).
+ * `byMood` gives a different box for each mood (where the head can reach while it
+ * idles in that mood); the drawn box is content's, and renderDragon swaps it in when
+ * the mood changes (data-box-happy and so on, "x y width height").
  */
-export function headBoxRect([x0, y0, x1, y1]: readonly [number, number, number, number], followsPose = false): string {
-  return `<rect class="dragon-head-box${followsPose ? ' follows-pose' : ''}" x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" fill="none" stroke="none" pointer-events="none" />`
+export function headBoxRect(box: Box, followsPose = false, byMood?: Record<string, Box>): string {
+  const xywh = ([x0, y0, x1, y1]: Box) => [x0, y0, r1(x1 - x0), r1(y1 - y0)] as const
+  const [x, y, w, h] = xywh(byMood?.content ?? box)
+  const moods = byMood ? Object.entries(byMood).map(([m, b]) => ` data-box-${m}="${xywh(b).join(' ')}"`).join('') : ''
+  return `<rect class="dragon-head-box${followsPose ? ' follows-pose' : ''}" x="${x}" y="${y}" width="${w}" height="${h}"${moods} fill="none" stroke="none" pointer-events="none" />`
 }
 
 const r1 = (n: number) => Math.round(n * 10) / 10
@@ -300,9 +309,10 @@ export function dragonSvg(
   const held = wornItemSvg(wearing?.held, 'held', anchors.wear.held)
   const head = wornItemSvg(wearing?.head, 'head', anchors.wear.head)
   const worn = head ? unionBox(anchors.headBox, wornItemBox('head', anchors.wear.head)) : anchors.headBox
-  // Room for the head's idle motion (art.css: the look-around tilt swings it sideways,
-  // nodding off dips it), so a speech bubble placed once stays clear all the while.
-  const headBox: Box = [worn[0] - HEAD_SWAY.side, worn[1], worn[2] + HEAD_SWAY.side, worn[3] + HEAD_SWAY.below]
+  // Room for the head's idle motion in each mood (motion.ts, worked out from the
+  // art.css amounts), so a speech bubble placed once stays clear all the while.
+  const hatBox = head ? [wornItemBox('head', anchors.wear.head)] : []
+  const reach = headReachByMood(worn, [...shapeBoxes(headGroup(body), ['dg-ear']), ...hatBox], anchors)
   const [wx, wy] = anchors.wingRoot
   // The points the head and wings move about, in drawing units, for art.css.
   const pivots = `--head-pivot: 256px ${anchors.neckY}px; --wing-l: ${wx}px ${wy}px; --wing-r: ${512 - wx}px ${wy}px`
@@ -311,7 +321,7 @@ export function dragonSvg(
 <svg class="dragon-svg dragon-${stage}" data-stage="${stage}" data-evolution="${evolution}" data-mood="content" viewBox="0 0 512 512" role="img" aria-label="${label}" style="${pivots}">
   ${paintDefs(uid, anchors.headTop - 20)}
   <g transform="translate(256 492) scale(${scale}) translate(-256 -492)">
-    ${headBoxRect(headBox, true)}
+    ${headBoxRect(reach.content ?? worn, true, reach)}
     <ellipse class="dragon-shadow" cx="256" cy="486" rx="${r1(anchors.body.rx * 0.95)}" ry="9" />
     <g class="dragon-pose">
       <g class="dragon-idle">
@@ -322,13 +332,32 @@ export function dragonSvg(
 </svg>`
 }
 
-type Box = readonly [number, number, number, number]
+const reachCache = new Map<string, Record<string, Box>>()
 
-/**
- * How far (drawing units) the head's idle motion can carry it sideways or down: the
- * look-around tilt swings the horn tips a little, nodding off dips the chin 8 units.
- */
-export const HEAD_SWAY = { side: 5, below: 10 } as const
+/** headReach for every mood, remembered (the same stage and hat always reach the same). */
+function headReachByMood(rest: Box, parts: Box[], anchors: Anchors): Record<string, Box> {
+  const key = `${rest.join(',')}|${parts.map((b) => b.join(',')).join(';')}|${anchors.ear ?? ''}|${anchors.neckY}`
+  let out = reachCache.get(key)
+  if (!out) {
+    out = Object.fromEntries(MOTION_MOODS.map((m) => [m, headReach({ rest, parts, ear: anchors.ear, neckY: anchors.neckY }, MOOD_MOTION[m])]))
+    reachCache.set(key, out)
+  }
+  return out
+}
+
+/** The markup inside a drawing's `.dragon-head` group (empty if it has none). */
+export function headGroup(body: string): string {
+  const start = body.indexOf('<g class="dragon-head')
+  if (start < 0) return ''
+  let depth = 0
+  const re = /<g\b|<\/g>/g
+  re.lastIndex = start
+  for (let m = re.exec(body); m; m = re.exec(body)) {
+    depth += m[0] === '</g>' ? -1 : 1
+    if (depth === 0) return body.slice(start, m.index)
+  }
+  return body.slice(start)
+}
 
 function unionBox(a: Box, b: Box): Box {
   return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])]

@@ -10,7 +10,8 @@ import { eggSvg } from './egg'
 import { WEAR_PIN, hasItemArt, itemSvg, unknownItemSvg, wornItemBox, wornItemSvg } from './items'
 import { EVOLVED_LOOKS, knownLook, type EvolutionLook } from './looks'
 import artCss from './art.css?raw'
-import { HEAD_SWAY, mirror, type Anchors, type WearLook, type WearSlot } from './parts'
+import { headGroup, mirror, type Anchors, type WearLook, type WearSlot } from './parts'
+import { GROUND, KEYFRAMES, MOOD_MOTION, MOTION_MOODS, PERK_LIFT, PERK_ORIGINS_Y, headReach, pathBox, shapeBoxes, type Box, type HeadMotionInput } from './motion'
 
 describe('crackLevel', () => {
   it('shows no crack below the small threshold', () => {
@@ -320,11 +321,12 @@ describe('worn items', () => {
       expect(y, stage).toBeLessThanOrEqual(hy0)
       expect(x + w, stage).toBeGreaterThanOrEqual(hx1)
       expect(y + h, stage).toBeGreaterThanOrEqual(hy1)
-      // No hat: just the head, with room for its idle motion at the sides and below.
-      const [bx0, by0, bx1, by1] = art.anchors.headBox
-      expect(art.draw('neutral', { neck: 'scarf' })).toContain(
-        `x="${bx0 - HEAD_SWAY.side}" y="${by0}" width="${bx1 - bx0 + 2 * HEAD_SWAY.side}" height="${by1 - by0 + HEAD_SWAY.below}"`,
-      )
+      // No hat: just the head, with room for its idle motion in each mood.
+      const plain = art.draw('neutral')
+      const reach = headReach({ rest: art.anchors.headBox, parts: shapeBoxes(headGroup(plain), ['dg-ear']), ear: art.anchors.ear, neckY: art.anchors.neckY }, MOOD_MOTION.content)
+      const [bx0, by0, bx1, by1] = reach
+      const r1 = (n: number) => Math.round(n * 10) / 10
+      expect(art.draw('neutral', { neck: 'scarf' })).toContain(`x="${bx0}" y="${by0}" width="${r1(bx1 - bx0)}" height="${r1(by1 - by0)}"`)
     }
   })
 
@@ -472,5 +474,215 @@ describe('richer look and idle life', () => {
         if (!/animation-name/.test(anim[0]) || name) expect(name, `${sel}: keyframes defined`).toBeTruthy()
       }
     })
+  })
+})
+
+describe('head reach (speech keep-clear box)', () => {
+  const css = artCss.replace(/\/\*[\s\S]*?\*\//g, '')
+  const block = (selector: string) => {
+    const i = css.indexOf(`${selector} {`)
+    expect(i, selector).toBeGreaterThan(-1)
+    return css.slice(i, css.indexOf('}', i))
+  }
+  const prop = (body: string, name: string) => {
+    const m = new RegExp(`--${name}:\\s*(-?[\\d.]+)`).exec(body)
+    return m ? Number(m[1]) : undefined
+  }
+  const keyframe = (name: string) => {
+    const m = new RegExp(`@keyframes ${name}\\s*\\{((?:[^{}]*\\{[^{}]*\\})*)\\s*\\}`).exec(css)
+    expect(m, name).not.toBeNull()
+    return m![1]!
+  }
+  /** Every `[+-] var(--v) * n` in a keyframe, signed. */
+  const coeffs = (name: string, v: string, unit = '') =>
+    [...keyframe(name).matchAll(new RegExp(`(?:([+-])\\s*)?var\\(--${v}\\)\\s*\\*\\s*(-?[\\d.]+)${unit}`, 'g'))].map((m) => (m[1] === '-' ? -1 : 1) * Number(m[2]))
+  const VARS: Record<string, keyof (typeof MOOD_MOTION)['content']> = {
+    'idle-sway': 'sway', 'idle-rock': 'rock', 'idle-bob': 'bob', 'idle-huff': 'huff', hop: 'hop', 'hop-extra': 'hopExtra',
+    'ear-flick': 'earFlick', 'ear-droop': 'earDroop', look: 'look', nod: 'nod', snuggle: 'snuggle',
+  }
+
+  it('uses the same mood amounts as art.css', () => {
+    // The .dragon-svg rule that sets the idle amounts (there are several .dragon-svg rules).
+    const base = [...css.matchAll(/(?:^|\})\s*\.dragon-svg\s*\{([^{}]*)\}/g)].map((m) => m[1]!).find((b) => b.includes('--idle-sway:')) ?? ''
+    expect(base).toContain('--idle-sway:')
+    for (const mood of MOTION_MOODS) {
+      const own = mood === 'content' ? '' : block(`.dragon-svg[data-mood='${mood}']`)
+      for (const [cssName, key] of Object.entries(VARS)) {
+        const v = prop(own, cssName) ?? prop(base, cssName)
+        expect(v, `${mood} --${cssName}`).toBe(MOOD_MOTION[mood][key])
+      }
+    }
+  })
+
+  it('covers the largest move in each art.css keyframe', () => {
+    const K = KEYFRAMES
+    const maxOut = (ns: number[]) => Math.max(0, ...ns.map((n) => -n))
+    const maxIn = (ns: number[]) => Math.max(0, ...ns)
+    expect(maxOut(coeffs('ear-flick', 'ear-flick', 'deg'))).toBe(K.earFlick.out)
+    expect(maxIn(coeffs('ear-flick', 'ear-flick', 'deg'))).toBe(K.earFlick.back)
+    expect(maxOut(coeffs('ear-droop', 'ear-droop', 'deg'))).toBe(K.earDroop.sag)
+    expect(Math.min(...coeffs('ear-droop', 'ear-droop', 'deg').map(Math.abs))).toBe(K.earDroop.rest)
+    expect(maxOut(coeffs('head-look', 'look', 'deg'))).toBe(K.headLook.left)
+    expect(maxIn(coeffs('head-look', 'look', 'deg'))).toBe(K.headLook.right)
+    expect(maxIn(coeffs('head-nod', 'nod', 'px'))).toBe(K.headNod.down)
+    expect(maxOut(coeffs('head-nod', 'nod', 'px'))).toBe(K.headNod.up)
+    expect(maxIn(coeffs('head-nod', 'nod', 'deg'))).toBe(K.headNod.turn)
+    expect(maxOut(coeffs('head-nod', 'nod', 'deg'))).toBe(0)
+    expect(maxIn(coeffs('head-snuggle', 'snuggle', 'deg'))).toBe(K.headSnuggle.turn)
+    expect(maxOut(coeffs('head-snuggle', 'snuggle', 'deg'))).toBe(K.headSnuggle.back)
+    for (const v of ['hop', 'hop-extra']) {
+      expect(maxOut(coeffs('idle-hop', v, 'px')), v).toBe(K.idleHop.lift)
+      const scales = coeffs('idle-hop', v).filter((n) => Math.abs(n) < 1)
+      expect(Math.max(K.idleHop.wide, K.idleHop.tall), v).toBeGreaterThanOrEqual(maxIn(scales))
+      expect(K.idleHop.short, v).toBeGreaterThanOrEqual(maxOut(scales))
+    }
+    const huff = coeffs('idle-huff', 'idle-huff')
+    expect(Math.max(K.idleHuff.wide, K.idleHuff.tall)).toBeGreaterThanOrEqual(maxIn(huff))
+    expect(K.idleHuff.short).toBeGreaterThanOrEqual(maxOut(huff))
+    // The sway and rock are plain angles, times one; the bob a plain length.
+    expect(coeffs('idle-sway', 'idle-sway').length + keyframe('idle-sway').split('var(--idle-sway)').length - 1).toBeGreaterThan(0)
+    expect(keyframe('idle-sway')).not.toMatch(/var\(--idle-sway\)\s*\*\s*-?(?!1\))[\d.]+/)
+    expect(keyframe('idle-rock')).not.toMatch(/var\(--idle-(rock|bob)\)\s*\*\s*-?(?!1\))[\d.]+/)
+    expect(keyframe('hatchling-breathe')).toContain(`translateY(-${K.breathe.lift}px) scale(${1 + K.breathe.wide}, ${1 - K.breathe.short})`)
+    // The perk-up: exactly these numbers, with no overshooting easing.
+    const P = KEYFRAMES.reactPerk
+    expect(keyframe('react-perk')).toContain(`translateY(-${P.liftPercent}%) scale(${1 - P.narrow}, ${1 + P.tall})`)
+    expect(keyframe('react-perk')).toContain(`scale(${1 + P.wide}, ${1 - P.short})`)
+    expect(block('.react-perk')).toMatch(/react-perk 600ms ease-in-out/)
+    expect(block('.dragon-react')).toContain('transform-origin: 50% 90%')
+    // 1% of a box up to 1.4 times taller than the square drawing is within PERK_LIFT units.
+    expect(0.01 * 1.4 * 512).toBeLessThanOrEqual(PERK_LIFT)
+    // The origin, 90% down a box from square to 1.4 times taller than wide, in drawing units.
+    for (const ratio of [1, 1.4]) {
+      const y = (0.9 * ratio - (ratio - 1) / 2) * 512
+      expect(y).toBeGreaterThanOrEqual(PERK_ORIGINS_Y[0]! - 1)
+      expect(y).toBeLessThanOrEqual(PERK_ORIGINS_Y[1]! + 1)
+    }
+    // The ears turn about their root, the body about the ground.
+    expect(block('.dg-ear.dg-l')).toContain('transform-origin: 100% 100%')
+    expect(block('.dg-ear.dg-r')).toContain('transform-origin: 0% 100%')
+    expect(block('.dragon-idle')).toContain(`transform-origin: ${GROUND[0]}px ${GROUND[1]}px`)
+    expect(block('.dragon-body')).toContain(`transform-origin: ${GROUND[0]}px ${GROUND[1]}px`)
+  })
+
+  const STAGE_DRAW: Record<string, [Anchors, () => string]> = {
+    hatchling: [HATCHLING, () => hatchlingSvg('t')],
+    whelp: [WHELP, () => whelpSvg('t')],
+    juvenile: [JUVENILE, () => juvenileSvg('t')],
+    adult: [ADULT, () => adultSvg('t')],
+    elder: [ELDER, () => elderSvg('t')],
+  }
+  const input = (a: Anchors, svg: string): HeadMotionInput => ({ rest: a.headBox, parts: shapeBoxes(headGroup(svg), ['dg-ear']), ear: a.ear, neckY: a.neckY })
+  const contains = (outer: Box, inner: Box) => outer[0] <= inner[0] && outer[1] <= inner[1] && outer[2] >= inner[2] && outer[3] >= inner[3]
+  const rot = ([x, y]: readonly [number, number], [cx, cy]: readonly [number, number], deg: number) => {
+    const a = (deg * Math.PI) / 180
+    return [cx + (x - cx) * Math.cos(a) - (y - cy) * Math.sin(a), cy + (x - cx) * Math.sin(a) + (y - cy) * Math.cos(a)] as const
+  }
+
+  it('finds the shapes on the head', () => {
+    const svg = juvenileSvg('t')
+    const head = headGroup(svg)
+    expect(head.startsWith('<g class="dragon-head')).toBe(true)
+    expect(head).toContain('hd-mouth')
+    expect(head).not.toContain('dragon-tail')
+    const boxes = shapeBoxes(head, ['dg-ear'])
+    // The head ellipse, cx 256 cy 172 rx 100 ry 86; a horn's control points; no ears.
+    expect(boxes).toContainEqual([156, 86, 356, 258])
+    expect(boxes).toContainEqual(pathBox('M194 112 C168 66 176 28 210 12 C204 48 210 78 226 100 Z'))
+    expect(boxes).not.toContainEqual(pathBox(JUVENILE.ear!))
+    expect(boxes.flat().every(Number.isFinite)).toBe(true)
+  })
+
+  it('covers the head at rest, and the fully drooped ears, nodding, when sleepy', () => {
+    for (const [stage, [a, draw]] of Object.entries(STAGE_DRAW)) {
+      const inp = input(a, draw())
+      for (const mood of MOTION_MOODS) {
+        const reach = headReach(inp, MOOD_MOTION[mood])
+        expect(contains(reach, a.headBox), `${stage} ${mood}`).toBe(true)
+        expect(reach.every(Number.isFinite), `${stage} ${mood}`).toBe(true)
+      }
+      const sleepy = headReach(inp, MOOD_MOTION.sleepy)
+      expect(sleepy[3], stage).toBeGreaterThanOrEqual(Math.max(...inp.parts.map((b) => b[3])) + KEYFRAMES.headNod.down)
+      if (!a.ear) continue
+      // Each ear's outer corners sagged to the full droop, on a head turned by the nod.
+      const e = pathBox(a.ear)
+      for (const corner of [[e[0], e[1]], [e[0], e[3]]] as const) {
+        const [x] = rot(rot(corner, [e[2], e[3]], -KEYFRAMES.earDroop.sag), [256, a.neckY], KEYFRAMES.headNod.turn)
+        expect(sleepy[0], stage).toBeLessThanOrEqual(x)
+        expect(sleepy[2], stage).toBeGreaterThanOrEqual(512 - x)
+      }
+    }
+  })
+
+  it('covers the welcome perk-up on top of the idle motion, in every mood', () => {
+    const inp = input(WHELP, whelpSvg('t'))
+    const top = Math.min(...inp.parts.map((b) => b[1]))
+    const P = KEYFRAMES.reactPerk
+    for (const mood of MOTION_MOODS) {
+      const reach = headReach(inp, MOOD_MOTION[mood])
+      // The top stretched 4% up from the lowest origin, then lifted.
+      expect(reach[1], mood).toBeLessThanOrEqual(PERK_ORIGINS_Y[1]! - (PERK_ORIGINS_Y[1]! - top) * (1 + P.tall) - PERK_LIFT)
+    }
+  })
+
+  it('pivots each ear on points of its outline, so the box of its points is its own box', () => {
+    // transform-box: fill-box turns the ear about the corner of its drawn outline; the
+    // reach uses the box of the path's points. They agree when the largest x and y are
+    // both ends of segments (on the outline), not control points.
+    for (const [stage, [a]] of Object.entries(STAGE_DRAW)) {
+      if (!a.ear) continue
+      const ends: [number, number][] = []
+      for (const seg of a.ear.matchAll(/[MLCQ]([^MLCQZ]*)/g)) {
+        const n = seg[1]!.trim().split(/[\s,]+/).map(Number)
+        ends.push([n[n.length - 2]!, n[n.length - 1]!])
+      }
+      const box = pathBox(a.ear)
+      expect(Math.max(...ends.map((e) => e[0])), stage).toBe(box[2])
+      expect(Math.max(...ends.map((e) => e[1])), stage).toBe(box[3])
+    }
+  })
+
+  it('understands every shape on every head (no shape it skips, no turned groups)', () => {
+    const looks: EvolutionLook[] = ['neutral', 'strength', 'discipline', 'wisdom', 'heart']
+    for (const stage of ['hatchling', 'whelp', 'juvenile', 'adult', 'elder'])
+      for (const look of looks) {
+        const head = headGroup(drawLook({ stage, progress: 0, look, wearing: { head: 'crown', neck: 'scarf', held: 'teddy' } }).svg)
+        expect(head, stage).not.toBe('')
+        const tags = [...head.matchAll(/<([a-zA-Z]+)\b([^>]*)>/g)]
+        for (const [, tag, attrs] of tags) {
+          expect(['g', 'ellipse', 'circle', 'path'], `${stage}/${look}: <${tag}>`).toContain(tag)
+          if (tag === 'g') expect(attrs, `${stage}/${look}: a turned group`).not.toMatch(/\btransform=/)
+          // Only the soft shines (which sit inside the skin) carry their own turn.
+          if (/\btransform=/.test(attrs!)) expect(attrs, `${stage}/${look}`).toContain('hd-shine')
+        }
+        const drawable = tags.filter(([, t]) => t !== 'g').length
+        const skipped = tags.filter(([, t, at]) => t !== 'g' && (/\btransform=/.test(at!) || /dg-ear/.test(at!))).length
+        expect(shapeBoxes(head, ['dg-ear']).length, `${stage}/${look}`).toBe(drawable - skipped)
+      }
+  })
+
+  it('lifts the top for a happy hop and for the head tilt', () => {
+    const inp = input(JUVENILE, juvenileSvg('t'))
+    const top = Math.min(...inp.parts.map((b) => b[1]))
+    const happy = headReach(inp, MOOD_MOTION.happy)
+    expect(happy[1]).toBeLessThanOrEqual(top - KEYFRAMES.idleHop.lift - MOOD_MOTION.happy.bob - KEYFRAMES.breathe.lift)
+    // A tilt lifts a shape's top corner by its distance from the neck's centre line times sin(angle).
+    const content = headReach(inp, MOOD_MOTION.content)
+    const horn = pathBox('M194 112 C168 66 176 28 210 12 C204 48 210 78 226 100 Z')
+    const [, y] = rot([horn[2], horn[1]], [256, JUVENILE.neckY], -KEYFRAMES.headLook.left)
+    expect(content[1]).toBeLessThanOrEqual(Math.min(y, mirrorY(horn, JUVENILE.neckY)))
+  })
+  const mirrorY = (b: Box, neckY: number) => rot([512 - b[0], b[1]], [256, neckY], KEYFRAMES.headLook.right)[1]
+
+  it('draws a box for each mood on the svg, content first', () => {
+    const svg = juvenileSvg('t', 'neutral')
+    for (const mood of MOTION_MOODS) {
+      const m = new RegExp(`data-box-${mood}="(-?[\\d.]+) (-?[\\d.]+) ([\\d.]+) ([\\d.]+)"`).exec(svg)
+      expect(m, mood).not.toBeNull()
+      expect(m!.slice(1).map(Number).every(Number.isFinite), mood).toBe(true)
+    }
+    expect(svg).not.toMatch(/NaN|undefined/)
+    const content = /data-box-content="([^"]+)"/.exec(svg)![1]!.split(' ')
+    expect(svg).toContain(`x="${content[0]}" y="${content[1]}" width="${content[2]}" height="${content[3]}"`)
   })
 })

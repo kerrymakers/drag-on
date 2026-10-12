@@ -39,6 +39,7 @@ export function eggSvg(crack: CrackLevel, uid: string): string {
     <radialGradient id="${blush}"><stop offset="0.2" class="g-blush" /><stop offset="1" class="g-blush g-clear" /></radialGradient>
   </defs>
   ${headBoxRect([80, 4, 432, 272])}
+  ${lowerPartRect()}
   <ellipse class="mood-part mood-happy egg-glow" cx="256" cy="270" rx="240" ry="256" fill="url(#${glow})" />
   <ellipse class="egg-shadow" cx="256" cy="482" rx="140" ry="11" />
   <g class="egg-inner">
@@ -72,6 +73,19 @@ export function eggSvg(crack: CrackLevel, uid: string): string {
   <path class="egg-sparkle" d="M350 96 l8 22 l22 8 l-22 8 l-8 22 l-8 -22 l-22 -8 l22 -8 z" fill="#fff" />
   </g>
 </svg>`
+}
+
+/**
+ * The egg's base, below its middle (and below the curled-up face) and down to the
+ * nest's lip on Home (art/scene.ts): with no room for a speech bubble above or beside
+ * the egg, one may sit here, covering only this part and leaving the nest in view
+ * (ui/speech.ts). Invisible.
+ */
+export const EGG_LOWER_PART = { top: 330, bottom: 452 } as const
+
+function lowerPartRect(): string {
+  const { top, bottom } = EGG_LOWER_PART
+  return `<rect class="speech-lower-part" x="86" y="${top}" width="340" height="${bottom - top}" fill="none" stroke="none" pointer-events="none" />`
 }
 
 function ariaLabel(crack: CrackLevel): string {

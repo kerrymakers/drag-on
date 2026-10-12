@@ -51,7 +51,8 @@ export default defineConfig({
   test: {
     include: ['src/**/*.test.ts'],
     environment: 'node',
-    // art.test.ts reads art.css (?raw) to check the animations; Vitest blanks CSS otherwise.
-    css: { include: [/art\.css/] },
+    // art.test.ts and scene.test.ts read art.css and scene.css (?raw) to check the
+    // animations; Vitest blanks CSS otherwise.
+    css: { include: [/art\.css/, /scene\.css/] },
   },
 })

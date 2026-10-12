@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  clockMinutes,
   clockToDayMinutes,
+  londonClock,
   isClockTime,
   dayKey,
   dayMinutesToClock,
@@ -261,5 +263,35 @@ describe('daysBetween', () => {
 
   it('rejects malformed keys', () => {
     expect(() => daysBetween('2026-1-5', '2026-01-06')).toThrow()
+  })
+})
+
+describe('londonClock', () => {
+  it('reads the London month and minutes since midnight, and the lead over GMT', () => {
+    expect(londonClock(at('2026-12-15T00:00:00Z'))).toEqual({ year: 2026, month: 12, day: 15, daysInMonth: 31, minutes: 0, aheadOfGmt: 0 })
+    expect(londonClock(at('2026-06-15T23:59:30+01:00'))).toEqual({ year: 2026, month: 6, day: 15, daysInMonth: 30, minutes: 23 * 60 + 59, aheadOfGmt: 60 })
+    // 23:30 UTC on 31 May is 00:30 on 1 June in London.
+    expect(londonClock(at('2026-05-31T23:30:00Z'))).toMatchObject({ month: 6, day: 1, minutes: 30, aheadOfGmt: 60 })
+    // New Year's Eve, and a leap February.
+    expect(londonClock(at('2026-12-31T23:59:00Z'))).toMatchObject({ year: 2026, month: 12, day: 31 })
+    expect(londonClock(at('2028-02-10T12:00:00Z'))).toMatchObject({ daysInMonth: 29 })
+  })
+
+  it('follows the clock changes', () => {
+    expect(londonClock(at('2026-03-29T00:59:00Z'))).toMatchObject({ month: 3, day: 29, minutes: 59, aheadOfGmt: 0 })
+    expect(londonClock(at('2026-03-29T01:00:00Z'))).toMatchObject({ month: 3, day: 29, minutes: 120, aheadOfGmt: 60 })
+    expect(londonClock(at('2026-10-25T00:30:00Z'))).toMatchObject({ month: 10, day: 25, minutes: 90, aheadOfGmt: 60 })
+    expect(londonClock(at('2026-10-25T01:30:00Z'))).toMatchObject({ month: 10, day: 25, minutes: 90, aheadOfGmt: 0 })
+  })
+})
+
+describe('clockMinutes', () => {
+  it('turns HH:MM into minutes since midnight', () => {
+    expect(clockMinutes('00:00')).toBe(0)
+    expect(clockMinutes('04:00')).toBe(240)
+    expect(clockMinutes('23:59')).toBe(1439)
+  })
+  it('rejects anything else', () => {
+    for (const v of ['24:00', '7:30', '07:60', 'noon', '']) expect(clockMinutes(v), v).toBeNull()
   })
 })

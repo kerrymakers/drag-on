@@ -1,0 +1,378 @@
+/* The scene behind the dragon on Home (scene.ts). Soft and warm in every sky.
+   Each sky's colours are custom properties on [data-sky]; the hills and ground ease
+   between them, and the sky layers, sun, moon and stars cross-fade, so a change of
+   sky never moves anything. Gentle motion only (clouds drift, stars twinkle), by
+   transform and opacity, and none of it under reduced motion. */
+
+@property --scene-hill-far { syntax: '<color>'; inherits: true; initial-value: #cfe5bf; }
+@property --scene-hill-near { syntax: '<color>'; inherits: true; initial-value: #b5d79a; }
+@property --scene-ground { syntax: '<color>'; inherits: true; initial-value: #a9cf8c; }
+@property --scene-tuft { syntax: '<color>'; inherits: true; initial-value: #8fbf72; }
+@property --scene-cloud { syntax: '<color>'; inherits: true; initial-value: #ffffff; }
+
+.scene,
+.scene-floor {
+  --scene-fade: 1.6s;
+}
+/* Fades only once the first sky is up (scene.ts sets data-scene-ready a frame later),
+   so opening the app shows the sky straight away rather than fading it in. */
+.scene:not([data-scene-ready]),
+.scene:not([data-scene-ready]) *,
+.scene-floor:not([data-scene-ready]),
+.scene-floor:not([data-scene-ready]) * {
+  transition: none !important;
+}
+.scene,
+.scene-floor {
+  transition:
+    --scene-hill-far var(--scene-fade) ease-in-out,
+    --scene-hill-near var(--scene-fade) ease-in-out,
+    --scene-ground var(--scene-fade) ease-in-out,
+    --scene-tuft var(--scene-fade) ease-in-out,
+    --scene-cloud var(--scene-fade) ease-in-out;
+}
+
+/* Light mode. Night stays soft (a dusky periwinkle), never black. */
+[data-sky='day'] {
+  --scene-hill-far: #cfe5bf;
+  --scene-hill-near: #b5d79a;
+  --scene-ground: #a6cd88;
+  --scene-tuft: #8fbf72;
+  --scene-cloud: #ffffff;
+}
+[data-sky='dawn'] {
+  --scene-hill-far: #e0dfbd;
+  --scene-hill-near: #c6d9a1;
+  --scene-ground: #b5cf8e;
+  --scene-tuft: #9cbd78;
+  --scene-cloud: #fff1ee;
+}
+[data-sky='evening'] {
+  --scene-hill-far: #dcd2b4;
+  --scene-hill-near: #c0cf99;
+  --scene-ground: #afc489;
+  --scene-tuft: #98b176;
+  --scene-cloud: #ffe9e0;
+}
+[data-sky='night'] {
+  --scene-hill-far: #bccbc6;
+  --scene-hill-near: #a9c4a6;
+  --scene-ground: #9dba98;
+  --scene-tuft: #88a985;
+  --scene-cloud: #e8e6f6;
+}
+.scene-sky.scene-for-day {
+  background: linear-gradient(to bottom, #cdeaf6 0%, #e2f2f6 55%, #f7f2e2 100%);
+}
+.scene-sky.scene-for-dawn {
+  background: linear-gradient(to bottom, #f4d6e2 0%, #fbe1d3 50%, #fff0d8 100%);
+}
+.scene-sky.scene-for-evening {
+  background: linear-gradient(to bottom, #ead2ea 0%, #f7d3c0 55%, #fde3c0 100%);
+}
+.scene-sky.scene-for-night {
+  background: linear-gradient(to bottom, #cfcdee 0%, #dcd5ef 55%, #ece2ee 100%);
+}
+.scene {
+  --scene-sun: #ffe9a6;
+  --scene-sun-low: #ffc98f;
+  --scene-glow: #fff3c4;
+  --scene-moon: #fff8e2;
+  --scene-star: #ffffff;
+}
+
+/* Dark mode: the same skies, dimmer and muted. */
+@media (prefers-color-scheme: dark) {
+  [data-sky='day'] {
+    --scene-hill-far: #34473b;
+    --scene-hill-near: #2f4433;
+    --scene-ground: #2b3e2f;
+    --scene-tuft: #3b5540;
+    --scene-cloud: #5a6b78;
+  }
+  [data-sky='dawn'] {
+    --scene-hill-far: #43463a;
+    --scene-hill-near: #374434;
+    --scene-ground: #323e2f;
+    --scene-tuft: #44553d;
+    --scene-cloud: #6e5660;
+  }
+  [data-sky='evening'] {
+    --scene-hill-far: #433f35;
+    --scene-hill-near: #384131;
+    --scene-ground: #333b2c;
+    --scene-tuft: #47533b;
+    --scene-cloud: #6a5058;
+  }
+  [data-sky='night'] {
+    --scene-hill-far: #262f30;
+    --scene-hill-near: #233027;
+    --scene-ground: #202b23;
+    --scene-tuft: #2f4033;
+    --scene-cloud: #3a3850;
+  }
+  .scene-sky.scene-for-day {
+    background: linear-gradient(to bottom, #2c4052 0%, #34495a 55%, #3e4a4b 100%);
+  }
+  .scene-sky.scene-for-dawn {
+    background: linear-gradient(to bottom, #3b2f47 0%, #553f4e 55%, #694b46 100%);
+  }
+  .scene-sky.scene-for-evening {
+    background: linear-gradient(to bottom, #39293f 0%, #523845 55%, #604332 100%);
+  }
+  .scene-sky.scene-for-night {
+    background: linear-gradient(to bottom, #17162b 0%, #201d35 55%, #2a2437 100%);
+  }
+  .scene {
+    --scene-sun: #f1d585;
+    --scene-sun-low: #e6a86f;
+    --scene-glow: #8a7246;
+    --scene-moon: #f3ead0;
+    --scene-star: #fdf6dc;
+  }
+}
+
+/* The backdrop: a rounded window behind the heading and the dragon. */
+.scene {
+  overflow: hidden;
+  pointer-events: none;
+  isolation: isolate;
+}
+.scene > * {
+  position: absolute;
+}
+.scene-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+.scene-sky {
+  inset: 0;
+}
+/* Whatever isn't the current sky fades out. */
+.scene-for-dawn,
+.scene-for-day,
+.scene-for-evening,
+.scene-for-night {
+  opacity: 0;
+  transition: opacity var(--scene-fade) ease-in-out;
+}
+[data-sky='dawn'] .scene-for-dawn,
+[data-sky='day'] .scene-for-day,
+[data-sky='evening'] .scene-for-evening,
+[data-sky='night'] .scene-for-night {
+  opacity: 1;
+}
+
+.scene-star {
+  display: block;
+  transform: translate(-50%, -50%);
+}
+.scene-star svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: var(--scene-star);
+}
+/* Soft light-mode stars need a touch of warmth to show on the pale night sky. */
+@media (prefers-color-scheme: light) {
+  .scene-star svg {
+    fill: #fffbea;
+    filter: drop-shadow(0 0 1.5px rgb(120 110 190 / 0.55));
+  }
+}
+.scene-star-twinkle {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+[data-sky='night'] .scene-star-twinkle {
+  animation: scene-twinkle 5.3s ease-in-out infinite;
+}
+
+/* Below the heading, high on the left (a long stage name reaches far across). */
+.scene-moon {
+  left: 3%;
+  top: 66px;
+  width: 68px;
+  height: 68px;
+}
+.scene-moon-disc {
+  fill: var(--scene-moon);
+}
+.scene-moon-glow,
+.scene-sun-glow {
+  opacity: 0.8;
+}
+.scene-glow-stop {
+  stop-color: var(--scene-glow);
+}
+.scene-glow-clear {
+  stop-opacity: 0;
+}
+
+.scene-sun {
+  width: 84px;
+  height: 84px;
+}
+/* Below the heading, high on the right. */
+.scene-sun-high {
+  right: 3%;
+  top: 70px;
+  width: 72px;
+  height: 72px;
+}
+.scene-sun-low {
+  top: 50%;
+}
+.scene-sun-dawn {
+  left: 2%;
+}
+.scene-sun-evening {
+  right: 2%;
+}
+.scene-sun-disc {
+  fill: var(--scene-sun);
+}
+.scene-sun-low .scene-sun-disc {
+  fill: var(--scene-sun-low);
+}
+.scene svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* Clouds drift very slowly to and fro; not at night. */
+.scene-cloud {
+  width: 96px;
+  height: 36px;
+  opacity: 0.9;
+  transition: opacity var(--scene-fade) ease-in-out;
+}
+.scene-cloud path {
+  fill: var(--scene-cloud);
+}
+.scene-cloud-a {
+  left: 3%;
+  top: 22%;
+  animation: scene-drift 70s ease-in-out -20s infinite alternate;
+}
+.scene-cloud-b {
+  right: 6%;
+  top: 36%;
+  width: 72px;
+  height: 27px;
+  animation: scene-drift 90s ease-in-out -55s infinite alternate-reverse;
+}
+[data-sky='night'] .scene-cloud {
+  opacity: 0;
+  animation-play-state: paused;
+}
+@media (prefers-color-scheme: dark) {
+  .scene-cloud {
+    opacity: 0.55;
+  }
+}
+
+.scene > .scene-hills {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 34%;
+}
+.scene-hill-far {
+  fill: var(--scene-hill-far);
+}
+.scene-hill-near {
+  fill: var(--scene-hill-near);
+}
+
+/* The floor: the same box as the dragon drawing, so its ground lines up with the feet. */
+.scene-floor-svg {
+  display: block;
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  overflow: visible;
+}
+.scene-patch-ground {
+  fill: var(--scene-ground);
+}
+.scene-tuft {
+  fill: var(--scene-tuft);
+}
+.scene-nest-hollow {
+  fill: #a8744a;
+}
+.scene-nest-rim {
+  fill: #dcaa78;
+  stroke: #b77b4b;
+  stroke-width: 5;
+  stroke-linejoin: round;
+}
+.scene-nest-straw {
+  fill: none;
+  stroke: #b77b4b;
+  stroke-width: 4;
+  stroke-linecap: round;
+  opacity: 0.8;
+}
+.scene-nest-hollow + .scene-nest-straw {
+  stroke: #8a5a36;
+}
+@media (prefers-color-scheme: dark) {
+  .scene-nest-hollow {
+    fill: #5e4029;
+  }
+  .scene-nest-rim {
+    fill: #94683f;
+    stroke: #6b4a30;
+  }
+  .scene-nest-straw,
+  .scene-nest-hollow + .scene-nest-straw {
+    stroke: #6b4a30;
+  }
+}
+.scene-patch,
+.scene-nest {
+  display: none;
+}
+[data-ground='patch'] .scene-patch,
+[data-ground='nest'] .scene-nest {
+  display: inline;
+}
+
+@keyframes scene-twinkle {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+@keyframes scene-drift {
+  from {
+    transform: translateX(-14px);
+  }
+  to {
+    transform: translateX(22px);
+  }
+}
+
+/* Reduced motion: the scene stands still and a change of sky switches at once, with no fade. */
+@media (prefers-reduced-motion: reduce) {
+  .scene *,
+  .scene-floor * {
+    animation: none !important;
+  }
+  /* A change of sky is instant: the sky, the hills and the ground all at once. */
+  .scene,
+  .scene-floor,
+  .scene *,
+  .scene-floor * {
+    transition: none !important;
+  }
+}

@@ -1082,6 +1082,13 @@
 [data-mood='grumpy'] .dragon-pose {
   transform: var(--curl-pose);
 }
+/* The speech bubble's keep-clear markers are never painted (they still have a size
+   and place, which is all the bubble needs). */
+.dragon-head-box,
+.speech-lower-part {
+  visibility: hidden;
+  opacity: 0;
+}
 /* The speech bubble's keep-clear box moves with the curled-up head (straight away,
    not animated, so the bubble is placed where the head ends up). */
 .dragon-head-box.follows-pose {
@@ -1174,19 +1181,21 @@
   }
 }
 
-/* A perk-up when you come back: a quick stretch. */
+/* A perk-up when you come back: a small, quick stretch. It plays while the welcome
+   bubble shows, so the bubble's keep-clear box covers it (motion.ts, KEYFRAMES.reactPerk;
+   art.test.ts checks the numbers). No overshooting easing, so it never goes past them. */
 .react-perk {
-  animation: react-perk 600ms var(--bounce);
+  animation: react-perk 600ms ease-in-out;
 }
 @keyframes react-perk {
   0% {
     transform: scale(1, 1);
   }
   30% {
-    transform: scale(0.95, 1.08) translateY(-10px);
+    transform: translateY(-1%) scale(0.98, 1.04);
   }
   60% {
-    transform: scale(1.03, 0.97);
+    transform: scale(1.02, 0.98);
   }
   100% {
     transform: scale(1, 1);

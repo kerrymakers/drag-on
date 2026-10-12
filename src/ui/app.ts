@@ -1,13 +1,14 @@
 // The app shell: wires game logic, storage and art to the Home, Dragon, Collection, History and Settings screens.
 // This is the only layer that reads the clock (Date.now), generates ids and rolls dice.
 
-import { react, renderDragon, speechAnchor, speechKeepClear, type WearLook } from '../art'
+import { react, renderDragon, renderScene, speechAnchor, speechKeepClear, speechLowerPart, type WearLook } from '../art'
 import { BACKUP_REMINDER_DAYS } from '../config/backup'
 import { EVOLVES_AT_STAGE, LOOK_CHANGE_MARGIN } from '../config/evolution'
 import { REWARDS } from '../config/rewards'
 import { DRAGON_NAME_MAX } from '../config/settings'
 import { DEFAULT_WAKE_TIME } from '../config/time'
 import { MOODS } from '../config/mood'
+import { SCENE } from '../config/scene'
 import { STAGES } from '../config/stages'
 import { STATS } from '../config/stats'
 import { STREAK_CHIP_FROM, STREAKS } from '../config/streaks'
@@ -15,6 +16,7 @@ import { EFFORT_LEVELS, NEW_TASK_EFFORT, NEW_TASK_ID_PREFIX, NEW_TASK_TIMES_A_DA
 import { backupDue } from '../game/backup'
 import { dayKey, dayMinutesToClock } from '../game/day'
 import { evolutionLook, lookChange, type Evolution } from '../game/evolution'
+import { skyPeriod } from '../game/scene'
 import { createLogEvent, createUndoEvent, undoableLog } from '../game/log'
 import { foundItems, itemFor, rewardMilestone, treatBonus } from '../game/rewards'
 import { withScheduleEdit } from '../game/settings'
@@ -244,6 +246,9 @@ export function startApp(doc: Document): App {
     mood: byId(doc, 'mood-chip'),
     speech: byId(doc, 'speech'),
     art: byId(doc, 'dragon-art'),
+    scene: byId(doc, 'scene'),
+    sceneFloor: byId(doc, 'scene-floor'),
+    sceneFront: byId(doc, 'scene-front'),
     label: byId(doc, 'growth-label'),
     xp: byId(doc, 'xp-total'),
     bar: byId(doc, 'xp-bar'),
@@ -324,12 +329,15 @@ export function startApp(doc: Document): App {
           return { width: bubble.offsetWidth, height: bubble.offsetHeight }
         },
         speechKeepClear(el.art),
+        speechLowerPart(el.art) ?? undefined,
       )
       bubble.style.maxWidth = `${p.maxWidth}px`
       bubble.classList.toggle('is-compact', p.compact)
       bubble.style.left = `${Math.round(p.left)}px`
       bubble.style.top = `${Math.round(p.top)}px`
       bubble.dataset.tail = p.tail
+      if (p.tailAt === undefined) bubble.style.removeProperty('--tail-x')
+      else bubble.style.setProperty('--tail-x', `${Math.round(p.tailAt)}px`)
     }
     bubble.classList.add('is-showing')
     window.clearTimeout(speechTimer)
@@ -442,6 +450,8 @@ export function startApp(doc: Document): App {
     el.mood.textContent = MOOD_LABELS[mood]
     el.mood.dataset.mood = mood
     renderDragon(el.art, { stage: progress.stage.id, progress: progress.fraction, mood, look, wearing: homeOutfitHold ?? wearing })
+    // The sky follows the London clock; render runs every minute and on coming back.
+    renderScene(el.scene, el.sceneFloor, el.sceneFront, { sky: skyPeriod(now, SCENE), stage: progress.stage.id })
 
     const label = progressLabel(progress.stage.id, progress.xpToNext, progress.next !== null)
     el.label.textContent = label
@@ -761,8 +771,12 @@ export function startApp(doc: Document): App {
   // The streak chip opens History, the same way its tab would.
   el.streakChip.addEventListener('click', () => nav.go('history'))
 
-  // Decorative: a little bounce. Never logs anything.
-  el.art.addEventListener('click', () => react(el.art, 'tap'))
+  // Decorative: a little bounce. Never logs anything. A tap also answers the speech
+  // bubble (it fades away), so the bounce never stretches up under it.
+  el.art.addEventListener('click', () => {
+    hush()
+    react(el.art, 'tap')
+  })
 
   doc.addEventListener('visibilitychange', () => {
     if (doc.visibilityState === 'visible') {
@@ -771,6 +785,12 @@ export function startApp(doc: Document): App {
     }
   })
   window.setInterval(() => render(), TICK_MS)
+  // Restored from the back/forward cache, or a frozen tab woken up again (Chrome's
+  // 'resume'; visibilitychange covers the usual coming back): bring the sky up to date.
+  doc.addEventListener('resume', () => render())
+  window.addEventListener('pageshow', (e) => {
+    if (e.persisted) render()
+  })
 
   // Another tab saved: pick up its events. In read-only mode, keep this session's
   // in-memory taps on screen instead.
