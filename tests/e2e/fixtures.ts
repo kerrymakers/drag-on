@@ -2,11 +2,39 @@
 // so by default the page's Math.random is pinned to a roll that brings nothing: specs
 // that check exact XP, floats and toasts stay deterministic. A spec that wants a
 // reward adds its own init script, which runs after this one and wins.
-import { test as base, expect, type Locator, type Page } from '@playwright/test'
+// For the same reason the app makes no secret-wish seed (__dragOnNoWishSeed), so no
+// wish is ever granted (src/main.ts then passes startApp a makeSeed that makes none);
+// a spec that wants one saves a missionSeed in its settings. That flag goes on every
+// browser context, including ones a spec makes itself with browser.newContext, so no
+// spec can miss it. (It never needs overriding, so the undefined order of context and
+// page init scripts doesn't matter; the Math.random pin stays on the page, where a
+// spec's own pin is sure to run after it.)
+import { test as base, expect, type BrowserContext, type Locator, type Page } from '@playwright/test'
 
 export * from '@playwright/test'
 
-export const test = base.extend({
+const noWishSeed = (context: BrowserContext) =>
+  context.addInitScript(() => {
+    ;(window as { __dragOnNoWishSeed?: boolean }).__dragOnNoWishSeed = true
+  })
+
+export const test = base.extend<{}, {}>({
+  browser: [
+    async ({ browser }, use) => {
+      const newContext = browser.newContext.bind(browser)
+      browser.newContext = async (options) => {
+        const context = await newContext(options)
+        await noWishSeed(context)
+        return context
+      }
+      await use(browser)
+    },
+    { scope: 'worker' },
+  ],
+  context: async ({ context }, use) => {
+    await noWishSeed(context)
+    await use(context)
+  },
   page: async ({ page }, use) => {
     await page.addInitScript(() => {
       Math.random = () => 0.9999

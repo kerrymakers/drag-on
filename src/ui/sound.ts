@@ -83,6 +83,8 @@ export interface LogOutcome {
   newLook: boolean
   /** The log met the weekly goal (its treat is the goal treat). */
   goal?: boolean
+  /** The log granted the dragon's secret wish: the treat jingle. */
+  wish?: boolean
 }
 
 /**
@@ -92,11 +94,12 @@ export interface LogOutcome {
  *   tap's sound has finished.
  * - card: when the find's card opens after that moment (a tap later).
  * A find with no moment before it opens its card at once, so its jingle is the tap's
- * sound, in place of the chirp. Meeting the weekly goal gets the jingle on the tap too.
+ * sound, in place of the chirp. Meeting the weekly goal gets the jingle on the tap too,
+ * and granting the secret wish gets the treat's.
  */
 export function logSounds(o: LogOutcome): { now: SoundId; reveal: SoundId | null; card: SoundId | null } {
   const moment = o.stageUp || o.newLook
-  const chirp: SoundId = o.goal ? 'item' : o.treat ? 'treat' : 'log'
+  const chirp: SoundId = o.goal ? 'item' : o.treat || o.wish ? 'treat' : 'log'
   return {
     now: o.item && !moment ? 'item' : chirp,
     reveal: o.stageUp ? 'stageUp' : o.newLook ? 'item' : null,

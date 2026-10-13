@@ -201,3 +201,35 @@ export function react(container: HTMLElement, kind: Reaction): void {
   }
   wrap.addEventListener('animationend', done)
 }
+
+/** How many sparkles fly out when a log grants the dragon's secret wish. */
+export const WISH_BURST_SPARKS = 8
+
+/**
+ * The secret-wish sparkle burst: little twinkles flying out from the middle of the
+ * drawing, each at its own angle (--a) and a slightly different size. Decorative.
+ */
+export function wishBurstHtml(): string {
+  const r = 10
+  const twinkle = `<svg viewBox="-10 -10 20 20"><path d="M0 ${-r} Q${r * 0.18} ${-r * 0.18} ${r} 0 Q${r * 0.18} ${r * 0.18} 0 ${r} Q${-r * 0.18} ${r * 0.18} ${-r} 0 Q${-r * 0.18} ${-r * 0.18} 0 ${-r} Z" /></svg>`
+  const sparks = Array.from({ length: WISH_BURST_SPARKS }, (_, i) => {
+    const angle = Math.round((360 / WISH_BURST_SPARKS) * i + (i % 2 ? 12 : 0))
+    const size = i % 3 === 0 ? 18 : i % 3 === 1 ? 13 : 10
+    return `<span class="wish-spark" style="--a:${angle}deg;--s:${size}px;animation-delay:${(i % 3) * 40}ms">${twinkle}</span>`
+  })
+  return `<div class="wish-burst" aria-hidden="true">${sparks.join('')}</div>`
+}
+
+/**
+ * Plays the secret-wish sparkle burst over the dragon in `container` (once, then it
+ * tidies itself away). Under reduced motion it does nothing: the bubble and the toast
+ * still say the wish was granted.
+ */
+export function wishBurst(container: HTMLElement): void {
+  const view = container.ownerDocument.defaultView
+  if (view?.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+  container.querySelector(':scope > .wish-burst')?.remove()
+  container.insertAdjacentHTML('beforeend', wishBurstHtml())
+  const burst = container.lastElementChild
+  view?.setTimeout(() => burst?.remove(), 1200)
+}

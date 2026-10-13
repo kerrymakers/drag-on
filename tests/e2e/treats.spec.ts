@@ -1,8 +1,12 @@
 // Milestone 4, Slice 1: treats. A treat roll adds a second float, a happy hop, a
 // longer buzz and a toast that mentions it. A normal log feels exactly as before.
+// Milestone 8, slice 3: granting the dragon's secret wish feels like a treat too.
 import { test, expect, shot, LAYOUT, type Page } from './fixtures'
+import { MISSION } from '../../src/config/missions'
 import { REWARDS } from '../../src/config/rewards'
 import { TASKS } from '../../src/config/tasks'
+import { dayKey } from '../../src/game/day'
+import { missionFor } from '../../src/game/mission'
 
 test.use({ timezoneId: 'Europe/London', locale: 'en-GB' })
 const NOW = new Date('2026-10-13T10:00:00+01:00')
@@ -90,22 +94,47 @@ test('a normal log is unchanged: one float, the usual wiggle, toast and buzz', a
   expect(fb.saved).not.toHaveProperty('reward')
 })
 
-test('a treat in dark mode', async ({ page }) => {
-  await page.emulateMedia({ colorScheme: 'dark' })
-  await setUp(page, TREAT_ROLL)
-  await page.locator('button.task[data-task-id="walk"]').click()
-  const treat = page.locator('.float-treat')
-  await expect(treat).toHaveText(`+${BONUS('walk')} treat`)
-  const colours = await treat.evaluate((el) => {
-    const s = getComputedStyle(el)
-    return { color: s.color, bg: s.backgroundColor }
-  })
-  expect(colours).toEqual({ color: 'rgb(255, 194, 216)', bg: 'rgb(90, 47, 64)' })
-  await shot(page, `m4s1-treat-dark-${test.info().project.name}`, { delay: 350 })
+test('a log that grants the secret wish: its float, a hop, a sparkle, a happy line, the bonus in the toast and saved; undo reopens it', async ({ page }) => {
+  const msgs = collectConsole(page)
+  // A seed whose wish today is something for Wisdom, found through the game's own pick.
+  const tasks = TASKS
+  const day = dayKey(NOW.getTime())
+  const seed = Array.from({ length: 200 }, (_, i) => `e2e-${i}`).find((s) => missionFor(day, s, tasks, [], MISSION)?.id === 'stat:wisdom')!
+  await page.addInitScript((missionSeed) => {
+    if (!sessionStorage.getItem('seeded')) {
+      localStorage.setItem('drag-on:v1', JSON.stringify({ schemaVersion: 1, events: [], settings: { missionSeed } }))
+      sessionStorage.setItem('seeded', '1')
+    }
+  }, seed)
+  await setUp(page, null)
+  const bonus = MISSION.bonusXp
+  // Not the wish: a normal log.
+  await page.locator('button.task[data-task-id="gym"]').click()
+  expect((await feedback(page)).saved).not.toHaveProperty('mission')
+  await page.locator('button.task[data-task-id="read"]').click()
+  const fb = await feedback(page)
+  expect(fb.floats.slice(-2)).toEqual([
+    { text: `+${XP('read')} XP`, treat: false },
+    { text: `+${bonus} wish`, treat: true },
+  ])
+  expect(fb.toast).toBe(`Secret wish! +${XP('read') + bonus} XP · Read for 20 minutes`)
+  expect(fb).toMatchObject({ treat: true, xp: XP('gym') + XP('read') + bonus })
+  expect(fb.saved).toMatchObject({ taskId: 'read', xpAwarded: XP('read'), mission: { id: 'stat:wisdom', bonusXp: bonus } })
+  await expect(page.locator('#speech')).toHaveText(/^You granted my secret wish/)
+  await expect(page.locator('#dragon-art .wish-burst .wish-spark')).toHaveCount(8)
+  await shot(page, `m8s3-wish-${test.info().project.name}`, { delay: 350 })
+
+  // Undo takes the bonus back and reopens the wish: logging it again grants it again.
+  await page.locator('#toast-undo').click()
+  await expect(page.locator('#xp-total')).toHaveText(String(XP('gym')))
+  await page.locator('button.task[data-task-id="read"]').click()
+  await expect(page.locator('#toast-text')).toHaveText(`Secret wish! +${XP('read') + bonus} XP · Read for 20 minutes`)
+  await expect(page.locator('#xp-total')).toHaveText(String(XP('gym') + XP('read') + bonus))
+  expect(msgs).toEqual([])
 })
 
-test('reduced motion: no hop, the floats and toast still say it, and the still floats sit above the tapped button, clear of its labels', LAYOUT, async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: 'reduce' })
+test('reduced motion and dark mode: no hop, the floats and toast still say it, the treat pill keeps its colours, and the still floats sit above the tapped button, clear of its labels', LAYOUT, async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'dark' })
   await setUp(page, TREAT_ROLL)
   const button = page.locator('button.task[data-task-id="avoided"]')
   await button.click()
@@ -119,6 +148,12 @@ test('reduced motion: no hop, the floats and toast still say it, and the still f
   const floats = await page.$$eval('.float-xp', (els) => els.map((e) => e.getBoundingClientRect().bottom))
   expect(floats).toHaveLength(2)
   for (const bottom of floats) expect(bottom).toBeLessThanOrEqual(labels.y)
+  const colours = await page.locator('.float-treat').evaluate((el) => {
+    const s = getComputedStyle(el)
+    return { color: s.color, bg: s.backgroundColor }
+  })
+  expect(colours).toEqual({ color: 'rgb(255, 194, 216)', bg: 'rgb(90, 47, 64)' })
+  await shot(page, `m4s1-treat-dark-${test.info().project.name}`)
 })
 
 test('a treat that also hatches the egg is acknowledged again when the overlay closes', async ({ page }) => {

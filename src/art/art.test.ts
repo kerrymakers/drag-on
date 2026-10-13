@@ -5,7 +5,7 @@ import { STAGES } from '../config/stages'
 import { STATS } from '../config/stats'
 import { ADULT, ADULT_SCALE, ELDER, ELDER_SCALE, JUVENILE, JUVENILE_SCALE, WHELP, WHELP_SCALE, adultSvg, elderSvg, juvenileSvg, whelpSvg } from './grown'
 import { HATCHLING, HATCHLING_SCALE, hatchlingSvg } from './hatchling'
-import { CRACK_BIG_AT, CRACK_SMALL_AT, crackLevel, drawLook, hasLookArt, type MoodLook } from './index'
+import { CRACK_BIG_AT, CRACK_SMALL_AT, WISH_BURST_SPARKS, crackLevel, drawLook, hasLookArt, wishBurstHtml, type MoodLook } from './index'
 import { eggSvg } from './egg'
 import { WEAR_PIN, hasItemArt, itemSvg, unknownItemSvg, wornItemBox, wornItemSvg } from './items'
 import { EVOLVED_LOOKS, knownLook, type EvolutionLook } from './looks'
@@ -714,5 +714,16 @@ describe('head reach (speech keep-clear box)', () => {
     expect(svg).not.toMatch(/NaN|undefined/)
     const content = /data-box-content="([^"]+)"/.exec(svg)![1]!.split(' ')
     expect(svg).toContain(`x="${content[0]}" y="${content[1]}" width="${content[2]}" height="${content[3]}"`)
+  })
+})
+
+describe('the secret-wish burst', () => {
+  it('is decorative twinkles at their own angles, untappable, and still under reduced motion', () => {
+    const html = wishBurstHtml()
+    expect(html).toMatch(/^<div class="wish-burst" aria-hidden="true">/)
+    expect(html.match(/class="wish-spark"/g)).toHaveLength(WISH_BURST_SPARKS)
+    expect(new Set(html.match(/--a:\d+deg/g)).size).toBe(WISH_BURST_SPARKS)
+    expect(artCss).toMatch(/\.wish-burst \{[^}]*pointer-events: none/)
+    expect(artCss).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.wish-spark \{\s*animation: none/)
   })
 })

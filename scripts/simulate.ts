@@ -37,6 +37,7 @@ import type { Evolution, GameEvent, LogEvent, MoodId, StatId, Task } from '../sr
 import { EVOLVES_AT_STAGE, LOOK_CHANGE_MARGIN } from '../src/config/evolution'
 import { MOODS } from '../src/config/mood'
 import { TASKS } from '../src/config/tasks'
+import { MISSION } from '../src/config/missions'
 import { STAGES } from '../src/config/stages'
 import { STATS } from '../src/config/stats'
 import { DEFAULT_SETTINGS } from '../src/config/settings'
@@ -83,8 +84,14 @@ const VARIANT = process.argv.find((a) => a.startsWith('--variant='))?.split('=')
 const GOAL_ARG = process.argv.find((a) => a.startsWith('--goal='))?.split('=')[1]
 const GOAL_XP_ARG = process.argv.find((a) => a.startsWith('--goalxp='))?.split('=')[1]
 const SIM_GOAL = GOAL_XP_ARG === undefined ? GOAL : { ...GOAL, bonusXp: Number(GOAL_XP_ARG) }
-const SIM_SETTINGS = GOAL_ARG && GOAL_ARG !== 'off' ? { ...DEFAULT_SETTINGS, goal: { taskId: 'gym', daysPerWeek: Number(GOAL_ARG) } } : DEFAULT_SETTINGS
-const EXACT = process.argv.includes('--exact') || SIM_SETTINGS !== DEFAULT_SETTINGS
+const SIM_BASE = GOAL_ARG && GOAL_ARG !== 'off' ? { ...DEFAULT_SETTINGS, goal: { taskId: 'gym', daysPerWeek: Number(GOAL_ARG) } } : DEFAULT_SETTINGS
+const SIM_SETTINGS = SIM_BASE
+// --mission=N: daily secret mission bonus XP (default: the config value; 'off' = no wishes).
+// Wishes need this week's logs ("fresh"), so missions use the full log like --exact.
+const MISSION_ARG = process.argv.find((a) => a.startsWith('--mission='))?.split('=')[1]
+const MISSION_ON = MISSION_ARG !== 'off'
+const SIM_MISSION = MISSION_ARG === undefined || MISSION_ARG === 'off' ? MISSION : { ...MISSION, bonusXp: Number(MISSION_ARG) }
+const EXACT = process.argv.includes('--exact') || SIM_BASE !== DEFAULT_SETTINGS || MISSION_ON
 const MARGIN_ARG = process.argv.find((a) => a.startsWith('--margin='))?.split('=')[1]
 const MARGIN = MARGIN_ARG === undefined ? LOOK_CHANGE_MARGIN : Number(MARGIN_ARG) / 100
 const PROFILES_ARG = process.argv.find((a) => a.startsWith('--profiles='))?.split('=')[1] ?? 'keen,typical,patchy'
@@ -331,6 +338,7 @@ interface RunResult {
   comebacks: Array<{ gapLen: number; xpWeekAfter: number }>
   treatDays: boolean[] // per day: at least one treat
   treatXp: number
+  missionGrants: number
   rareBandRolls: number
   milestoneFinds: number // items taken from the pool by projected milestones
   pityFinds: number // items brought by bad-luck protection
@@ -422,6 +430,7 @@ function simulate(profile: Profile, seed: number, rewardCfg: RewardConfig = REWA
   let rareBandRolls = 0
   let milestoneFinds = 0
   let pityFinds = 0
+  let missionGrants = 0
   let lastFindDay = 0 // game day (1-based) of the last find; 0 = start
   let logsSinceFind = 0
   // Inline projected streak, only used for --milestones (mirrors the post-loop projection).
@@ -503,7 +512,7 @@ function simulate(profile: Profile, seed: number, rewardCfg: RewardConfig = REWA
           forced = true
         }
       }
-      const ev = createLogEvent(t, todays, SIM_SETTINGS, a.ts, `e${id++}`, roll, { stages: STAGE_LIST, rewards: rewardCfg, streaks: SIM_STREAKS, effortLevels: NO_LEVELS, goal: SIM_GOAL })
+      const ev = createLogEvent(t, todays, { ...SIM_SETTINGS, missionSeed: `sim${seed}` }, a.ts, `e${id++}`, roll, { stages: STAGE_LIST, rewards: rewardCfg, streaks: SIM_STREAKS, effortLevels: NO_LEVELS, goal: SIM_GOAL }, MISSION_ON ? { tasks: TASK_LIST, missions: SIM_MISSION } : undefined)
       if (!ev) {
         refused[a.taskId] = (refused[a.taskId] ?? 0) + 1
         continue
@@ -532,6 +541,7 @@ function simulate(profile: Profile, seed: number, rewardCfg: RewardConfig = REWA
         evo = next
       }
       logs++
+      if (ev.mission) missionGrants++
       loggedToday = true
       // Real rewards on the event.
       if (ev.reward?.kind === 'treat') {
@@ -691,6 +701,7 @@ function simulate(profile: Profile, seed: number, rewardCfg: RewardConfig = REWA
     comebacks,
     treatDays,
     treatXp,
+    missionGrants,
     rareBandRolls,
     milestoneFinds,
     pityFinds,
@@ -851,6 +862,7 @@ for (const p of PROFILES) {
       `  Treats/week ${r1(mean(runs.map((r) => r.rewards.treats)) / (DAYS / 7))} | per log day ${r1(perActive)} | log days with >=1 treat ${r1(dayShare * 100)}% | active weeks with >=1 treat ${r1(mean(runs.map(weeksWith)) * 100)}%`,
     )
     console.log(
+      `  Mission wishes granted: ${r1(mean(runs.map((r) => r.missionGrants)) / (DAYS / 7))} per week (bonus ${MISSION_ON ? SIM_MISSION.bonusXp : 0} XP)`,
       `  Longest run of log days without a treat: median ${med(runs.map(drought))}, p90 ${pct(runs.map(drought), 90)} | logs per treat ${r1(mean(runs.map(droughtLogs)))} | bonus XP/run ${Math.round(mean(runs.map((r) => r.treatXp)))}`,
     )
   }

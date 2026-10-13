@@ -1,10 +1,12 @@
 // Creating events. The caller supplies the time and the id; nothing here reads the clock.
 
 import type { GoalConfig } from '../config/goal'
+import type { MissionConfig } from '../config/missions'
 import type { RewardConfig } from '../config/rewards'
 import type { StreakConfig } from '../config/streaks'
 import { dayKey } from './day'
 import { goalRewardFor } from './goal'
+import { missionFor, missionGrantFor } from './mission'
 import { milestoneReward, rollReward } from './rewards'
 import { activeLogs, dragonStage, heldStage, stageFor, taskAvailability } from './state'
 import { streakMilestoneReached } from './streaks'
@@ -45,6 +47,12 @@ export interface LogRules {
  * Next, a log that earns the week's goal treat (see goalRewardFor) brings it instead
  * of the roll. One reward per log: if a milestone takes the meeting log, the goal
  * treat falls to the goal task's next new day that week.
+ *
+ * With `wish` (the task list and mission config), a log that grants the day's secret
+ * wish (see missionFor and missionGrantFor, using `settings.missionSeed`) saves the
+ * grant as `mission`. It's separate from the reward above and stacks with it, and it's
+ * attached before the stage is worked out too. Without `wish`, or with no seed, there's
+ * no wish.
  */
 export function createLogEvent(
   task: Task,
@@ -54,6 +62,7 @@ export function createLogEvent(
   id: string,
   roll: RewardRoll,
   { stages, rewards, streaks, effortLevels, goal }: LogRules,
+  wish?: { tasks: readonly Task[]; missions: MissionConfig },
 ): LogEvent | null {
   if (!taskAvailability(task, events, settings, now).canLog) return null
   const xp = taskXp(task, effortLevels)
@@ -64,6 +73,11 @@ export function createLogEvent(
     goalRewardFor(events, event, task, settings, goal) ??
     rollReward(xp === task.xp ? task : { ...task, xp }, events, roll, rewards)
   if (reward) event.reward = reward
+  if (wish) {
+    const mission = missionFor(dayKey(now), settings.missionSeed, wish.tasks, events, wish.missions)
+    const grant = missionGrantFor(mission, events, event, wish.tasks, wish.missions)
+    if (grant) event.mission = grant
+  }
   const after = dragonStage([...events, event], stages)
   // With nothing recorded yet, the first stage needs no record.
   const recorded = heldStage(events, stages) ?? stageFor(Number.NEGATIVE_INFINITY, stages)

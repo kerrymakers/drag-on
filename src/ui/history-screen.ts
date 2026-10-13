@@ -6,7 +6,7 @@
 
 import type { StreakConfig } from '../config/streaks'
 import { dayKey, nextDayKey, weekdayOf } from '../game/day'
-import { itemFor, logXp, treatBonus } from '../game/rewards'
+import { itemFor, logXp, missionBonus, treatBonus } from '../game/rewards'
 import { activeLogs } from '../game/active'
 import { firstLogDay, nextMilestone, overallStreak, wakeStreak, weeklyCounts, type DayStatus } from '../game/streaks'
 import type { GameEvent, Item, Settings, Task, Weekday } from '../game/types'
@@ -104,9 +104,11 @@ export function weeklyTasks(tasks: readonly Task[]): Task[] {
 export interface DayEntry {
   logId: string
   taskName: string
-  /** Base XP plus any treat. */
+  /** Base XP plus any treat and secret-wish bonus. */
   xp: number
   treat: number
+  /** The secret-wish bonus this log granted, or 0. */
+  wish: number
   /** The name of an item this log found, if any. */
   itemName: string | null
 }
@@ -126,6 +128,7 @@ export function dayEntries(
       taskName: tasks.find((t) => t.id === l.taskId)?.name ?? HISTORY.unknownTask,
       xp: logXp(l),
       treat: treatBonus(l),
+      wish: missionBonus(l),
       itemName: itemFor(l, items)?.name ?? null,
     }))
 }
@@ -321,7 +324,7 @@ export function createHistoryScreen(doc: Document, root: HTMLElement, config: Hi
       ...entries.map((e) => {
         const li = el(doc, 'li', 'hs-entry')
         const top = el(doc, 'div', 'hs-entry-top')
-        top.append(el(doc, 'span', 'hs-entry-name', e.taskName), el(doc, 'span', 'hs-entry-xp', historyLogXp(e.xp, e.treat)))
+        top.append(el(doc, 'span', 'hs-entry-name', e.taskName), el(doc, 'span', 'hs-entry-xp', historyLogXp(e.xp, e.treat, e.wish)))
         li.append(top)
         if (e.itemName) li.append(el(doc, 'span', 'hs-entry-item', historyFound(e.itemName)))
         return li

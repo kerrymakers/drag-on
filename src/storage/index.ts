@@ -152,7 +152,8 @@ function readTasks(v: unknown): unknown[] | undefined {
  * only if it's a finite number. The wake schedule history is checked entry by entry
  * (see readScheduleHistory), and the task list task by task (see readTasks). A goal
  * is kept only if it's well formed (see cleanGoal); null (no goal) stays null, and
- * anything else is dropped, so it reads as no goal.
+ * anything else is dropped, so it reads as no goal. The secret-wish seed is kept
+ * only if it's a non-empty string.
  */
 function readSettings(v: unknown): Settings {
   const defaults = defaultData().settings
@@ -161,7 +162,7 @@ function readSettings(v: unknown): Settings {
   const history = readScheduleHistory(v.wakeScheduleHistory)
   const tasks = readTasks(v.tasks)
   const goal = v.goal === null ? null : cleanGoal(v.goal, GOAL)
-  const { lastBackupAt, wakeScheduleHistory: _history, tasks: _tasks, goal: _goal, ...rest } = v
+  const { lastBackupAt, wakeScheduleHistory: _history, tasks: _tasks, goal: _goal, missionSeed, ...rest } = v
   return {
     ...rest,
     wakeSchedule: schedule,
@@ -177,6 +178,8 @@ function readSettings(v: unknown): Settings {
     ...(tasks ? { tasks } : {}),
     // Older saves have none: no goal. A goal this version can't read is dropped.
     ...(goal !== null || v.goal === null ? { goal } : {}),
+    // Older saves have none: the app makes one. Anything but a non-empty string is dropped.
+    ...(typeof missionSeed === 'string' && missionSeed !== '' ? { missionSeed } : {}),
   }
 }
 

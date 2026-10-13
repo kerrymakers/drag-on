@@ -1,6 +1,7 @@
 // Words the app says. Warm, never guilt-tripping. Not game logic, not balancing.
 
 import { daysBetween } from '../game/day'
+import { pickFor } from '../game/hash'
 import type { DayStatus } from '../game/streaks'
 import type { MoodId, StatId } from '../game/types'
 import type { LoadNotice } from '../storage'
@@ -29,10 +30,7 @@ export const WELCOME_BACK: Partial<Record<MoodId, readonly string[]>> = {
 
 /** One of `lines`, fixed for a given key, so it never flickers between renders. */
 function lineFor(lines: readonly string[], key: string): string | null {
-  if (lines.length === 0) return null
-  let hash = 0
-  for (const ch of key) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0
-  return lines[hash % lines.length] ?? null
+  return pickFor(lines, key)
 }
 
 /** The same line all day for a given mood, so it never flickers between renders. */
@@ -69,6 +67,40 @@ export const goalWistfulLine = (dayKey: string): string => lineFor(GOAL_WISTFUL,
 
 /** When a log of the goal task lifts the wistful look: pure delight. */
 export const GOAL_WISTFUL_LIFTED = 'Yay! That one counts for our goal!'
+
+/**
+ * The dragon's secret wish for the day (see missionFor), by mission id: `wish` is how
+ * it says it ("I wish…"), `granted` how it names it once you've granted it. Hopeful
+ * and warm, never naming a miss: a wish that's out of reach is never mentioned.
+ */
+export interface WishCopy {
+  wish: string
+  granted: string
+}
+const STAT_WISH_WORDS: Record<StatId, string> = {
+  strength: 'something strong',
+  discipline: 'something steady',
+  wisdom: 'something wise',
+  heart: 'something kind',
+}
+export function wishCopy(missionId: string): WishCopy | null {
+  if (missionId.startsWith('stat:')) {
+    const words = STAT_WISH_WORDS[missionId.slice(5) as StatId]
+    return words ? { wish: `I wish we'd do ${words} today!`, granted: `${words} today` } : null
+  }
+  return WISHES[missionId] ?? null
+}
+const WISHES: Record<string, WishCopy> = {
+  early: { wish: "I wish we'd log something before 9!", granted: 'a log before 9' },
+  'two-stats': { wish: "I wish we'd do two different kinds of thing today!", granted: 'two kinds of thing today' },
+  'three-logs': { wish: "I wish we'd log three things today!", granted: 'three logs today' },
+  fresh: { wish: "I wish we'd do something new for this week!", granted: 'something new this week' },
+}
+/** What the dragon says when a log grants its secret wish, revealed or not. */
+export const wishGrantedLine = (missionId: string): string => {
+  const copy = wishCopy(missionId)
+  return copy ? `You granted my secret wish: ${copy.granted}!` : 'You granted my secret wish!'
+}
 
 export interface StageUpCopy {
   message: string
@@ -167,14 +199,17 @@ export const loggedToast = (
   foundItem = false,
   earnedFreeze = false,
   goalMet = false,
+  wishBonus = 0,
 ): LoggedToast => ({
   lead: foundItem
-    ? `Found something! +${xp} XP · `
+    ? `Found something! +${xp + wishBonus} XP · `
     : goalMet
-      ? `Goal met! +${xp + treatBonus} XP · `
-      : treatBonus > 0
-        ? `Treat! +${xp + treatBonus} XP · `
-        : `+${xp} XP · `,
+      ? `Goal met! +${xp + treatBonus + wishBonus} XP · `
+      : wishBonus > 0
+        ? `Secret wish! +${xp + treatBonus + wishBonus} XP · `
+        : treatBonus > 0
+          ? `Treat! +${xp + treatBonus} XP · `
+          : `+${xp} XP · `,
   name: taskName,
   ...(earnedFreeze ? { note: FREEZE_EARNED } : {}),
 })
@@ -186,14 +221,20 @@ export const LOGGED = (
   foundItem = false,
   earnedFreeze = false,
   goalMet = false,
+  wishBonus = 0,
 ): string => {
-  const { lead, name, note } = loggedToast(xp, taskName, treatBonus, foundItem, earnedFreeze, goalMet)
+  const { lead, name, note } = loggedToast(xp, taskName, treatBonus, foundItem, earnedFreeze, goalMet, wishBonus)
   return note ? `${lead}${name} ${note}` : lead + name
 }
 /** The second float on a treat, e.g. "+13 treat". */
 export const TREAT_FLOAT = (bonus: number) => `+${bonus} treat`
 /** The second float on the log that meets the weekly goal, e.g. "+30 goal treat". */
 export const GOAL_FLOAT = (bonus: number) => `+${bonus} goal treat`
+/** The float on the log that grants the secret wish, e.g. "+10 wish". */
+export const WISH_FLOAT = (bonus: number) => `+${bonus} wish`
+/** The second float after the XP one: the treat (or goal treat), the wish, or both. */
+export const bonusFloat = (treat: number, goal: boolean, wish: number): string =>
+  [treat > 0 ? (goal ? GOAL_FLOAT : TREAT_FLOAT)(treat) : '', wish > 0 ? WISH_FLOAT(wish) : ''].filter(Boolean).join(' · ')
 export const UNDONE = 'Undone'
 /** Undoing a log that found something: the find goes back, gently. */
 export const UNDONE_ITEM = 'Undone. That find is hiding again for now.'
@@ -449,8 +490,9 @@ export function calendarDayLabel(key: string, status: DayStatus | null, today: b
 }
 
 /** A log in the day detail: "+38 XP", with any treat called out. */
-export function historyLogXp(xp: number, treat: number): string {
-  return treat > 0 ? `+${xp} XP (with a +${treat} treat)` : `+${xp} XP`
+export function historyLogXp(xp: number, treat: number, wish = 0): string {
+  const extras = [treat > 0 ? `a +${treat} treat` : '', wish > 0 ? `a +${wish} wish` : ''].filter(Boolean)
+  return extras.length > 0 ? `+${xp} XP (with ${extras.join(' and ')})` : `+${xp} XP`
 }
 
 /** "Found the tiny book". */

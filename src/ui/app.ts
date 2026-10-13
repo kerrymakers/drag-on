@@ -1,10 +1,11 @@
 // The app shell: wires game logic, storage and art to the Home, Dragon, Collection, History and Settings screens.
 // This is the only layer that reads the clock (Date.now), generates ids and rolls dice.
 
-import { react, renderDragon, renderScene, speechAnchor, speechKeepClear, speechLowerPart, type WearLook } from '../art'
+import { react, renderDragon, renderScene, speechAnchor, speechKeepClear, speechLowerPart, wishBurst, type WearLook } from '../art'
 import { BACKUP_REMINDER_DAYS } from '../config/backup'
 import { EVOLVES_AT_STAGE, LOOK_CHANGE_MARGIN } from '../config/evolution'
 import { GOAL } from '../config/goal'
+import { MISSION } from '../config/missions'
 import { REWARDS } from '../config/rewards'
 import { DRAGON_NAME_MAX } from '../config/settings'
 import { DEFAULT_WAKE_TIME } from '../config/time'
@@ -19,7 +20,7 @@ import { dayKey, dayMinutesToClock } from '../game/day'
 import { evolutionLook, lookChange, type Evolution } from '../game/evolution'
 import { skyPeriod } from '../game/scene'
 import { createLogEvent, createUndoEvent, undoableLog } from '../game/log'
-import { foundItems, itemFor, rewardMilestone, treatBonus } from '../game/rewards'
+import { foundItems, itemFor, missionOf, rewardMilestone, treatBonus } from '../game/rewards'
 import { goalMaxDays, goalProgress, goalWistful, isGoalTreat, withGoal } from '../game/goal'
 import { soundIsOn, withScheduleEdit } from '../game/settings'
 import {
@@ -55,10 +56,9 @@ import {
   MOOD_LABELS,
   IMPORT_REFUSED,
   SETTINGS,
-  GOAL_FLOAT,
   GOAL_WISTFUL_LIFTED,
-  TREAT_FLOAT,
   backupReminderLine,
+  bonusFloat,
   freezeUsedLine,
   goalChipCount,
   goalChipLabel,
@@ -71,10 +71,11 @@ import {
   streakChipLabel,
   undoneToast,
   welcomeLine,
+  wishGrantedLine,
 } from './copy'
 import { createDragonScreen } from './dragon-screen'
 import { createHistoryScreen } from './history-screen'
-import { newId } from './ids'
+import { newId, newMissionSeed } from './ids'
 import { showItemFound } from './item-found'
 import { createNav, type Route } from './nav'
 import { outfitOf } from './outfit'
@@ -249,7 +250,16 @@ export interface App {
   requestReload(): void
 }
 
-export function startApp(doc: Document): App {
+export interface AppOptions {
+  /**
+   * Makes the secret wish's seed the first time the app opens without one, or returns
+   * null to make none (then there's no wish until a seed is saved). Defaults to a
+   * random seed (newMissionSeed).
+   */
+  makeSeed?: () => string | null
+}
+
+export function startApp(doc: Document, { makeSeed = newMissionSeed }: AppOptions = {}): App {
   let { data, readOnly, notice } = load()
   void requestPersistence()
 
@@ -471,6 +481,21 @@ export function startApp(doc: Document): App {
   const loadNotice = noticeFor(notice)
   if (readOnly) console.warn(`Not saving on this device (${notice}), so nothing stored is overwritten.`)
   if (loadNotice) showNotice(loadNotice)
+
+  /**
+   * The secret wish's seed (see missionFor): made once, the first time the app opens
+   * without one (a fresh start, or a save or backup from before wishes), and saved
+   * straight away so the day's wish holds across reloads. In read-only mode it's kept
+   * in memory only. With no seed made (makeSeed gives null), there's no wish.
+   */
+  function ensureMissionSeed() {
+    if (data.settings.missionSeed) return
+    const missionSeed = makeSeed()
+    if (!missionSeed) return
+    data = { ...data, settings: { ...data.settings, missionSeed } }
+    persist()
+  }
+  ensureMissionSeed()
 
   /**
    * While a find's card is pending (and any stage-up before it), Home keeps the outfit
@@ -713,6 +738,7 @@ export function startApp(doc: Document): App {
     const result = importBackup(data, backup.data, backup.exportedAt, now, store)
     if (!result.ok) return { ok: false, message: IMPORT_REFUSED[result.reason] }
     data = result.data
+    ensureMissionSeed()
     homeOutfitHold = null
     toast.hide()
     hush()
@@ -748,7 +774,7 @@ export function startApp(doc: Document): App {
     const wasWistful = isWistful(now, before)
     // The outfit before this log, for any stage-up moment: a find stays a surprise until its card.
     const outfitBefore: WearLook = outfitOf(wornNow(before, data.settings.wearing))
-    const event = createLogEvent(task, data.events, data.settings, now, newId(), rewardRoll(), { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS, goal: GOAL })
+    const event = createLogEvent(task, data.events, data.settings, now, newId(), rewardRoll(), { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS, goal: GOAL }, { tasks, missions: MISSION })
     if (!event) {
       render(now) // the screen was stale (e.g. the wake window just closed)
       return
@@ -760,6 +786,9 @@ export function startApp(doc: Document): App {
     // A treat or a find is always good news, on top of the usual feedback. A normal log is unchanged.
     const bonus = treatBonus(event)
     const goalMet = isGoalTreat(event)
+    // The day's secret wish, if this log granted it: a bonus on top of any other reward.
+    const wish = missionOf(event)
+    const wishBonus = wish?.bonusXp ?? 0
     const item = itemFor(event, REWARDS.items)
     // After the save: a find goes straight on if its spot is free. Never replaces a choice.
     if (item) {
@@ -769,13 +798,13 @@ export function startApp(doc: Document): App {
     const wearingFind = item !== null && isWorn(wornNow(data.events, data.settings.wearing), item)
     if (item) homeOutfitHold = outfitBefore
     hush()
-    haptic(item ? HAPTIC_ITEM : bonus > 0 ? HAPTIC_TREAT : HAPTIC_LOG)
+    haptic(item ? HAPTIC_ITEM : bonus > 0 || wish ? HAPTIC_TREAT : HAPTIC_LOG)
     render(now)
 
     const fresh = el.list.querySelector<HTMLElement>(`button.task[data-task-id="${task.id}"]`)
     fresh?.classList.add('is-logged')
     floatXp(doc, rect, `+${event.xpAwarded} XP`)
-    if (bonus > 0) floatXp(doc, rect, goalMet ? GOAL_FLOAT(bonus) : TREAT_FLOAT(bonus), true)
+    if (bonus > 0 || wishBonus > 0) floatXp(doc, rect, bonusFloat(bonus, goalMet, wishBonus), true)
     // A stage-up or a first new look gets its own moment (worked out here, shown below).
     const reached = stageUp(before, data.events, STAGES)
     const lookBefore = evolution(before, tasks)
@@ -784,17 +813,23 @@ export function startApp(doc: Document): App {
     // A log that lifts the wistful look gets a cheer and a happy line, unless a bigger
     // moment (goal met, a find, a stage-up or new look) already has it: one at a time.
     const lifted = wasWistful && !isWistful(now)
-    const cheerLift = lifted && !goalMet && !item && !reached && !newLook?.firstTime
+    // Granting the secret wish gets its moment (a hop, a sparkle burst and a happy line)
+    // unless a stage-up, new look, find or goal met already has it; it comes before a lift.
+    const wishMoment = wish !== null && !goalMet && !item && !reached && !newLook?.firstTime
+    const cheerLift = lifted && !wishMoment && !goalMet && !item && !reached && !newLook?.firstTime
     // Meeting the weekly goal, or lifting the wistful look: the chip gives a little cheer too.
     if (goalMet || lifted) cheer(el.goalChip)
     const earnedFreeze = logEarnsFreeze(before, event, STREAKS)
-    const logged = loggedToast(event.xpAwarded, task.name, bonus, item !== null, earnedFreeze, goalMet)
+    const logged = loggedToast(event.xpAwarded, task.name, bonus, item !== null, earnedFreeze, goalMet, wishBonus)
     toast.show(logged, undoLast)
     // After the toast, so the bubble sits clear above it; before the hop moves the art.
-    if (cheerLift) say(GOAL_WISTFUL_LIFTED)
-    react(el.art, item ? 'perk' : bonus > 0 || cheerLift ? 'treat' : 'log')
-    // After a find's card the card has already celebrated it, so the toast is just the log.
-    const afterCard = item ? loggedToast(event.xpAwarded, task.name, 0, false, earnedFreeze) : logged
+    if (wishMoment) say(wishGrantedLine(wish.id))
+    else if (cheerLift) say(GOAL_WISTFUL_LIFTED)
+    react(el.art, item ? 'perk' : bonus > 0 || wishMoment || cheerLift ? 'treat' : 'log')
+    if (wishMoment) wishBurst(el.art)
+    // After a find's card the card has already celebrated it, so the toast is just the
+    // log (and any wish bonus, which the card doesn't mention).
+    const afterCard = item ? loggedToast(event.xpAwarded, task.name, 0, false, earnedFreeze, false, wishBonus) : logged
 
     // The tapped button if it can still take focus (a once-a-day task is now done
     // and disabled), else the next task to log, else the dragon.
@@ -816,7 +851,7 @@ export function startApp(doc: Document): App {
       // The overlay hid the treat's floats (or the find) and outlasted its toast: say it
       // again, with Undo while this log is still the one Undo would take back. After a
       // find it drops "Found something!", which the card has just said.
-      if (bonus > 0 || item) {
+      if (bonus > 0 || wishBonus > 0 || item) {
         const stillLatest = undoableLog(data.events, Date.now())?.id === event.id
         toast.show(afterCard, stillLatest ? undoLast : undefined)
       }
@@ -840,7 +875,7 @@ export function startApp(doc: Document): App {
     // A stage-up gets the full moment. A look the dragon has never had gets a gentle
     // one; changing back to a look it has had before happens quietly (render did it).
     // One sound now, and any bigger ones in turn as their moments arrive (never piled up).
-    const sounds = logSounds({ treat: bonus > 0, item: item !== null, stageUp: reached !== null, newLook: newLook?.firstTime === true, goal: goalMet })
+    const sounds = logSounds({ treat: bonus > 0, item: item !== null, stageUp: reached !== null, newLook: newLook?.firstTime === true, goal: goalMet, wish: wish !== null })
     sound.play(sounds.now)
     if (reached || newLook?.firstTime) {
       const from = dragonStage(before, STAGES)
@@ -899,6 +934,7 @@ export function startApp(doc: Document): App {
   window.addEventListener('storage', (e) => {
     if (e.key === STORAGE_KEY && !readOnly) {
       ;({ data, readOnly, notice } = load())
+      ensureMissionSeed()
       render()
     }
   })

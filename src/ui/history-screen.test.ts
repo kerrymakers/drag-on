@@ -72,15 +72,15 @@ describe('dayEntries', () => {
 
   it('lists a day’s logs in time order, with XP including treats and any find', () => {
     const events = [
-      treatLog(read, noon + 2000, 13),
+      { ...treatLog(read, noon + 2000, 13), mission: { id: 'early', bonusXp: 15 } },
       log(gym, noon),
       itemLog(gym, noon + 1000, ITEMS[0]!.id),
       log(gym, at('2026-10-06T12:00:00+01:00')), // another day
     ]
-    expect(dayEntries(events, day, TASKS, ITEMS).map(({ taskName, xp, treat, itemName }) => ({ taskName, xp, treat, itemName }))).toEqual([
-      { taskName: gym.name, xp: gym.xp, treat: 0, itemName: null },
-      { taskName: gym.name, xp: gym.xp, treat: 0, itemName: ITEMS[0]!.name },
-      { taskName: read.name, xp: read.xp + 13, treat: 13, itemName: null },
+    expect(dayEntries(events, day, TASKS, ITEMS).map(({ taskName, xp, treat, wish, itemName }) => ({ taskName, xp, treat, wish, itemName }))).toEqual([
+      { taskName: gym.name, xp: gym.xp, treat: 0, wish: 0, itemName: null },
+      { taskName: gym.name, xp: gym.xp, treat: 0, wish: 0, itemName: ITEMS[0]!.name },
+      { taskName: read.name, xp: read.xp + 13 + 15, treat: 13, wish: 15, itemName: null },
     ])
   })
 
@@ -156,6 +156,8 @@ describe('History copy', () => {
   it('shows a log’s XP with its treat, and what it found', () => {
     expect(historyLogXp(25, 0)).toBe('+25 XP')
     expect(historyLogXp(38, 13)).toBe('+38 XP (with a +13 treat)')
+    expect(historyLogXp(40, 0, 15)).toBe('+40 XP (with a +15 wish)')
+    expect(historyLogXp(53, 13, 15)).toBe('+53 XP (with a +13 treat and a +15 wish)')
     expect(historyFound('Tiny book')).toBe('Found the tiny book')
   })
 })

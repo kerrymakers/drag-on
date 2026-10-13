@@ -121,6 +121,13 @@ export interface Settings {
    * on their logs.
    */
   goal?: Goal | null
+  /**
+   * The seed that, with the game day, picks the dragon's secret wish (see missionFor),
+   * so the wish doesn't change on reload. Made by the UI on first load when absent
+   * (older saves and backups have none). Checked on load: anything but a non-empty
+   * string is dropped.
+   */
+  missionSeed?: string
 }
 
 /** One weekly goal: log `taskId` on `daysPerWeek` different days, Monday to Sunday. */
@@ -190,7 +197,20 @@ export interface LogEvent {
    * version may hold a shape this version doesn't know; game logic ignores it (see logXp).
    */
   reward?: Reward | UnrecognisedReward
+  /**
+   * The day's secret wish, when this log granted it: its mission id and bonus XP,
+   * decided at log time. Separate from `reward`, so it stacks with a treat, a goal
+   * treat or a find. Like `reward`, saved data may hold a shape this version doesn't
+   * know; game logic checks it at run time (see missionBonus).
+   */
+  mission?: MissionGrant | { readonly id?: unknown }
   note?: string
+}
+
+/** A granted secret wish, saved on the log that granted it. */
+export interface MissionGrant {
+  id: string
+  bonusXp: number
 }
 
 /** Cancels an earlier LogEvent. The log is append-only, so undo never deletes anything. */

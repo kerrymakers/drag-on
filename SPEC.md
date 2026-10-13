@@ -137,6 +137,17 @@ Decided 2026-10-13 (Milestone 8, slice 2): the dragon is wistful only while all 
 
 Each day the dragon has a small secret wish (for example, log before 9, or log two different stats). It hints at it in its speech bubble, and tapping the bubble reveals it. The day's mission is worked out from the day and a seed saved in settings, so it doesn't change on reload. When a log completes it, the reward is decided at that moment and saved on the event, and the dragon is extra happy. Missions are listed in config.
 
+Decided 2026-10-13 (Milestone 8, slice 3a):
+
+- The wishes: an early bird (any log before 09:00 game time, so 04:00 to 08:59), logs for two different stats today, three logs today, a log for the stat of the day, and a "fresh" task (one not logged yet this week, judged on the logs from before today started, so it holds all day). Each day's wish is drawn only from those the active tasks make possible: every wish needs an active task other than wake-up (its schedule skips days), a stat wish needs a task for that stat, three logs need room for three logs a day, two stats need tasks for two stats, and fresh needs a task not logged yet this week. A wake-up log still counts towards granting one.
+- The pick comes from a hash of the day and `Settings.missionSeed`, so it's the same on every reload. If it would repeat yesterday's wish, it moves on to the next one. The seed is made once, the first time the app opens without one, and goes along with export and import.
+- Granting it brings a wish bonus (`MISSION_BONUS_XP`, 10), saved on the log in its own `mission` field ({ id, bonusXp }). It stacks with that log's treat, goal treat or find and never replaces them, and it counts towards XP and the logged task's stat like a treat.
+- A wish counts even if it was never revealed: a surprise grant. At most one is granted per game day. Undoing the granting log reopens the wish, and the next log that completes it grants it again.
+- A wish that's out of reach (the early bird after 09:00) goes quiet and is never mentioned.
+- Feedback: the toast always includes the bonus ("Secret wish! +35 XP · Read"), and a "+10 wish" float joins the XP one. When the wish has the moment to itself (no stage-up, new look, find or goal met), the dragon hops, a burst of sparkles goes off, it says "You granted my secret wish: …!", and the treat sound plays. It comes before the wistful-lift cheer.
+
+Balance check 2026-10-13 (simulation, 365 days, 100 runs each): wishes are granted about 5.6 times a week for a keen user, 2.8 typical and 2.1 patchy. The bonus was cut from 15 to 10: with the goal treat, a typical user's Elder comes around day 146 (day 140 at 15), close to the target window, and a patchy user's about a week sooner than before. The collection's timing is unchanged, and no stat is favoured.
+
 ## Rewards
 
 ### Variable rewards
@@ -186,7 +197,7 @@ Store an append-only log of events. Work out everything else from it.
 
 ```
 Task      { id, name, stat, xp, rules, archived, effort? }
-Event     { id, taskId, timestamp, xpAwarded, reward?, note? }
+Event     { id, taskId, timestamp, xpAwarded, reward?, mission?, note? }
 Settings  { wakeSchedule: { mon: "06:30", ..., sat: null, sun: null }, wakeScheduleHistory?: [{ from: "YYYY-MM-DD", schedule }], dragonName, lastBackupAt?, ... }
 ```
 

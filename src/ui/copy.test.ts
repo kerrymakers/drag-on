@@ -8,6 +8,8 @@ import { ITEMS } from '../config/items'
 import { effortChoiceLabel, effortTimesHint, effortXp, legacyTimesHint, legacyXpHint, taskRowLabel } from './copy'
 import { IMPORT_CONFIRM, IMPORT_REFUSED, SETTINGS, importDropped, lastBackupLine } from './copy'
 import { GOAL_FLOAT, GOAL_WISTFUL, GOAL_WISTFUL_LIFTED, goalWistfulLine, goalChip, goalChipCount, goalChipLabel, goalDays, goalWakeCap } from './copy'
+import { bonusFloat, wishCopy, wishGrantedLine } from './copy'
+import { MISSIONS } from '../config/missions'
 import { LOGGED, LOOK_CHANGE, TREAT_FLOAT, loggedToast, LOOK_NAMES, LOOK_REVEAL, STAGE_UP, STAGE_UP_FALLBACK, celebrationCopy, lookLabel, progressLabel } from './copy'
 
 const from = (id: string) => STAGES.find((s) => s.id === id)!.xpFrom
@@ -294,6 +296,28 @@ describe('weekly goal copy', () => {
   it('is warm, never blaming', () => {
     const all = [SETTINGS.goalTitle, SETTINGS.goalIntro, SETTINGS.goalArchived, SETTINGS.goalNone, SETTINGS.goalPick, goalChipLabel('Gym', 0, 3, false), goalWakeCap(3)]
     for (const text of all) expect(text, text).not.toMatch(/\b(missed|failed|behind|lost|only|should|must)\b/i)
+  })
+
+  it('the secret wish: every mission has words, the toast and float carry its bonus, and nothing blames', () => {
+    for (const m of MISSIONS) {
+      const copy = wishCopy(m.id)
+      expect(copy, m.id).not.toBeNull()
+      expect(copy?.wish, m.id).toMatch(/^I wish /)
+      expect(wishGrantedLine(m.id)).toBe(`You granted my secret wish: ${copy?.granted}!`)
+      for (const text of [copy!.wish, wishGrantedLine(m.id)]) {
+        expect(text, text).not.toMatch(/\b(miss\w*|fail\w*|behind|lost|only|should|must|need\w*|forgot\w*|late|sad)\b/i)
+      }
+    }
+    expect(wishCopy('stat:heart')).toEqual({ wish: "I wish we'd do something kind today!", granted: 'something kind today' })
+    expect(wishCopy('later-version')).toBeNull()
+    expect(wishGrantedLine('later-version')).toBe('You granted my secret wish!')
+    expect(loggedToast(25, 'Read', 0, false, false, false, 15)).toEqual({ lead: 'Secret wish! +40 XP · ', name: 'Read' })
+    expect(loggedToast(25, 'Read', 13, false, false, false, 15).lead).toBe('Secret wish! +53 XP · ')
+    expect(loggedToast(40, 'Gym', 30, false, false, true, 15).lead).toBe('Goal met! +85 XP · ')
+    expect(loggedToast(25, 'Read', 0, true, false, false, 15).lead).toBe('Found something! +40 XP · ')
+    expect(bonusFloat(0, false, 15)).toBe('+15 wish')
+    expect(bonusFloat(13, false, 15)).toBe('+13 treat · +15 wish')
+    expect(bonusFloat(30, true, 0)).toBe('+30 goal treat')
   })
 
   it('the wistful lines are hopeful: about the goal, no blame, no misses, no counts, the same all day', () => {

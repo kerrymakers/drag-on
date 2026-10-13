@@ -4,7 +4,7 @@
 import type { RewardConfig } from '../config/rewards'
 import { activeLogs } from './active'
 import { dayKey } from './day'
-import type { GameEvent, Item, LogEvent, Reward, RewardRoll, Task } from './types'
+import type { GameEvent, Item, LogEvent, MissionGrant, Reward, RewardRoll, Task } from './types'
 
 /**
  * The reward for a new log of `task`, or undefined for none. One draw decides:
@@ -104,9 +104,31 @@ export function treatBonus(log: LogEvent): number {
   return typeof bonus === 'number' && Number.isFinite(bonus) && bonus >= 0 ? bonus : 0
 }
 
-/** The XP a log is worth: its base `xpAwarded` plus any treat bonus. Use this for every XP sum. */
+/**
+ * The secret wish a log granted (see missionGrantFor), or null. Checks the shape at run
+ * time, like treatBonus: anything but a non-empty string id with a finite,
+ * non-negative bonus is null, so a malformed or later version's shape is ignored.
+ */
+export function missionOf(log: LogEvent): MissionGrant | null {
+  const mission: unknown = log.mission
+  if (typeof mission !== 'object' || mission === null) return null
+  const { id, bonusXp } = mission as { id?: unknown; bonusXp?: unknown }
+  if (typeof id !== 'string' || id === '') return null
+  if (typeof bonusXp !== 'number' || !Number.isFinite(bonusXp) || bonusXp < 0) return null
+  return { id, bonusXp }
+}
+
+/** A log's secret-wish bonus, or 0 (no wish granted, or a shape this version can't read). */
+export function missionBonus(log: LogEvent): number {
+  return missionOf(log)?.bonusXp ?? 0
+}
+
+/**
+ * The XP a log is worth: its base `xpAwarded` plus any treat bonus plus any secret-wish
+ * bonus. Use this for every XP sum.
+ */
 export function logXp(log: LogEvent): number {
-  return log.xpAwarded + treatBonus(log)
+  return log.xpAwarded + treatBonus(log) + missionBonus(log)
 }
 
 /**

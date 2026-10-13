@@ -9,7 +9,11 @@ import './ui/styles/collection.css'
 import './ui/styles/history.css'
 import './ui/styles/settings.css'
 
-const app = startApp(document)
+// The e2e fixtures set __dragOnNoWishSeed (as they pin Math.random for reward rolls) so
+// no secret wish surprises their exact XP and toasts; a spec that wants one saves a
+// seed. A page global is the only way a Playwright init script can reach this call.
+const noWishSeed = (window as { __dragOnNoWishSeed?: unknown }).__dragOnNoWishSeed === true
+const app = startApp(document, noWishSeed ? { makeSeed: () => null } : {})
 
 // Precaches the app shell so it opens offline. A new deploy's service worker
 // activates straight away (skipWaiting + clientsClaim); the page reload that shows

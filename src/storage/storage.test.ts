@@ -328,6 +328,11 @@ describe('settings', () => {
     }
   })
 
+  it('keeps a non-empty mission seed and drops anything else (older saves have none)', () => {
+    expect(loadSettings({ missionSeed: 'k3x9' }).missionSeed).toBe('k3x9')
+    for (const bad of [undefined, '', 7, null, {}]) expect('missionSeed' in loadSettings({ missionSeed: bad }), String(bad)).toBe(false)
+  })
+
   it('ignores a non-string dragon name', () => {
     expect(loadSettings({ dragonName: 42 }).dragonName).toBeNull()
   })
