@@ -106,10 +106,9 @@ async function geo(page: Page) {
   })
 }
 
+// The extremes: the phone, and the narrowest and shortest supported.
 const SIZES = [
   [410, 914],
-  [360, 800],
-  [410, 800],
   [360, 680],
 ] as const
 
@@ -425,27 +424,6 @@ test('reduced motion: no hop, zzz drift, wag or pulses; moods still fade', async
   const poseT = await page.evaluate(() => getComputedStyle(document.querySelector('#dragon-art .dragon-pose')!).transitionDuration)
   expect(poseT).toBe('0s')
   expect(msgs, msgs.join('\n')).toEqual([])
-})
-
-test('offline: mood and welcome work offline; log persists', async ({ page, context }) => {
-  const msgs = collectConsole(page)
-  await seed(page, events(150, SLEEPY))
-  await page.clock.setFixedTime(NOW)
-  await page.goto('./')
-  await page.evaluate(async () => navigator.serviceWorker.ready)
-  await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 5000 })
-  await context.setOffline(true)
-  await page.evaluate(() => localStorage.removeItem('drag-on:ui'))
-  await page.reload()
-  await expect(chip(page)).toHaveText('Sleepy')
-  expect(await speechShowing(page)).toBe(true)
-  await page.locator('button.task[data-task-id="gym"]').click()
-  await page.reload()
-  await expect(chip(page)).toHaveText('Happy')
-  expect(await xpTotal(page)).toBe(150 + XP('gym'))
-  expect(await page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true)
-  await context.setOffline(false)
-  expect(msgs.filter((m) => !m.includes('ERR_INTERNET_DISCONNECTED'))).toEqual([])
 })
 
 test('tap targets with chip and bubble showing', LAYOUT, async ({ page }) => {

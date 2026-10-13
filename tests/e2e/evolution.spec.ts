@@ -165,40 +165,38 @@ test('changing back to a look seen before happens quietly', async ({ page }) => 
   expect(msgs).toEqual([])
 })
 
-test('every look draws cleanly at every grown stage, mood and scheme', LAYOUT, async ({ page }, info) => {
+// Tagging every look x stage x mood is a unit test (art.test.ts). This checks the drawn
+// dragon fits the narrowest screen: every look at every grown stage, in the widest mood
+// (grumpy curls up wider) and sleepy (blanket and zzz), one scheme per stage, rotated.
+test('every look draws cleanly at every grown stage, in the widest moods', LAYOUT, async ({ page }, info) => {
   test.skip(info.project.name !== 'narrow360') // the narrowest supported width
   const msgs = collectConsole(page)
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.clock.install({ time: TUE_1000 })
   await page.goto('./')
   const looks = { strength: 'gym', discipline: 'avoided', wisdom: 'read', heart: 'selfcare' } as const
-  for (const scheme of ['light', 'dark'] as const) {
+  for (const [i, stage] of ['juvenile', 'adult', 'elder'].entries()) {
+    const scheme = i % 2 ? 'dark' : 'light'
     await page.emulateMedia({ colorScheme: scheme })
-    for (const stage of ['juvenile', 'adult', 'elder']) {
-      for (const [look, taskId] of Object.entries(looks)) {
-        for (const [mood, daysAgo] of [['happy', 0], ['content', 1], ['sleepy', 3], ['grumpy', 5]] as const) {
-          await page.evaluate(
-            ({ xp, taskId, stage, ts }) =>
-              localStorage.setItem('drag-on:v1', JSON.stringify({ schemaVersion: 1, events: [{ id: 's', type: 'log', taskId, timestamp: ts, xpAwarded: xp, stageReached: stage }] })),
-            { xp: from(stage) + 10, taskId, stage, ts: TUE_1000.getTime() - daysAgo * 86_400_000 },
-          )
-          await page.reload()
-          const svg = page.locator('#dragon-art .dragon-svg')
-          await expect(svg).toHaveAttribute('data-evolution', look)
-          await expect(svg).toHaveAttribute('data-stage', stage)
-          await expect(svg).toHaveAttribute('data-mood', mood)
-          const fit = await page.evaluate(() => {
-            const b = document.querySelector('#dragon-art .dragon-body')!.getBoundingClientRect()
-            const area = document.querySelector('.dragon')!.getBoundingClientRect()
-            return { l: b.left, r: b.right, t: b.top, b: b.bottom, aT: area.top, aB: area.bottom, w: document.documentElement.scrollWidth }
-          })
-          expect(fit.l, `${stage} ${look} ${mood}`).toBeGreaterThanOrEqual(-1)
-          expect(fit.r, `${stage} ${look} ${mood}`).toBeLessThanOrEqual(361)
-          expect(fit.w).toBeLessThanOrEqual(360)
-          if (mood === 'sleepy' || (mood === 'happy' && stage !== 'adult')) {
-            await shot(page, `m3s2-${scheme}-${stage}-${look}-${mood}`, { of: '#dragon-art' })
-          }
-        }
+    for (const [look, taskId] of Object.entries(looks)) {
+      for (const [mood, daysAgo] of [['sleepy', 3], ['grumpy', 5]] as const) {
+        await page.evaluate(
+          ({ xp, taskId, stage, ts }) =>
+            localStorage.setItem('drag-on:v1', JSON.stringify({ schemaVersion: 1, events: [{ id: 's', type: 'log', taskId, timestamp: ts, xpAwarded: xp, stageReached: stage }] })),
+          { xp: from(stage) + 10, taskId, stage, ts: TUE_1000.getTime() - daysAgo * 86_400_000 },
+        )
+        await page.reload()
+        const svg = page.locator('#dragon-art .dragon-svg')
+        await expect(svg).toHaveAttribute('data-evolution', look)
+        await expect(svg).toHaveAttribute('data-mood', mood)
+        const fit = await page.evaluate(() => {
+          const b = document.querySelector('#dragon-art .dragon-body')!.getBoundingClientRect()
+          return { l: b.left, r: b.right, w: document.documentElement.scrollWidth }
+        })
+        expect(fit.l, `${stage} ${look} ${mood}`).toBeGreaterThanOrEqual(-1)
+        expect(fit.r, `${stage} ${look} ${mood}`).toBeLessThanOrEqual(361)
+        expect(fit.w).toBeLessThanOrEqual(360)
+        if (mood === 'sleepy') await shot(page, `m3s2-${scheme}-${stage}-${look}-${mood}`, { of: '#dragon-art' })
       }
     }
   }

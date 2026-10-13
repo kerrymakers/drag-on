@@ -61,10 +61,9 @@ async function artFit(page: Page, root = '#dragon-art') {
   }, root)
 }
 
+// The extremes: the phone, and the narrowest and shortest supported.
 const SIZES = [
   [410, 914],
-  [360, 800],
-  [410, 800],
   [360, 680],
 ] as const
 const SEED_AT: Record<(typeof GROWN)[number], number> = {
@@ -122,9 +121,14 @@ const TRANSITIONS = [
   ['adult', 'elder'],
 ] as const
 
+// At 360 only the first and last transitions run (the middle two are the same overlay).
+// One scheme per run, rotated so both widths get both; a screenshot run declares both.
 for (const [i, [a, b]] of TRANSITIONS.entries()) {
-  for (const scheme of schemesFor(i)) {
-    test(`stage-up ${a} -> ${b} ${scheme}: saved first, fits the screen, app inert`, LAYOUT, async ({ page }, info) => {
+  for (const pick of schemesFor(i).length > 1 ? (['light', 'dark'] as const) : [null]) {
+    test(`stage-up ${a} -> ${b}${pick ? ` ${pick}` : ''}: saved first, fits the screen, app inert`, LAYOUT, async ({ page }, info) => {
+      const narrow = info.project.name === 'narrow360'
+      test.skip(narrow && (i === 1 || i === 2), 'the middle transitions run at 410 only')
+      const scheme = pick ?? schemesFor(i + (narrow ? 1 : 0))[0]!
       const msgs = collectConsole(page)
       await page.emulateMedia({ colorScheme: scheme })
       const below = from(b) - 10
@@ -313,48 +317,51 @@ test('elder: Fully grown, full bar, logging still gives feedback', async ({ page
   expect(msgs).toEqual([])
 })
 
-// 7. Reduced motion: reveals crossfade
-for (const [a, b] of TRANSITIONS) {
-  test(`reduced motion reveal ${a} -> ${b}`, async ({ page }, info) => {
-    test.skip(info.project.name !== 'pixel10pro')
-    const msgs = collectConsole(page)
-    await page.emulateMedia({ reducedMotion: 'reduce' })
-    await seed(page, [log(from(b) - 10, { stageReached: a })])
-    // Every frame while the overlay is up, note what's animating.
-    await page.addInitScript(() => {
-      const w = window as any
-      w.__anims = new Set()
-      const tick = () => {
-        if (document.querySelector('.overlay'))
-          for (const x of document.getAnimations() as any[])
-            w.__anims.add(`${x.animationName ?? 'transition:' + x.transitionProperty}@${(x.effect?.target as Element)?.className?.toString?.() ?? ''}`)
-        requestAnimationFrame(tick)
-      }
+// 7. Reduced motion: reveals crossfade (the first and last transitions; one overlay serves all)
+test('reduced motion reveals crossfade, hatchling -> whelp and adult -> elder', async ({ page }, info) => {
+  test.skip(info.project.name !== 'pixel10pro')
+  const msgs = collectConsole(page)
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  // Every frame while the overlay is up, note what's animating (reset on each load).
+  await page.addInitScript(() => {
+    const w = window as any
+    w.__anims = new Set()
+    const tick = () => {
+      if (document.querySelector('.overlay'))
+        for (const x of document.getAnimations() as any[])
+          w.__anims.add(`${x.animationName ?? 'transition:' + x.transitionProperty}@${(x.effect?.target as Element)?.className?.toString?.() ?? ''}`)
       requestAnimationFrame(tick)
-    })
-    await page.clock.setFixedTime(TUE_1000)
-    await page.goto('./')
+    }
+    requestAnimationFrame(tick)
+  })
+  await page.clock.setFixedTime(TUE_1000)
+  await page.goto('./')
+  for (const [a, b] of [TRANSITIONS[0], TRANSITIONS[3]]) {
+    await page.evaluate((e) => localStorage.setItem('drag-on:v1', JSON.stringify({ schemaVersion: 1, events: [e] })), log(from(b) - 10, { stageReached: a }))
+    await page.reload()
+    await expect(page.locator('#stage-name')).toHaveText(STAGES.find((s) => s.id === a)!.name)
     await page.locator('button.task[data-task-id="gym"]').click()
     await expect(page.locator('.overlay')).toHaveClass(/is-calm/)
     await expect(page.locator('.overlay')).toHaveClass(/is-revealed/)
     await settle(page)
     const uniq: string[] = await page.evaluate(() => [...(window as any).__anims])
     // Only opacity transitions or the overlay fade-in; no keyframe motion
-    for (const x of uniq) expect(x, x).toMatch(/^(transition:opacity|overlay-in|float-xp-calm)@/)
+    for (const x of uniq) expect(x, `${b}: ${x}`).toMatch(/^(transition:opacity|overlay-in|float-xp-calm)@/)
     const final = await page.evaluate(() => ({
       to: getComputedStyle(document.querySelector('.overlay-layer.is-to')!).transform,
       sparks: [...document.querySelectorAll('.overlay-sparks, .overlay-glow')].map((s) => getComputedStyle(s).display),
     }))
-    expect(final.to).toMatch(/^(none|matrix\(1, 0, 0, 1, 0, 0\))$/)
-    for (const s of final.sparks) expect(s).toBe('none')
+    expect(final.to, b).toMatch(/^(none|matrix\(1, 0, 0, 1, 0, 0\))$/)
+    for (const s of final.sparks) expect(s, b).toBe('none')
     await page.locator('.overlay-button').click()
     await expect(page.locator('.overlay')).toHaveCount(0)
-    expect(msgs).toEqual([])
-  })
-}
+  }
+  expect(msgs).toEqual([])
+})
 
 // Offline at a grown stage
-test('offline at Adult: log, reload, still there', async ({ page, context }) => {
+// Offline at a grown stage, after a gap: the mood and welcome work offline too.
+test('offline at Adult after a gap: welcome shows, log, reload, still there and happy', async ({ page, context }) => {
   const msgs = collectConsole(page)
   await seed(page, [log(from('adult') + 100, { stageReached: 'adult' })])
   await page.clock.setFixedTime(TUE_1000)
@@ -362,8 +369,13 @@ test('offline at Adult: log, reload, still there', async ({ page, context }) => 
   await page.evaluate(async () => navigator.serviceWorker.ready)
   await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 5000 })
   await context.setOffline(true)
+  await page.evaluate(() => localStorage.removeItem('drag-on:ui'))
+  await page.reload()
+  await expect(page.locator('#speech')).toHaveClass(/is-showing/)
+  await expect(page.locator('#mood-chip')).not.toHaveText('Happy')
   await page.locator('button.task[data-task-id="read"]').click()
   await page.reload()
+  await expect(page.locator('#mood-chip')).toHaveText('Happy')
   await expect(page.locator('#stage-name')).toHaveText('Adult')
   expect(await xpTotal(page)).toBe(from('adult') + 100 + XP('read'))
   expect(await page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true)

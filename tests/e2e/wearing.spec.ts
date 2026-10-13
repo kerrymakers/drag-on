@@ -1,7 +1,7 @@
 // Milestone 4, Slice 3: the dragon wears found items. One item per spot; tap a found
 // tile in Collection to wear it, tap again to take it off; a new find goes on by
 // itself only if its spot is free.
-import { test, expect, closePastGuard, settle, shot, LAYOUT, SWEEPS_SIZES, type Page } from './fixtures'
+import { test, expect, closePastGuard, settle, shot, schemesFor, LAYOUT, SWEEPS_SIZES, type Page } from './fixtures'
 import { ITEMS } from '../../src/config/items'
 import { REWARDS } from '../../src/config/rewards'
 
@@ -276,12 +276,14 @@ test('old saves and malformed outfits load safely', async ({ page }) => {
   expect(msgs).toEqual([])
 })
 
-// Layout: the outfit on every screen at 410 and 360, light and dark. Adult, so the
-// hat is as high as it goes; sleepy, so the welcome bubble shows by the head.
-for (const scheme of ['light', 'dark'] as const) {
-  test(`layout with a full outfit (${scheme})`, LAYOUT, async ({ page }) => {
+// Layout: the outfit on every screen at 410 and 360. Adult, so the hat is as high as it
+// goes; sleepy, so the welcome bubble shows by the head. Light at 410 and dark at 360
+// (both at each in a screenshot run), each in a fresh context.
+test('layout with a full outfit, light and dark', LAYOUT, async ({ browser }, info) => {
+  for (const scheme of schemesFor(info.project.name === 'narrow360' ? 1 : 0)) {
+    const context = await browser.newContext({ ...info.project.use, timezoneId: 'Europe/London', locale: 'en-GB', colorScheme: scheme, reducedMotion: 'reduce' })
+    const page = await context.newPage()
     const msgs = collectConsole(page)
-    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' })
     const finds = ITEMS.slice(0, 9).map((i) => i.id)
     await seed(page, { xp: 4200, finds, wearing: { head: 'partyhat', neck: SCARF.id, held: 'balloon' }, lastLogDaysAgo: 3 })
     // partyhat and balloon aren't in the first nine: find them too.
@@ -361,8 +363,9 @@ for (const scheme of ['light', 'dark'] as const) {
     await page.locator('#dragon-screen .wear-list').scrollIntoViewIfNeeded()
     await shot(page, `m4s3-dragon-${scheme}-${test.info().project.name}`)
     expect(msgs).toEqual([])
-  })
-}
+    await context.close()
+  }
+})
 
 test('Home still fits without scrolling at 410x840 with a full outfit', SWEEPS_SIZES, async ({ page }, info) => {
   test.skip(info.project.name !== 'pixel10pro')
@@ -394,13 +397,14 @@ test('curled up and sleepy carry the outfit, under reduced motion too', async ({
 })
 
 // The welcome bubble keeps clear of the hat, and covers at most a sliver (<10%) of
-// anything worn at the neck or held, on every stage that wears things.
-for (const [w, h] of [[410, 914], [410, 840], [360, 800]] as const) {
-  test(`the welcome bubble keeps clear of worn items at ${w}x${h}`, SWEEPS_SIZES, async ({ browser }, info) => {
-    test.skip(info.project.name !== 'pixel10pro')
-    test.setTimeout(90_000)
-    const logs: string[][] = []
-    for (const xp of [200, 700, 1600, 4200, 9000]) {
+// anything worn at the neck or held: the smallest stage that wears things and the two
+// biggest, at the phone's size and the narrowest.
+test('the welcome bubble keeps clear of worn items at 410x914 and 360x800', SWEEPS_SIZES, async ({ browser }, info) => {
+  test.skip(info.project.name !== 'pixel10pro')
+  test.setTimeout(90_000)
+  const logs: string[][] = []
+  for (const [w, h] of [[410, 914], [360, 800]] as const) {
+    for (const xp of [200, 4200, 9000]) {
       for (const outfit of [
         { head: BEANIE.id, neck: SCARF.id, held: BOOK.id },
         { head: 'partyhat', neck: 'bell', held: 'balloon' },
@@ -435,10 +439,10 @@ for (const [w, h] of [[410, 914], [410, 840], [360, 800]] as const) {
         expect(g.hat, name).toBe(0)
         expect(g.inView, name).toBe(true)
         expect(g.docH, name).toBeLessThanOrEqual(h)
-        if (xp === 1600 && outfit.head === BEANIE.id) await shot(ctx, `m4s3-bubble-${w}x${h}`)
+        if (xp === 4200 && outfit.head === BEANIE.id) await shot(ctx, `m4s3-bubble-${w}x${h}`)
         await context.close()
       }
     }
-    expect(logs.flat()).toEqual([])
-  })
-}
+  }
+  expect(logs.flat()).toEqual([])
+})

@@ -381,6 +381,25 @@ describe('richer look and idle life', () => {
     }
   })
 
+  it('tags every look at every grown stage with its stage and look, and has a keep-clear box for every mood', () => {
+    // The e2e fit check only draws a few of these; the tagging for all of them is checked here.
+    const grown = STAGES.map((s) => s.id).filter((id) => id !== 'egg' && hasLookArt(id))
+    expect(grown.length).toBeGreaterThan(0)
+    for (const stage of grown) {
+      for (const look of EVOLVED_LOOKS) {
+        for (const mood of MOODS) {
+          const name = `${stage} ${look} ${mood}`
+          const { key, svg } = drawLook({ stage, progress: 0, mood, look })
+          expect(key, name).toBe(`${stage}-${look}`)
+          expect(svg, name).toContain(`data-stage="${stage}"`)
+          expect(svg, name).toContain(`data-evolution="${look}"`)
+          // renderDragon sets data-mood and swaps in this box for the mood.
+          expect(svg, name).toMatch(new RegExp(`data-box-${mood}="(-?[\\d.]+ ){3}-?[\\d.]+"`))
+        }
+      }
+    }
+  })
+
   it('gives every rendered drawing its own gradient ids, so two dragons on screen never clash', () => {
     for (const stage of ['egg', ...STAGES.slice(1).map((s) => s.id)]) {
       const a = ids(drawLook({ stage, progress: 0.9, look: 'heart' }).svg)

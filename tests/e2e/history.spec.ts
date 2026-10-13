@@ -375,15 +375,28 @@ test('Android back from History returns Home (chip and tab)', async ({ browser }
   await context.close()
 })
 
-test('offline: log, reload, chip and calendar still show it', async ({ browser }, info) => {
+test('offline: log, reload on Home and straight into the Dragon screen, chip, stats and calendar still show it', async ({ browser }, info) => {
   const { page, context, msgs } = await fresh(browser, info)
+  const heart = page.locator('#dragon-screen .stat[data-stat="heart"] .stat-value')
+  await page.locator('.tabbar a.tab[data-route="dragon"]').tap()
+  const heartBefore = Number(await heart.textContent())
+  await page.locator('.tabbar a.tab[data-route="home"]').tap()
   await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 15000 })
   await context.setOffline(true)
   await page.locator('button.task[data-task-id="read"]').tap()
   await expect(page.locator('#streak-chip')).toHaveText('27 days')
+  await page.locator('button.task[data-task-id="selfcare"]').tap()
   await page.reload()
   await expect(page.locator('button.task[data-task-id="read"]')).toBeDisabled()
   await expect(page.locator('#streak-chip')).toHaveText('27 days')
+  // The Dragon screen shows it, and reloads offline straight into #/dragon.
+  await page.locator('.tabbar a.tab[data-route="dragon"]').tap()
+  await expect(heart).toHaveText(String(heartBefore + XP('selfcare')))
+  await page.reload()
+  await expect(page.locator('#dragon-screen')).toBeVisible()
+  await expect(heart).toHaveText(String(heartBefore + XP('selfcare')))
+  await page.locator('.tabbar a.tab[data-route="home"]').tap()
+  await expect(page.locator('button.task[data-task-id="selfcare"]')).toBeDisabled()
   await page.locator('#streak-chip').tap()
   await expect(page.locator('button.hs-cell[data-day="2026-10-07"]')).toHaveAttribute('data-status', 'logged')
   await expect(page.locator('.hs-day-list')).toContainText('Read')
@@ -396,16 +409,35 @@ test('offline: log, reload, chip and calendar still show it', async ({ browser }
   await context.close()
 })
 
-test('reduced motion: no transitions or animations on chip and History', async ({ browser }, info) => {
+test('reduced motion: no transitions or animations on chip, History, stat bars or tabs; a day card is in view without smooth scrolling', async ({ browser }, info) => {
   const { page, context, msgs } = await fresh(browser, info, { reduced: true, scheme: 'dark' })
+  const running = () =>
+    page.evaluate(() =>
+      document.getAnimations().map((a) => `${(a as CSSAnimation).animationName ?? (a as CSSTransition).transitionProperty} on ${((a.effect as KeyframeEffect).target as Element)?.className}`),
+    )
   await page.locator('#streak-chip').tap()
-  await page.locator('button.hs-cell[data-day="2026-10-03"]').tap()
+  await page.locator('button.hs-cell[data-day="2026-10-04"]').tap()
+  // No smooth scroll: it's already in place on the next frame.
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))))
+  const p = await page.locator('.hs-day-title').evaluate((e) => {
+    const r = e.getBoundingClientRect()
+    return { top: r.top, bottom: r.bottom, tabTop: document.getElementById('tabbar')!.getBoundingClientRect().top }
+  })
+  expect(p.top).toBeGreaterThanOrEqual(0)
+  expect(p.bottom).toBeLessThanOrEqual(p.tabTop)
   await page.locator('.hs-month-btn').first().tap()
-  const anims = await page.evaluate(() =>
-    document.getAnimations().map((a) => `${(a as CSSAnimation).animationName ?? (a as CSSTransition).transitionProperty} on ${((a.effect as KeyframeEffect).target as Element)?.className}`),
-  )
+  expect(await running()).toEqual([])
   await shot(page, `m5s1-history-${tag(info)}-reduced-dark`)
-  expect(anims).toEqual([])
+  // The Dragon screen's stat bars and the tab icons don't transition; nothing runs on Home.
+  await page.locator('.tabbar a.tab[data-route="dragon"]').tap()
+  const s = await page.evaluate(() => {
+    const cs = (sel: string) => getComputedStyle(document.querySelector(sel)!).transitionDuration
+    return { fill: cs('.stat-fill'), tabIcon: cs('.tab-icon') }
+  })
+  expect(s.fill).toMatch(/(^|, )0s$/)
+  expect(s.tabIcon).toMatch(/(^|, )0s$/)
+  await page.locator('.tabbar a.tab[data-route="home"]').tap()
+  expect(await running()).toEqual([])
   expect(msgs).toEqual([])
   await context.close()
 })
@@ -440,19 +472,5 @@ test('tapping the bottom corner of the toast Undo undoes, and never opens Histor
   await expect(page).not.toHaveURL(/history/)
   await expect(page.locator('#home')).toBeVisible()
   expect(msgs, msgs.join('\n')).toEqual([])
-  await context.close()
-})
-
-test('reduced motion: tapping a day brings its card into view without smooth scrolling', async ({ browser }, info) => {
-  const { page, context } = await fresh(browser, info, { reduced: true, url: './#/history' })
-  await page.locator('button.hs-cell[data-day="2026-10-04"]').tap()
-  // No smooth scroll: it's already in place on the next frame.
-  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))))
-  const p = await page.locator('.hs-day-title').evaluate((e) => {
-    const r = e.getBoundingClientRect()
-    return { top: r.top, bottom: r.bottom, tabTop: document.getElementById('tabbar')!.getBoundingClientRect().top }
-  })
-  expect(p.top).toBeGreaterThanOrEqual(0)
-  expect(p.bottom).toBeLessThanOrEqual(p.tabTop)
   await context.close()
 })

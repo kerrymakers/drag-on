@@ -19,7 +19,7 @@ The whole suite runs in GitHub Actions on every push, and deploy waits for it. R
 | `moods.spec.ts` | Moods, the mood chip, welcome-back bubbles, recovering after a gap |
 | `dragon-motion.spec.ts` | Idle animation and tap reaction stay in view (Collection preview, tall stages) |
 | `scene.spec.ts` | Home's time-of-day sky, the nest and grass, motion and reduced motion |
-| `history.spec.ts` | Streaks: the Home streak chip and the History screen |
+| `history.spec.ts` | Streaks: the Home streak chip and the History screen; offline and reduced motion across the tabs (Dragon screen included) |
 | `streak-rewards.spec.ts` | Streak milestone finds, freeze notes, the "kept our streak cosy" line |
 | `dragon-screen.spec.ts` | Shared layout and the tab bar, the Dragon screen, scrolling on short screens |
 | `short-viewport.spec.ts` | Toasts, the hatch overlay and notices on short screens |

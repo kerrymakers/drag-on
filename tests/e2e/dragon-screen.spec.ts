@@ -179,7 +179,7 @@ async function smallTargets(page: Page, root: string) {
 
 for (const [i, [w, h]] of VIEWPORTS.entries()) {
   for (const scheme of schemesFor(i)) {
-    test(`pt home ${w}x${h} ${scheme}: page never scrolls, list scrolls under a fixed header`, SWEEPS_SIZES, async ({ page }, info) => {
+    test(`home ${w}x${h} ${scheme}: page never scrolls, list scrolls under a fixed header`, SWEEPS_SIZES, async ({ page }, info) => {
       test.skip(info.project.name !== 'pixel10pro')
       const msgs = collectConsole(page)
       await page.setViewportSize({ width: w, height: h })
@@ -296,10 +296,10 @@ async function leakCheck(page: Page, reachedCount: number) {
   }, hidden.map((s) => ({ id: s.id, name: s.name })))
 }
 
-for (const [i, [w, h]] of ([[410, 840], [360, 680], [410, 914]] as const).entries()) {
+for (const [i, [w, h]] of ([[410, 914], [360, 680]] as const).entries()) {
   for (const scheme of schemesFor(i)) {
     for (const stage of ['egg', 'hatchling', 'adult'] as const) {
-      test(`pt dragon screen ${stage} ${w}x${h} ${scheme}`, SWEEPS_SIZES, async ({ page }, info) => {
+      test(`dragon screen ${stage} ${w}x${h} ${scheme}`, SWEEPS_SIZES, async ({ page }, info) => {
         test.skip(info.project.name !== 'pixel10pro')
         const msgs = collectConsole(page)
         const seedData = STAGE_SEEDS[stage]!
@@ -350,7 +350,7 @@ for (const [i, [w, h]] of ([[410, 840], [360, 680], [410, 914]] as const).entrie
   }
 }
 
-test('pt welcome: opened straight on #/dragon after a 3-day gap, bubble waits for Home and shows once', async ({ page }) => {
+test('welcome: opened straight on #/dragon after a 3-day gap, bubble waits for Home and shows once', async ({ page }) => {
   const msgs = collectConsole(page)
   await seed(page, [{ id: 'a', type: 'log', taskId: 'gym', timestamp: Date.parse('2026-10-03T09:00:00+01:00'), xpAwarded: 40 }])
   await page.clock.install({ time: new Date('2026-10-06T10:00:00+01:00') })
@@ -376,7 +376,7 @@ test('pt welcome: opened straight on #/dragon after a 3-day gap, bubble waits fo
 })
 
 for (const variant of ['quick', 'slow'] as const) {
-  test(`pt toast across a tab switch (${variant})`, async ({ page }) => {
+  test(`toast across a tab switch (${variant})`, async ({ page }) => {
     const msgs = collectConsole(page)
     await page.clock.install({ time: TUE_0600 })
     await page.goto('./')
@@ -402,47 +402,3 @@ for (const variant of ['quick', 'slow'] as const) {
     expect(msgs, msgs.join('\n')).toEqual([])
   })
 }
-
-test('pt reduced motion: stat bars and tab icons do not transition', async ({ page }) => {
-  for (const rm of ['no-preference', 'reduce'] as const) {
-    await page.emulateMedia({ reducedMotion: rm })
-    await page.clock.install({ time: TUE_0600 }).catch(() => {})
-    await page.goto('./#/dragon')
-    const s = await page.evaluate(() => {
-      const cs = (sel: string) => {
-        const c = getComputedStyle(document.querySelector(sel)!)
-        return `${c.transitionProperty} ${c.transitionDuration}`
-      }
-      return { fill: cs('.stat-fill'), tabIcon: cs('.tab-icon'), screen: cs('#dragon-screen'), home: cs('#home') }
-    })
-    await page.getByRole('link', { name: 'Home' }).click()
-    const anims = await page.evaluate(() => document.getAnimations().map((a) => (a as CSSAnimation).animationName ?? (a as CSSTransition).transitionProperty))
-    if (rm === 'reduce') {
-      expect(s.fill).toMatch(/0s$/)
-      expect(s.tabIcon).toMatch(/0s$/)
-      expect(anims).toEqual([])
-    }
-  }
-})
-
-test('pt offline: log on Home, see it on Dragon, reload offline straight into #/dragon', async ({ page, context }) => {
-  const msgs = collectConsole(page)
-  await page.clock.install({ time: TUE_0600 })
-  await page.goto('./')
-  await page.evaluate(async () => navigator.serviceWorker.ready)
-  await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 15000 })
-  await context.setOffline(true)
-  await page.locator('button.task[data-task-id="selfcare"]').click()
-  await expect(page.locator('#xp-total')).toHaveText(String(XP('selfcare')))
-  await page.getByRole('link', { name: 'Dragon' }).click()
-  await expect(page.locator('.stat[data-stat="heart"] .stat-value')).toHaveText(String(XP('selfcare')))
-  await page.reload()
-  await expect(page.locator('#dragon-screen')).toBeVisible()
-  await expect(page.locator('.stat[data-stat="heart"] .stat-value')).toHaveText(String(XP('selfcare')))
-  await page.getByRole('link', { name: 'Home' }).click()
-  await expect(page.locator('button.task[data-task-id="selfcare"]')).toBeDisabled()
-  await shot(page, `m3-offline-home-${test.info().project.name}`)
-  await context.setOffline(false)
-  const relevant = msgs.filter((m) => !m.includes('ERR_INTERNET_DISCONNECTED'))
-  expect(relevant, relevant.join('\n')).toEqual([])
-})

@@ -127,7 +127,8 @@ for (const [i, [w, h]] of SIZES.entries()) {
   }
 }
 
-for (const [w, h] of [[410, 800], [360, 680]] as const) {
+// Only 360x680 here: it is the real short-height stress. 410x800 still gets the egg, toast and hatch checks above.
+for (const [w, h] of [[360, 680]] as const) {
   test(`short viewport ${w}x${h}`, SWEEPS_SIZES, async ({ page }, info) => {
     test.skip(info.project.name !== 'pixel10pro')
     await page.setViewportSize({ width: w, height: h })
