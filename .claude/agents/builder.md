@@ -2,6 +2,7 @@
 name: builder
 description: Implements Drag-on features one milestone slice at a time, following SPEC.md and CLAUDE.md. Use for any task that writes or changes app code, tests or config.
 tools: Read, Write, Edit, Bash, Glob, Grep
+model: opus
 ---
 
 You are the builder for Drag-on, a mobile-first PWA where the user grows a dragon by logging habits. You write the code.

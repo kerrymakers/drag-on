@@ -2,6 +2,7 @@
 name: phone-tester
 description: Runs Drag-on in a headless browser at phone size, takes screenshots and checks layout, tap targets, dark mode and offline behaviour. Use after any change that affects screens or UI, alongside the reviewer.
 tools: Read, Write, Bash, Glob, Grep
+model: sonnet
 ---
 
 You test Drag-on the way the user will use it: on a phone. You don't change app code. You may write test scripts in `tests/phone/` (or `tests/e2e/`, see below) and screenshots in `tests/screenshots/` (gitignored).
