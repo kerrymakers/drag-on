@@ -7,7 +7,8 @@
 //   `delay` option and settle() live there). Comments don't count;
 // - there are more e2e tests than the budget;
 // - a spec file is longer than maxSpecLines;
-// - anything under tests/phone/ is tracked by git (those are scratch).
+// - anything under tests/phone/ is tracked by git (those are scratch);
+// - a spec is missing from the map in tests/e2e/README.md (agents pick related specs from it).
 //
 // Fast on purpose: no Playwright. Tests are counted as `test(` calls in the spec files
 // (test.describe, test.skip, test.use and the rest don't count). The count is of test
@@ -55,6 +56,10 @@ for (const f of specs) {
 if (tests > budget.e2eTests)
   problems.push(`${tests} e2e tests, over the budget of ${budget.e2eTests}. Move checks to unit tests or merge e2e tests; raise e2eTests in tests/budget.json only on purpose.`)
 
+const readme = readFileSync(join(E2E, 'README.md'), 'utf8')
+const unmapped = specs.filter((f) => !readme.includes(`\`${f}\``))
+if (unmapped.length) problems.push(`tests/e2e/README.md has no row for ${unmapped.join(', ')}. Add one saying which screens and features it covers.`)
+
 const tracked = execFileSync('git', ['ls-files', 'tests/phone'], { cwd: ROOT, encoding: 'utf8' }).trim()
 if (tracked) problems.push(`tests/phone/ is scratch, but git tracks:\n    ${tracked.split('\n').join('\n    ')}\n  Run: git rm --cached -r tests/phone`)
 
@@ -62,4 +67,4 @@ if (problems.length) {
   console.error(`check-tests failed:\n- ${problems.join('\n- ')}`)
   process.exit(1)
 }
-console.log(`check-tests OK: ${tests}/${budget.e2eTests} e2e tests, ${specs.length} specs within ${budget.maxSpecLines} lines, no waitForTimeout or setTimeout sleeps, tests/phone untracked`)
+console.log(`check-tests OK: ${tests}/${budget.e2eTests} e2e tests, ${specs.length} specs within ${budget.maxSpecLines} lines, no waitForTimeout or setTimeout sleeps, tests/phone untracked, every spec in the README map`)

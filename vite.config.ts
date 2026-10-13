@@ -51,6 +51,8 @@ export default defineConfig({
   test: {
     include: ['src/**/*.test.ts'],
     environment: 'node',
+    // One dot per test; only failures get printed in full.
+    reporters: ['dot'],
     // art.test.ts and scene.test.ts read art.css and scene.css (?raw) to check the
     // animations; Vitest blanks CSS otherwise.
     css: { include: [/art\.css/, /scene\.css/] },

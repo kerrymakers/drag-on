@@ -38,7 +38,7 @@ These are the things that make or break the app, so a breach here is always a bl
 
 ### 4. Tests
 
-- Run `npm test` and `npm run build` yourself, with output piped through `tail`. Don't trust the builder's report. Don't run the e2e suite; the main session runs it before commit. If you must check one e2e spec, run just that file.
+- Run `npm test` and `npm run build` yourself, with output piped through `tail`. Don't trust the builder's report. Don't run the e2e suite; GitHub Actions runs it on push. If you must check one e2e spec, run just that file.
 - Are the new game-logic functions tested, including edge cases? Do the tests check behaviour, or just run the code?
 - Test budget: flag any edit to `tests/budget.json`. Flag new e2e tests that could have been unit tests, and new `LAYOUT` tags on tests that don't check geometry or fit. The budget counts `test(` declarations, not runs, so also flag tests that grow a loop of sizes, schemes or stages.
 

@@ -40,8 +40,9 @@ export default defineConfig({
   // stays usable for other work while tests run (the npm scripts also run them under nice).
   fullyParallel: true,
   workers: 2,
-  // Locally only failures get printed; in CI, annotations on the PR.
-  reporter: process.env.CI ? 'github' : 'dot',
+  // Locally only failures get printed. In CI, annotations on the run plus an HTML report,
+  // which the workflow uploads when something fails.
+  reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'dot',
   reportSlowTests: { max: 5, threshold: 10_000 },
   // About twice the measured run (see GLOBAL_TIMEOUT_MS), so a runaway suite fails instead of taking an hour.
   globalTimeout: GLOBAL_TIMEOUT_MS,

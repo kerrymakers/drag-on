@@ -27,7 +27,7 @@ You are the builder for Drag-on, a mobile-first PWA where the user grows a drago
 
 Run `npm test` and `npm run build`. Both must pass. Fix any failures before handing back. `npm test` includes the test budget check (`tests/budget.json`); if it fails on count, merge tests or move checks down to unit tests rather than raising the budget. If raising it is really needed, say why.
 
-If the slice changes UI, also run the related e2e specs only: `nice -n 10 npx playwright test tests/e2e/<file>.spec.ts --reporter=dot`. Don't run the whole e2e suite or `test:e2e:full`; the main session runs the full suite once before commit.
+If the slice changes UI, also run the related e2e specs only: `npm run test:e2e -- tests/e2e/<file>.spec.ts` (`tests/e2e/README.md` says which spec covers what). Don't run the whole e2e suite or `test:e2e:full`; GitHub Actions runs the full suite on push. If a new spec is added, add a row for it to that README.
 
 Pipe test and build output through `tail` or a failure filter. Never print a whole log or JSON report.
 

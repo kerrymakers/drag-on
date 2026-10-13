@@ -61,14 +61,14 @@ Days run 04:00 to 03:59, Europe/London. Use one shared helper for "which day is 
 - Dev server: `npm run dev`
 - Tests: `npm test`
 - End-to-end phone tests (Playwright): `npm run test:e2e` (the lasting feature checks in `tests/e2e/`; add `SCREENSHOTS=1` to save screenshots)
-- Just some specs: `nice -n 10 npx playwright test tests/e2e/<file>.spec.ts --reporter=dot`
+- Just some specs: `npm run test:e2e -- tests/e2e/<file>.spec.ts` (`tests/e2e/README.md` maps each spec to the screens and features it covers)
 - Full end-to-end run, including phone-tester's scratch checks in `tests/phone/`: `npm run test:e2e:full`
 - Phone sweep (phone-tester): `npm run phone:sweep` (every screen at both sizes, light and dark; summary in `tests/screenshots/sweep/summary.txt`)
 - Balance sims (balance-checker): `npm run balance` (simulate.ts for keen/typical/patchy, then streak-sim.ts, 100 runs each, under `nice`; about 1.5 minutes)
 - Build: `npm run build` (type-checks, then builds to `dist/`)
 - Preview the production build: `npm run preview` (served under `/drag-on/`)
 - Regenerate icons from `public/favicon.svg`: `npm run icons`
-- Deploy: push to `main` (GitHub Actions)
+- Deploy: push to `main`. GitHub Actions runs `npm test`, the build and the full e2e suite on every push, and deploys `main` only when they all pass. On failure, the Playwright report is uploaded as an artifact.
 
 ## Agents
 
@@ -78,7 +78,7 @@ The agents are in `.claude/agents/`. Subagents can't call each other, so the mai
 2. `builder` builds the slice. Its brief names the files involved and the related e2e specs.
 3. `reviewer` reviews it. If the UI changed, run `phone-tester` at the same time.
 4. If either reports problems, send the findings back to `builder` (resume the same builder rather than starting a new one), then review again. Round 2 checks only the round 1 findings, and `phone-tester` only reruns if round 1 found UI problems. Stop after two rounds and ask me.
-5. Once it's approved, run `npm run test:e2e` once, then commit.
+5. Once it's approved, commit and push. GitHub Actions runs the full e2e suite and deploy waits for it; check the run with `gh run watch` and fix anything it catches. Run the full suite locally first only if the slice touched layout or styles shared across screens, or `tests/e2e/fixtures.ts`.
 
 Run `balance-checker` whenever anything in `src/config/` changes, when tasks or stages are added, or when I ask whether progress feels right.
 
@@ -89,7 +89,7 @@ Models: `builder` runs on Opus; `reviewer`, `phone-tester` and `balance-checker`
 - The main session coordinates; it doesn't read source files the agents will read anyway. Agent reports go back to the next agent summarised, not pasted whole.
 - Read big files (`src/ui/styles.css`, `src/art/art.css`, `src/ui/app.ts`, `src/ui/copy.ts`, long specs) with grep and offset/limit, never whole.
 - Pipe test output through `tail` or a failure filter; never print a whole test log or JSON report.
-- Agents run `npm test`, `npm run build` and only the related e2e specs. The full e2e run happens once per slice, before commit.
+- Agents run `npm test`, `npm run build` and only the related e2e specs (picked from `tests/e2e/README.md`). The full e2e run happens in GitHub Actions.
 - Start a fresh session (`/clear`) between slices; memory holds progress.
 
 ## Working with me
