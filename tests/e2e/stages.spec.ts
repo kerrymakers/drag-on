@@ -1,5 +1,5 @@
 // Milestone 2, Slice 1: the grown stages, their reveals, and stage holding.
-import { test, expect, settle, shot, SWEEPS_SIZES, type Page } from './fixtures'
+import { test, expect, schemesFor, closePastGuard, settle, shot, LAYOUT, SWEEPS_SIZES, type Page } from './fixtures'
 import { STAGES } from '../../src/config/stages'
 import { TASKS } from '../../src/config/tasks'
 
@@ -76,8 +76,8 @@ const SEED_AT: Record<(typeof GROWN)[number], number> = {
 }
 
 // 1. Home screen at each stage
-for (const [w, h] of SIZES) {
-  for (const scheme of ['light', 'dark'] as const) {
+for (const [i, [w, h]] of SIZES.entries()) {
+  for (const scheme of schemesFor(i)) {
     test(`home stages ${w}x${h} ${scheme}`, SWEEPS_SIZES, async ({ page }, info) => {
       test.skip(info.project.name !== 'pixel10pro')
       const msgs = collectConsole(page)
@@ -95,7 +95,6 @@ for (const [w, h] of SIZES) {
         await expect(page.locator('#stage-name')).toHaveText(STAGES.find((s) => s.id === stage)!.name)
         const f = await artFit(page)
         const sh = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.scrollHeight])
-        console.log(`${w}x${h} ${scheme} ${stage}`, JSON.stringify(f), 'label', await page.locator('#growth-label').textContent())
         // Seeded with gym logs, so from Juvenile on the dragon has the strength look.
         expect(f.look).toBe(['juvenile', 'adult', 'elder'].includes(stage) ? `${stage}-strength` : stage)
         expect(sh[0]).toBeLessThanOrEqual(w)
@@ -110,7 +109,6 @@ for (const [w, h] of SIZES) {
         sizes[stage] = f.art.w * f.art.h
         await shot(page, `m2-${w}x${h}-${scheme}-${stage}`)
       }
-      console.log(`${w}x${h} painted area by stage`, JSON.stringify(sizes))
       expect(msgs, msgs.join('\n')).toEqual([])
     })
   }
@@ -124,25 +122,17 @@ const TRANSITIONS = [
   ['adult', 'elder'],
 ] as const
 
-for (const [a, b] of TRANSITIONS) {
-  for (const scheme of ['light', 'dark'] as const) {
-    test(`stage-up ${a} -> ${b} ${scheme}`, async ({ page }, info) => {
+for (const [i, [a, b]] of TRANSITIONS.entries()) {
+  for (const scheme of schemesFor(i)) {
+    test(`stage-up ${a} -> ${b} ${scheme}: saved first, fits the screen, app inert`, LAYOUT, async ({ page }, info) => {
       const msgs = collectConsole(page)
       await page.emulateMedia({ colorScheme: scheme })
       const below = from(b) - 10
       await seed(page, [log(below, { stageReached: a })])
-      await page.addInitScript(() => {
-        const w = window as any
-        w.__overlays = 0
-        new MutationObserver((ms) => {
-          for (const m of ms) for (const n of m.addedNodes) if (n instanceof HTMLElement && n.classList.contains('overlay')) w.__overlays++
-        }).observe(document, { childList: true, subtree: true })
-      })
       await page.clock.setFixedTime(TUE_1000)
       await page.goto('./')
       await expect(page.locator('#stage-name')).toHaveText(STAGES.find((s) => s.id === a)!.name)
-      await page.locator('button.task[data-task-id="gym"]').focus()
-      await page.keyboard.press('Enter')
+      await page.locator('button.task[data-task-id="gym"]').click()
       const overlay = page.getByRole('dialog')
       await expect(overlay).toBeVisible()
       const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('drag-on:v1')!).events.at(-1))
@@ -164,11 +154,8 @@ for (const [a, b] of TRANSITIONS) {
           btn: { w: Math.round(btn.width), h: Math.round(btn.height), b: Math.round(btn.bottom) },
           card: { t: Math.round(card.top), b: Math.round(card.bottom) },
           inert: (document.getElementById('app') as any).inert,
-          active: document.activeElement?.className,
-          bg: getComputedStyle(document.querySelector('.overlay')!).backgroundColor,
         }
       })
-      console.log(`${info.project.name} ${a}->${b} ${scheme}`, JSON.stringify({ art: f.art, overlayArt: f.area, ...m }))
       const vp = page.viewportSize()!
       expect(m.btn.w).toBeGreaterThanOrEqual(44)
       expect(m.btn.h).toBeGreaterThanOrEqual(44)
@@ -183,35 +170,62 @@ for (const [a, b] of TRANSITIONS) {
         expect(Math.min(...m.lines) / Math.max(...m.lines)).toBeGreaterThan(0.45)
       }
       await shot(page, `m2-${info.project.name}-up-${b}-${scheme}`)
-
-      // Tab can't reach the page behind
-      for (let i = 0; i < 3; i++) {
-        await page.keyboard.press('Tab')
-        expect(await page.evaluate(() => !!document.activeElement?.closest('#app'))).toBe(false)
-      }
-      // Close: light uses Escape, dark uses the backdrop; the button is covered below.
-      if (scheme === 'light') await page.keyboard.press('Escape')
-      else await page.locator('.overlay').click({ position: { x: 8, y: 8 } })
+      await page.keyboard.press('Escape')
       await expect(page.locator('.overlay')).toHaveCount(0)
-      const after = await page.evaluate(() => ({
-        inert: (document.getElementById('app') as any).inert,
-        tag: document.activeElement?.tagName,
-      }))
-      expect(after.inert).toBe(false)
-      expect(after.tag).not.toBe('BODY')
       await expect(page.locator('#stage-name')).toHaveText(STAGES.find((s) => s.id === b)!.name)
-
-      // Fires once: more logs and a reload don't repeat it
-      await page.locator('button.task[data-task-id="walk"]').click()
-      await page.reload()
-      await page.locator('button.task[data-task-id="read"]').click()
-      await settle(page)
-      await expect(page.locator('.overlay')).toHaveCount(0)
-      expect(await page.evaluate(() => (window as any).__overlays)).toBe(0) // counter resets on reload; none since
       expect(msgs, msgs.join('\n')).toEqual([])
     })
   }
 }
+
+// Behaviour shared by every stage-up (one overlay, src/ui/overlay.ts), checked once.
+test('stage-up: Tab stays inside, Escape and the backdrop close it, and it fires once', async ({ page }) => {
+  const msgs = collectConsole(page)
+  await seed(page, [log(from('adult') - 10, { stageReached: 'juvenile' })])
+  await page.addInitScript(() => {
+    const w = window as any
+    w.__overlays = 0
+    new MutationObserver((ms) => {
+      for (const m of ms) for (const n of m.addedNodes) if (n instanceof HTMLElement && n.classList.contains('overlay')) w.__overlays++
+    }).observe(document, { childList: true, subtree: true })
+  })
+  await page.clock.setFixedTime(TUE_1000)
+  await page.goto('./')
+  await page.locator('button.task[data-task-id="gym"]').focus()
+  await page.keyboard.press('Enter')
+  const overlay = page.locator('.overlay')
+  await expect(overlay).toHaveClass(/is-revealed/)
+  // Tab can't reach the page behind
+  for (let i = 0; i < 3; i++) {
+    await page.keyboard.press('Tab')
+    expect(await page.evaluate(() => !!document.activeElement?.closest('#app'))).toBe(false)
+  }
+  await page.keyboard.press('Escape')
+  await expect(overlay).toHaveCount(0)
+  const after = await page.evaluate(() => ({
+    inert: (document.getElementById('app') as any).inert,
+    tag: document.activeElement?.tagName,
+  }))
+  expect(after.inert).toBe(false)
+  expect(after.tag).not.toBe('BODY')
+  await expect(page.locator('#stage-name')).toHaveText('Adult')
+
+  // The backdrop closes it too: undo back down and cross again.
+  await page.locator('#undo').click()
+  await expect(page.locator('#stage-name')).toHaveText('Juvenile')
+  await page.locator('button.task[data-task-id="gym"]').click()
+  await closePastGuard(overlay, () => overlay.click({ position: { x: 8, y: 8 } }))
+  await expect(page.locator('#stage-name')).toHaveText('Adult')
+
+  // Fires once: more logs and a reload don't repeat it
+  await page.locator('button.task[data-task-id="walk"]').click()
+  await page.reload()
+  await page.locator('button.task[data-task-id="read"]').click()
+  await settle(page)
+  await expect(overlay).toHaveCount(0)
+  expect(await page.evaluate(() => (window as any).__overlays)).toBe(0) // counter resets on reload; none since
+  expect(msgs, msgs.join('\n')).toEqual([])
+})
 
 test('stage-up button closes and undo back down shows nothing sad', async ({ page }) => {
   const msgs = collectConsole(page)
@@ -222,7 +236,7 @@ test('stage-up button closes and undo back down shows nothing sad', async ({ pag
   await expect(page.getByRole('dialog')).toBeVisible()
   // Guard: an instant tap is ignored
   await page.locator('.overlay').click({ position: { x: 8, y: 8 } })
-  await page.waitForTimeout(50)
+  await expect(page.locator('.overlay')).not.toHaveClass(/is-closing/) // a close starts in the tap's own handler
   await expect(page.locator('.overlay')).toHaveCount(1)
   await expect(page.locator('.overlay')).toHaveClass(/is-revealed/) // revealed after the close guard has passed
   await settle(page)
@@ -231,7 +245,6 @@ test('stage-up button closes and undo back down shows nothing sad', async ({ pag
   await expect(page.locator('#stage-name')).toHaveText('Whelp')
   await page.locator('#undo').click()
   // Undoing the mis-tap takes the stage back; no overlay, nothing sad
-  console.log('after undo stage', await page.locator('#stage-name').textContent(), await page.locator('#growth-label').textContent())
   await settle(page)
   await expect(page.locator('.overlay')).toHaveCount(0)
   expect(msgs).toEqual([])
@@ -248,7 +261,6 @@ test('held stage: stageReached whelp below its threshold shows Whelp, counting t
   expect(await xpTotal(page)).toBe(total)
   await expect(page.locator('#growth-label')).toHaveText(`${from('juvenile') - total} XP to grow`)
   const bar = await page.locator('#xp-bar').evaluate((e) => ({ now: e.getAttribute('aria-valuenow'), text: e.getAttribute('aria-valuetext'), fill: (e.firstElementChild as HTMLElement).style.width }))
-  console.log('held bar', bar)
   expect(Number(bar.now)).toBe(0) // below the held stage's own threshold: progress shows from the start
   expect(await page.locator('#dragon-art .dragon-react').getAttribute('data-look')).toBe('whelp')
   await shot(page, `m2-${info.project.name}-held-whelp`)
@@ -272,8 +284,6 @@ test('existing hatchling data without stageReached loads and one log does not ce
   await expect(page.locator('#toast-text')).toHaveText(`+${XP('walk')} XP · Went for a walk`)
   await settle(page)
   await expect(page.locator('.overlay')).toHaveCount(0)
-  const last = await page.evaluate(() => JSON.parse(localStorage.getItem('drag-on:v1')!).events.at(-1))
-  console.log('new event on legacy data', last)
   expect(msgs).toEqual([])
 })
 
@@ -287,7 +297,6 @@ test('elder: Fully grown, full bar, logging still gives feedback', async ({ page
   await expect(page.locator('#growth-label')).toHaveText('Fully grown')
   await settle(page) // let the bar's width transition finish
   const bar = await page.locator('#xp-bar').evaluate((e) => ({ now: e.getAttribute('aria-valuenow'), fill: getComputedStyle(e.firstElementChild!).width, track: getComputedStyle(e).width }))
-  console.log('elder bar', bar)
   expect(bar.now).toBe('100')
   expect(bar.fill).toBe(bar.track)
   await page.locator('button.task[data-task-id="gym"]').click()
@@ -311,32 +320,25 @@ for (const [a, b] of TRANSITIONS) {
     const msgs = collectConsole(page)
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await seed(page, [log(from(b) - 10, { stageReached: a })])
+    // Every frame while the overlay is up, note what's animating.
     await page.addInitScript(() => {
       const w = window as any
-      w.__cls = new Set()
-      new MutationObserver(() => {
-        const o = document.querySelector('.overlay')
-        if (o) w.__cls.add(o.className)
-      }).observe(document, { attributes: true, childList: true, subtree: true, attributeFilter: ['class'] })
+      w.__anims = new Set()
+      const tick = () => {
+        if (document.querySelector('.overlay'))
+          for (const x of document.getAnimations() as any[])
+            w.__anims.add(`${x.animationName ?? 'transition:' + x.transitionProperty}@${(x.effect?.target as Element)?.className?.toString?.() ?? ''}`)
+        requestAnimationFrame(tick)
+      }
+      requestAnimationFrame(tick)
     })
     await page.clock.setFixedTime(TUE_1000)
     await page.goto('./')
     await page.locator('button.task[data-task-id="gym"]').click()
     await expect(page.locator('.overlay')).toHaveClass(/is-calm/)
-    const anims: string[] = []
-    for (let t = 0; t < 6; t++) {
-      anims.push(
-        ...(await page.evaluate(() =>
-          document
-            .getAnimations()
-            .map((x: any) => `${x.animationName ?? 'transition:' + x.transitionProperty}@${(x.effect?.target as Element)?.className?.toString?.() ?? ''}`),
-        )),
-      )
-      await page.waitForTimeout(200)
-    }
-    const uniq = [...new Set(anims)]
-    const classes = await page.evaluate(() => [...(window as any).__cls])
-    console.log(`reduced ${a}->${b}`, JSON.stringify({ uniq, classes }))
+    await expect(page.locator('.overlay')).toHaveClass(/is-revealed/)
+    await settle(page)
+    const uniq: string[] = await page.evaluate(() => [...(window as any).__anims])
     // Only opacity transitions or the overlay fade-in; no keyframe motion
     for (const x of uniq) expect(x, x).toMatch(/^(transition:opacity|overlay-in|float-xp-calm)@/)
     const final = await page.evaluate(() => ({

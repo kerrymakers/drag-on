@@ -1,7 +1,7 @@
 // Streak milestone finds, the freeze-earned toast note, the "kept our streak cosy"
 // line and History's "Next surprise" line, on the phone (from M5 slice 2).
 // Screenshots (with SCREENSHOTS=1): tests/screenshots/m5s2-*
-import { test, expect, settle, shot, type Page, type Browser, type TestInfo } from './fixtures'
+import { test, expect, closePastGuard, settle, shot, LAYOUT, type Page, type Browser, type TestInfo } from './fixtures'
 import { TASKS } from '../../src/config/tasks'
 import { FREEZE_EARNED, FREEZE_USED, WELCOME_BACK } from '../../src/ui/copy'
 
@@ -58,11 +58,7 @@ async function fresh(browser: Browser, info: TestInfo, data: object, opts: { sch
 
 const card = (page: Page) => page.locator('.overlay.item-found')
 /** The card ignores taps for a moment after opening (see CLOSE_GUARD_MS in overlay.ts). */
-async function closeCard(page: Page) {
-  await page.waitForTimeout(650)
-  await card(page).locator('.overlay-button').click()
-  await expect(card(page)).toHaveCount(0)
-}
+const closeCard = (page: Page) => closePastGuard(card(page), () => card(page).locator('.overlay-button').click())
 const task = (page: Page, id: string) => page.locator(`button.task[data-task-id="${id}"]`)
 const speechShowing = (page: Page) => page.evaluate(() => document.querySelector('#speech')!.classList.contains('is-showing'))
 const tag = (info: TestInfo) => info.project.name
@@ -136,7 +132,7 @@ test('the 7th day in a row brings a milestone find, a freeze note, and comes bac
   await context.close()
 })
 
-test('a freeze earned without a milestone gets the toast note; an ordinary log does not', async ({ browser }, info) => {
+test('a freeze earned without a milestone gets the toast note; an ordinary log does not', LAYOUT, async ({ browser }, info) => {
   // 13 days in a row: the 14th earns a second freeze, and 14 isn't a milestone.
   const { page, context } = await fresh(browser, info, seed('2026-09-24', '2026-10-06'))
   await task(page, 'gym').click()
@@ -194,13 +190,6 @@ test('no cosy line once the streak has ended anyway; the welcome back plays as b
   expect(FREEZE_USED).not.toContain(said)
   expect(WELCOME_BACK.sleepy).toContain(said)
   await expect(page.locator('#streak-chip')).toBeHidden()
-  await context.close()
-})
-
-test('History says the next surprise is at 60 days after 30', async ({ browser }, info) => {
-  const { page, context } = await fresh(browser, info, seed('2026-08-25', '2026-10-06')) // 43 days
-  await page.locator('#tabbar a[href="#/history"]').click()
-  await expect(page.locator('.hs-next')).toHaveText('Next surprise at 60 days')
   await context.close()
 })
 

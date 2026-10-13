@@ -1,4 +1,4 @@
-import { test, expect, settle, shot, SWEEPS_SIZES, type Page } from './fixtures'
+import { test, expect, schemesFor, settle, shot, SWEEPS_SIZES, type Page } from './fixtures'
 test.use({ timezoneId: 'Europe/London' })
 
 // Tuesday mid-morning: wake window closed, all other tasks open.
@@ -61,8 +61,8 @@ const SIZES = [
   [360, 680],
 ] as const
 
-for (const [w, h] of SIZES) {
-  for (const scheme of ['light', 'dark'] as const) {
+for (const [i, [w, h]] of SIZES.entries()) {
+  for (const scheme of schemesFor(i)) {
     test.describe(`viewport ${w}x${h} ${scheme}`, SWEEPS_SIZES, () => {
       test.beforeEach(({}, info) => test.skip(info.project.name !== 'pixel10pro'))
       test.use({ viewport: { width: w, height: h } })
@@ -76,10 +76,7 @@ for (const [w, h] of SIZES) {
           await page.clock.install({ time: TUE_1000 })
           await page.goto('./')
           await expect(page.locator('.task').first()).toBeVisible()
-          const look = await page.locator('#dragon-art .dragon-react').getAttribute('data-look')
-          const label = await page.locator('#growth-label').textContent()
           const g = await geometry(page)
-          console.log(tag, name, look, label, JSON.stringify(g))
           expect(g.scrollW).toBeLessThanOrEqual(w)
           expect(g.scrollH).toBeLessThanOrEqual(h)
           await shot(page, `${tag}-${name}`)
@@ -98,7 +95,6 @@ for (const [w, h] of SIZES) {
         await settle(page)
         await expect(page.locator('#toast')).toHaveClass(/is-showing/)
         const g = await geometry(page)
-        console.log(tag, 'toast', JSON.stringify(g))
         // The toast must sit above the bar label and never over a task button.
         expect(g.toast!.bottom).toBeLessThanOrEqual(g.label!.top)
         expect(g.toast!.bottom).toBeLessThanOrEqual(g.firstTask!.top)
@@ -106,7 +102,6 @@ for (const [w, h] of SIZES) {
         expect(g.toast!.right).toBeLessThanOrEqual(w)
         expect(g.toastUndo!.w).toBeGreaterThanOrEqual(44)
         expect(g.toastUndo!.h).toBeGreaterThanOrEqual(44)
-        if (g.eyes) console.log(tag, 'toast overlaps eyes:', g.toast!.top < g.eyes.bottom)
         await shot(page, `${tag}-toast`)
         expect(msgs).toEqual([])
       })
@@ -122,7 +117,6 @@ for (const [w, h] of SIZES) {
         await expect(page.locator('.overlay')).toHaveClass(/is-revealed/)
         await settle(page)
         const g = await geometry(page)
-        console.log(tag, 'overlay', JSON.stringify({ art: g.overlayArt, msg: g.overlayMsg, btn: g.overlayBtn }))
         expect(g.overlayBtn!.h).toBeGreaterThanOrEqual(44)
         expect(g.overlayBtn!.bottom).toBeLessThanOrEqual(h)
         expect(g.overlayArt!.top).toBeGreaterThanOrEqual(0)
@@ -143,10 +137,9 @@ for (const [w, h] of [[410, 800], [360, 680]] as const) {
     const r = await page.evaluate(() => ({
       scrollH: document.documentElement.scrollHeight,
       undoBottom: document.querySelector('#undo')!.getBoundingClientRect().bottom,
-      eggH: document.querySelector('.egg')!.getBoundingClientRect().height,
-      firstTaskTop: document.querySelector('.task')!.getBoundingClientRect().top,
     }))
-    console.log(w, h, JSON.stringify(r))
+    expect(r.scrollH).toBeLessThanOrEqual(h)
+    expect(r.undoBottom).toBeLessThanOrEqual(h)
     await shot(page, `home-short-${w}x${h}`)
   })
 }
@@ -161,8 +154,6 @@ test('notice at 360x680 leaves the dragon visible', SWEEPS_SIZES, async ({ page 
   await page.goto('./')
   await expect(page.locator('#notice')).toBeVisible()
   const g = await geometry(page)
-  const notice = await page.locator('#notice').boundingBox()
-  console.log('360x680 with notice', JSON.stringify({ notice, art: g.art, firstTask: g.firstTask, undo: g.undo, scrollH: g.scrollH }))
   expect(g.scrollH).toBeLessThanOrEqual(680)
   await shot(page, `s3-360x680-notice`)
 })

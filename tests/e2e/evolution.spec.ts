@@ -1,5 +1,5 @@
 // Milestone 3, Slice 2: the evolution look.
-import { test, expect, settle, shot, type Page } from './fixtures'
+import { test, expect, settle, shot, LAYOUT, type Page } from './fixtures'
 import { LOOK_CHANGE_MARGIN } from '../../src/config/evolution'
 import { STAGES } from '../../src/config/stages'
 import { TASKS } from '../../src/config/tasks'
@@ -165,7 +165,7 @@ test('changing back to a look seen before happens quietly', async ({ page }) => 
   expect(msgs).toEqual([])
 })
 
-test('every look draws cleanly at every grown stage, mood and scheme', async ({ page }, info) => {
+test('every look draws cleanly at every grown stage, mood and scheme', LAYOUT, async ({ page }, info) => {
   test.skip(info.project.name !== 'narrow360') // the narrowest supported width
   const msgs = collectConsole(page)
   await page.emulateMedia({ reducedMotion: 'reduce' })
@@ -207,7 +207,7 @@ test('every look draws cleanly at every grown stage, mood and scheme', async ({ 
 
 test('a lost popstate does not leave the tab bar ignoring taps', async ({ page }) => {
   const msgs = collectConsole(page)
-  await page.clock.setFixedTime(TUE_1000)
+  await page.clock.install({ time: TUE_1000 })
   await page.goto('./')
   await page.getByRole('link', { name: 'Dragon' }).click()
   await expect(page.locator('#dragon-screen')).toBeVisible()
@@ -222,7 +222,7 @@ test('a lost popstate does not leave the tab bar ignoring taps', async ({ page }
   await page.evaluate(() => {
     history.back = (window as any).__back
   })
-  await page.waitForTimeout(700) // past the guard's fallback
+  await page.clock.runFor(700) // past the guard's fallback (GOING_BACK_TIMEOUT_MS in src/ui/nav.ts)
   await page.getByRole('link', { name: 'Home' }).click()
   await expect(page.locator('#home')).toBeVisible()
   await expect(page.getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page')

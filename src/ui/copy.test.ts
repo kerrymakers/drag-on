@@ -221,6 +221,7 @@ describe('streak milestone and freeze copy', () => {
     expect(milestoneFound(7)).toEqual({ heading: '7 days together!', line: 'I found you something to celebrate.' })
     expect(milestoneFound(100).heading).toBe('100 days together!')
     expect(nextSurprise(30)).toBe('Next surprise at 30 days')
+    expect(nextSurprise(60)).toBe('Next surprise at 60 days')
   })
 
   it('never guilt-trips', () => {

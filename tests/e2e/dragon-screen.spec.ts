@@ -1,5 +1,5 @@
 // Milestone 3, Slice 1: fixed layout, tab bar, Dragon screen, Heart task.
-import { test, expect, settle, shot, SWEEPS_SIZES, type Page } from './fixtures'
+import { test, expect, schemesFor, settle, shot, SWEEPS_SIZES, type Page } from './fixtures'
 import { STAGES } from '../../src/config/stages'
 import { TASKS } from '../../src/config/tasks'
 
@@ -147,20 +147,6 @@ test('Dragon screen: stats, history with dates, and locked stages that give noth
   expect(msgs).toEqual([])
 })
 
-test('a welcome-back seen on Home is not replayed by switching tabs', async ({ page }) => {
-  await seed(page, [
-    { id: 'a', type: 'log', taskId: 'gym', timestamp: Date.parse('2026-10-01T12:00:00+01:00'), xpAwarded: 40 },
-  ])
-  await page.clock.install({ time: new Date('2026-10-06T10:00:00+01:00') })
-  await page.goto('./')
-  await expect(page.locator('#speech')).toHaveClass(/is-showing/)
-  await page.getByRole('link', { name: 'Dragon' }).click()
-  await expect(page.locator('#speech')).not.toHaveClass(/is-showing/)
-  await page.getByRole('link', { name: 'Home' }).click()
-  await settle(page)
-  await expect(page.locator('#speech')).not.toHaveClass(/is-showing/)
-})
-
 // ---------------------------------------------------------------------------
 // Phone tester, M3 Slice 1: every viewport (incl. the installed-PWA 410x840),
 // light and dark, stages, welcome, toast across tabs, reduced motion, offline.
@@ -172,7 +158,6 @@ const VIEWPORTS = [
   [410, 800],
   [360, 680],
 ] as const
-const ROUND = (r: DOMRect) => ({ l: Math.round(r.left), t: Math.round(r.top), r: Math.round(r.right), b: Math.round(r.bottom), w: Math.round(r.width), h: Math.round(r.height) })
 
 async function pageScroll(page: Page) {
   return page.evaluate(() => {
@@ -192,8 +177,8 @@ async function smallTargets(page: Page, root: string) {
   )
 }
 
-for (const [w, h] of VIEWPORTS) {
-  for (const scheme of ['light', 'dark'] as const) {
+for (const [i, [w, h]] of VIEWPORTS.entries()) {
+  for (const scheme of schemesFor(i)) {
     test(`pt home ${w}x${h} ${scheme}: page never scrolls, list scrolls under a fixed header`, SWEEPS_SIZES, async ({ page }, info) => {
       test.skip(info.project.name !== 'pixel10pro')
       const msgs = collectConsole(page)
@@ -210,7 +195,6 @@ for (const [w, h] of VIEWPORTS) {
       const ps = await pageScroll(page)
       const list = await page.locator('#tasks').evaluate((e) => ({ over: e.scrollHeight - e.clientHeight, fade: e.dataset.fade ?? '' }))
       const t = await smallTargets(page, '#app')
-      console.log(`pt ${w}x${h} ${scheme}`, JSON.stringify({ ps, list, small: t.filter((x) => x.w < 44 || x.h < 44) }))
       expect(ps.sh, 'page scrollHeight').toBe(ps.ch)
       expect(ps.sw).toBeLessThanOrEqual(ps.cw)
       for (const x of t) {
@@ -238,10 +222,14 @@ for (const [w, h] of VIEWPORTS) {
           for (let i = 1; i <= 8; i++) await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: cx, y: y0 + ((y1 - y0) * i) / 8 }] })
           await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
         }
+        // The fling coasts on after the finger lifts: wait for its scrollend.
+        await page.locator('#tasks').evaluate((e) => {
+          ;(e as any).__ended = false
+          e.addEventListener('scrollend', () => ((e as any).__ended = true), { once: true })
+        })
         await swipe(tb.y + tb.height - 10, tb.y + 10)
-        await page.waitForTimeout(600) // a fling has no event to wait on: let it coast to a stop
+        await expect.poll(() => page.locator('#tasks').evaluate((e) => (e as any).__ended)).toBe(true)
         const st = await page.locator('#tasks').evaluate((e) => ({ top: e.scrollTop, max: e.scrollHeight - e.clientHeight, fade: e.dataset.fade }))
-        console.log(`pt ${w}x${h} after swipe`, JSON.stringify(st))
         expect(st.top).toBeGreaterThan(0)
         if (st.top < st.max - 1) {
           expect(st.fade).toBe('both')
@@ -252,7 +240,8 @@ for (const [w, h] of VIEWPORTS) {
         const hb = (await page.locator('.top').boundingBox())!
         await swipe(hb.y + hb.height / 2, hb.y - 200 > 0 ? hb.y - 200 : 1)
         await page.mouse.wheel(0, 400)
-        await page.waitForTimeout(300) // give a wrongly scrolling page time to move
+        // Nothing to wait on when nothing moves: give a wrongly scrolling page 20 frames to show it.
+        await page.evaluate(() => new Promise((r) => { let n = 0; const f = () => (++n >= 20 ? r(null) : requestAnimationFrame(f)); requestAnimationFrame(f) }))
         expect(await fixed()).toEqual(before)
         expect((await pageScroll(page)).y).toBe(0)
         await shot(page, `m3-home-${w}x${h}-${scheme}-scrolled`)
@@ -307,8 +296,8 @@ async function leakCheck(page: Page, reachedCount: number) {
   }, hidden.map((s) => ({ id: s.id, name: s.name })))
 }
 
-for (const [w, h] of [[410, 840], [360, 680], [410, 914]] as const) {
-  for (const scheme of ['light', 'dark'] as const) {
+for (const [i, [w, h]] of ([[410, 840], [360, 680], [410, 914]] as const).entries()) {
+  for (const scheme of schemesFor(i)) {
     for (const stage of ['egg', 'hatchling', 'adult'] as const) {
       test(`pt dragon screen ${stage} ${w}x${h} ${scheme}`, SWEEPS_SIZES, async ({ page }, info) => {
         test.skip(info.project.name !== 'pixel10pro')
@@ -330,11 +319,9 @@ for (const [w, h] of [[410, 840], [360, 680], [410, 914]] as const) {
         }
         const leaks = await leakCheck(page, seedData.reached)
         const bars = await barCheck(page)
-        const hist = await screen.locator('.history-item.is-reached').allInnerTexts()
         const ps = await pageScroll(page)
         const t = await smallTargets(page, '#app')
         const ds = await page.locator('#dragon-screen .ds-scroll').evaluate((e) => ({ over: e.scrollHeight - e.clientHeight, fade: e.dataset.fade ?? '' }))
-        console.log(`pt ds ${stage} ${w}x${h} ${scheme}`, JSON.stringify({ leaks, bars, hist, ps, ds, line: await screen.locator('.ds-line').textContent() }))
         expect(leaks.screen, 'unreached stage names in Dragon screen DOM').toEqual([])
         for (const b of bars) expect(Math.abs(b.frac - b.expected), `${b.stat} bar`).toBeLessThan(0.02)
         expect(ps.sh).toBe(ps.ch)
@@ -354,7 +341,6 @@ for (const [w, h] of [[410, 840], [360, 680], [410, 914]] as const) {
           await page.getByRole('link', { name: 'Dragon' }).click()
           await expect(screen.locator('.stat[data-stat="heart"] .stat-value')).toHaveText(String(XP('selfcare')))
           const b2 = await barCheck(page)
-          console.log('pt egg after selfcare', JSON.stringify(b2), await screen.locator('.history-item.is-reached').allInnerTexts())
           expect(b2.find((b) => b.stat === 'heart')!.frac).toBeGreaterThan(0.98)
           await shot(page, `m3-dragon-egg-selfcare-${w}x${h}-${scheme}`)
         }
@@ -375,9 +361,10 @@ test('pt welcome: opened straight on #/dragon after a 3-day gap, bubble waits fo
   expect(await page.evaluate(() => localStorage.getItem('drag-on:ui'))).toBeNull()
   await page.getByRole('link', { name: 'Home' }).click()
   await expect(page.locator('#speech')).toHaveClass(/is-showing/)
-  console.log('pt welcome text', await page.locator('#speech').textContent(), 'chip', await page.locator('#mood-chip').textContent())
   await shot(page, `m3-welcome-home-${test.info().project.name}`)
+  // Switching tabs hides it, and coming back to Home doesn't replay it.
   await page.getByRole('link', { name: 'Dragon' }).click()
+  await expect(page.locator('#speech')).not.toHaveClass(/is-showing/)
   await page.getByRole('link', { name: 'Home' }).click()
   await settle(page)
   await expect(page.locator('#speech')).not.toHaveClass(/is-showing/)
@@ -396,11 +383,6 @@ for (const variant of ['quick', 'slow'] as const) {
     await page.locator('button.task[data-task-id="read"]').click()
     await expect(page.locator('#toast')).toHaveClass(/is-showing/)
     await page.getByRole('link', { name: 'Dragon' }).click()
-    const onDragon = await page.evaluate(() => {
-      const t = document.querySelector('#toast')!
-      const r = t.getBoundingClientRect()
-      return { showing: t.classList.contains('is-showing'), visible: r.width > 0 && (t as HTMLElement).offsetParent !== null }
-    })
     await shot(page, `m3-toast-on-dragon-${variant}-${test.info().project.name}`)
     if (variant === 'slow') await page.clock.runFor(6000) // past the toast's 5s
     await page.getByRole('link', { name: 'Home' }).click()
@@ -408,7 +390,6 @@ for (const variant of ['quick', 'slow'] as const) {
       showing: document.querySelector('#toast')!.classList.contains('is-showing'),
       undoDisabled: (document.querySelector('#toast-undo') as HTMLButtonElement).disabled,
     }))
-    console.log(`pt toast ${variant}`, JSON.stringify({ onDragon, back }))
     await shot(page, `m3-toast-back-${variant}-${test.info().project.name}`)
     if (back.showing && !back.undoDisabled) {
       await page.locator('#toast-undo').click()
@@ -436,7 +417,6 @@ test('pt reduced motion: stat bars and tab icons do not transition', async ({ pa
     })
     await page.getByRole('link', { name: 'Home' }).click()
     const anims = await page.evaluate(() => document.getAnimations().map((a) => (a as CSSAnimation).animationName ?? (a as CSSTransition).transitionProperty))
-    console.log('pt motion', rm, JSON.stringify(s), 'animations on tab switch', JSON.stringify(anims))
     if (rm === 'reduce') {
       expect(s.fill).toMatch(/0s$/)
       expect(s.tabIcon).toMatch(/0s$/)

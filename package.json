@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "vitest run",
+    "test": "vitest run && node --experimental-strip-types --no-warnings scripts/check-tests.ts",
     "test:watch": "vitest",
     "test:e2e": "nice -n 10 playwright test",
     "test:e2e:full": "E2E_FULL=1 nice -n 10 playwright test",

@@ -1,4 +1,4 @@
-import { test, expect, settle, shot, type ConsoleMessage, type Page } from './fixtures'
+import { test, expect, closePastGuard, settle, shot, LAYOUT, type ConsoleMessage, type Page } from './fixtures'
 import { STAGES } from '../../src/config/stages'
 import { TASKS } from '../../src/config/tasks'
 
@@ -47,7 +47,6 @@ async function checkLayout(page: Page) {
   const vp = page.viewportSize()!
   const sw = await page.evaluate(() => document.documentElement.scrollWidth)
   expect(sw).toBeLessThanOrEqual(vp.width)
-  const sh = await page.evaluate(() => document.documentElement.scrollHeight)
   const targets = await page.$$eval('button:not([hidden]), a, [role=button], input', (els) =>
     els
       .filter((e) => (e as HTMLElement).offsetParent !== null)
@@ -64,7 +63,6 @@ async function checkLayout(page: Page) {
         }
       }),
   )
-  console.log(`vp ${vp.width}x${vp.height} scrollH ${sh} targets`, JSON.stringify(targets))
   for (const t of targets) {
     expect(t.w, `${t.id} width`).toBeGreaterThanOrEqual(44)
     expect(t.h, `${t.id} height`).toBeGreaterThanOrEqual(44)
@@ -73,14 +71,11 @@ async function checkLayout(page: Page) {
     expect(t.x + t.w).toBeLessThanOrEqual(vp.width + 0.5)
     expect(t.bottom, `${t.id} on screen`).toBeLessThanOrEqual(vp.height)
   }
-  // Task buttons in the lower half
-  const firstTask = targets.find((t) => t.cls.includes('task'))
-  if (firstTask) console.log('first task top y', firstTask.y, 'half', vp.height / 2)
   return targets
 }
 
 for (const scheme of ['light', 'dark'] as const) {
-  test(`screens ${scheme}`, async ({ page }, info) => {
+  test(`screens ${scheme}`, LAYOUT, async ({ page }, info) => {
     const msgs = collectConsole(page)
     await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' })
     const p = info.project.name
@@ -97,23 +92,6 @@ for (const scheme of ['light', 'dark'] as const) {
     await expect(page.locator('#undo')).toBeVisible()
     await checkLayout(page)
     await shot(page, `home-${p}-weekday-logged-${scheme}`)
-
-    const colours = await page.evaluate(() => {
-      const g = (s: string) => getComputedStyle(document.querySelector(s)!)
-      return {
-        bg: g('body').backgroundColor,
-        task: g('button.task:not(.is-done)').backgroundColor,
-        taskText: g('button.task:not(.is-done)').color,
-        done: g('button.task.is-done').backgroundColor,
-        doneText: g('button.task.is-done').color,
-        tick: g('.task-tick').color,
-        xp: g('.task-xp').color,
-        hint: g('.task-hint')?.color,
-        undo: g('#undo').color,
-        name: g('#dragon-name').color,
-      }
-    })
-    console.log('colours', scheme, JSON.stringify(colours))
 
     await page.clock.setSystemTime(SAT_1000)
     await page.reload()
@@ -217,7 +195,6 @@ test('wake window', async ({ page }) => {
   await expect(task(page, 'wake')).toBeEnabled()
   await page.clock.setSystemTime(at('2026-10-07T06:46:10+01:00'))
   await task(page, 'wake').click()
-  console.log('stale tap after cutoff xp:', await xp(page), 'wake count', await task(page, 'wake').count())
   expect(await xp(page)).toBe(0)
 })
 
@@ -268,23 +245,13 @@ test('day rollover: 03:30 log counts for previous day', async ({ page }, info) =
   await expect(task(page, 'wake')).toHaveCount(0)
   await task(page, 'gym').click()
   await expect(task(page, 'gym')).toBeDisabled()
-  const ts = await page.evaluate(() => JSON.parse(localStorage.getItem('drag-on:v1')!).events[0].timestamp)
-  console.log('logged at', new Date(ts).toISOString())
   await page.clock.setSystemTime(at('2026-10-06T04:00:30+01:00'))
   await rerender(page)
   await expect(task(page, 'gym')).toBeEnabled()
   await expect(task(page, 'wake')).toBeEnabled()
   await expect(page.locator('#undo')).toBeHidden()
   await shot(page, `home-${info.project.name}-after-rollover`)
-  // Without visibilitychange: does the screen update on its own if left open?
-  await page.clock.setSystemTime(at('2026-10-06T03:50:00+01:00'))
-  await page.reload()
-  await expect(task(page, 'gym')).toBeDisabled()
-  await page.clock.runFor(15 * 60 * 1000)
-  const stillDisabled = await task(page, 'gym').isDisabled()
-  console.log('left open across 04:00 with no visibilitychange; gym still disabled:', stillDisabled)
-  await task(page, 'gym').click({ force: true })
-  console.log('tap on stale disabled button xp:', await xp(page))
+  // Left open across 04:00 without a visibilitychange is covered by 's3: left open across 06:46 and 04:00'.
 })
 
 test('reduced motion tones animations down', async ({ page }) => {
@@ -296,7 +263,6 @@ test('reduced motion tones animations down', async ({ page }) => {
   }))
   await task(page, 'walk').click()
   const gainNormal = await page.locator('.float-xp').evaluate((e) => getComputedStyle(e).animationName)
-  console.log('normal', normal, gainNormal)
   expect(normal.egg).toBe('egg-wobble')
   expect(gainNormal).toBe('float-xp')
   await page.clock.runFor(1000) // let the float finish
@@ -311,7 +277,6 @@ test('reduced motion tones animations down', async ({ page }) => {
     toastText: document.querySelector('#toast-text')!.textContent,
     running: document.getAnimations().length,
   }))
-  console.log('reduced', reduced)
   expect(reduced.egg).toBe('none')
   expect(reduced.float).toBe('float-xp-calm') // a fade in place, no movement
   expect(reduced.toastText).toBe(`+${XP('read')} XP · Read for 20 minutes`)
@@ -373,7 +338,6 @@ test('offline: load, go offline, log, reload, log persists', async ({ page, cont
   await expect(page.locator('#task-list button.task').first()).toBeVisible()
   await context.setOffline(false)
   const relevant = msgs.filter((m) => !m.includes('ERR_INTERNET_DISCONNECTED'))
-  console.log('offline console', msgs)
   expect(relevant, relevant.join('\n')).toEqual([])
 })
 
@@ -443,7 +407,6 @@ test('s3: one tap gives instant feedback; toast Undo reverts; tapping the dragon
     label: document.querySelector('#growth-label')!.textContent,
     persistentUndo: !document.querySelector('#undo')!.classList.contains('is-idle'),
   }))
-  console.log('feedback straight after one tap', JSON.stringify(now))
   expect(now.float).toBe(`+${XP('gym')} XP`)
   expect(now.squish && now.wiggle && now.toast && now.persistentUndo).toBe(true)
   expect(now.toastText).toBe(`+${XP('gym')} XP · Gym / workout`)
@@ -457,7 +420,6 @@ test('s3: one tap gives instant feedback; toast Undo reverts; tapping the dragon
 
   // Tap targets on the toast
   const tu = await size(page, '#toast-undo')
-  console.log('toast undo', tu)
   expect(tu.w).toBeGreaterThanOrEqual(44)
   expect(tu.h).toBeGreaterThanOrEqual(44)
 
@@ -475,8 +437,6 @@ test('s3: one tap gives instant feedback; toast Undo reverts; tapping the dragon
   for (let i = 0; i < 4; i++) await page.locator('#dragon-art').click()
   expect(await xp(page)).toBe(20)
   expect(await savedEvents(page)).toBe(3)
-  const art = await size(page, '#dragon-art')
-  console.log('dragon tap area', art)
   expect(msgs, msgs.join('\n')).toEqual([])
 })
 
@@ -502,22 +462,15 @@ test('s3: hatch overlay: saved first, 600ms guard, button/Escape/backdrop close,
   await task(page, 'gym').click()
   await expect(overlay).toBeVisible()
   const seen = await page.evaluate(() => (window as any).__overlaySeen)
-  console.log('overlay seen with saved events', seen)
   expect(seen[0].saved).toBe(2)
-  const tEarly = await page.evaluate(() => performance.now())
   await overlay.click({ position: { x: 20, y: 20 } })
   await page.keyboard.press('Escape')
-  const tAfterEarly = await page.evaluate(() => performance.now())
-  console.log('early tap+Escape at ms after open:', Math.round(tEarly - seen[0].t), '-', Math.round(tAfterEarly - seen[0].t))
-  await page.waitForTimeout(50)
-  await expect(overlay).toHaveCount(1)
+  // A close starts in the tap's (or key's) own handler, so it would show by now.
   await expect(overlay).not.toHaveClass(/is-closing/)
+  await expect(overlay).toHaveCount(1)
   await expect(overlay).toHaveClass(/is-revealed/)
   await settle(page)
   const btn = await size(page, '.overlay-button')
-  const scrim = await overlay.evaluate((e) => ({ bg: getComputedStyle(e).backgroundColor, op: getComputedStyle(e).opacity }))
-  const focused = await page.evaluate(() => document.activeElement?.className)
-  console.log('overlay button', btn, 'scrim', scrim, 'focused', focused)
   expect(btn.w).toBeGreaterThanOrEqual(44)
   expect(btn.h).toBeGreaterThanOrEqual(44)
   await page.getByRole('button', { name: 'Hi there!' }).click()
@@ -532,25 +485,20 @@ test('s3: hatch overlay: saved first, 600ms guard, button/Escape/backdrop close,
   await expect(overlay).toHaveCount(0)
   const look = await page.locator('#dragon-art .dragon-react').getAttribute('data-look')
   const bodyText = (await page.locator('body').innerText()).toLowerCase()
-  console.log('after undo look', look, 'toast', await page.locator('#toast-text').textContent())
   expect(look).toBe('egg-2')
   for (const sad of ['sad', 'sorry', 'lost', 'oh no', 'missed']) expect(bodyText).not.toContain(sad)
 
   // 3) Re-cross: overlay again; Escape closes
   await task(page, 'gym').click()
   await expect(overlay).toBeVisible()
-  await page.waitForTimeout(700) // past the overlay's 600ms close guard
-  await page.keyboard.press('Escape')
-  await expect(overlay).toHaveCount(0)
+  await closePastGuard(overlay, () => page.keyboard.press('Escape'))
 
   // 4) Again via backdrop tap
   await page.locator('#undo').click()
   await expect(page.locator('#stage-name')).toHaveText('Egg')
   await task(page, 'gym').click()
   await expect(overlay).toBeVisible()
-  await page.waitForTimeout(700) // past the overlay's 600ms close guard
-  await overlay.click({ position: { x: 10, y: 10 } })
-  await expect(overlay).toHaveCount(0)
+  await closePastGuard(overlay, () => overlay.click({ position: { x: 10, y: 10 } }))
   expect(await xp(page)).toBe(85 + XP('gym'))
   await page.reload()
   await expect(overlay).toHaveCount(0) // no replay on reload
@@ -591,8 +539,7 @@ test('s3: left open across 06:46 and 04:00 with no visibilitychange', async ({ p
   expect(msgs, msgs.join('\n')).toEqual([])
 })
 
-test('s3: newer-version data shows a calm notice and is never written', async ({ page }, info) => {
-  const msgs = collectConsole(page)
+test('s3: newer-version data shows a calm notice and is never written', LAYOUT, async ({ page }, info) => {
   const raw = JSON.stringify({
     schemaVersion: 2,
     events: [{ id: 'n1', type: 'log', taskId: 'gym', timestamp: Date.parse('2026-10-01T12:00:00+01:00'), xpAwarded: 40 }],
@@ -602,11 +549,9 @@ test('s3: newer-version data shows a calm notice and is never written', async ({
   await page.clock.install({ time: TUE_1000 })
   await page.goto('./')
   await expect(page.locator('#notice')).toBeVisible()
-  const text = await page.locator('#notice-text').textContent()
-  console.log('notice:', text)
+  await expect(page.locator('#notice-text')).not.toBeEmpty()
   expect(await xp(page)).toBe(40)
   const close = await size(page, '#notice-close')
-  console.log('notice close', close)
   expect(close.w).toBeGreaterThanOrEqual(44)
   expect(close.h).toBeGreaterThanOrEqual(44)
   await checkLayout(page)
@@ -626,11 +571,9 @@ test('s3: newer-version data shows a calm notice and is never written', async ({
   expect(after.keys).toEqual(['drag-on:v1'])
   await page.locator('#notice-close').click()
   await expect(page.locator('#notice')).toBeHidden()
-  console.log('newer-version console', msgs)
 })
 
-test('s3: a failed save shows a gentle notice and keeps the tap', async ({ page }, info) => {
-  const msgs = collectConsole(page)
+test('s3: a failed save shows a gentle notice and keeps the tap', LAYOUT, async ({ page }, info) => {
   await page.addInitScript(() => {
     const orig = Storage.prototype.setItem
     Storage.prototype.setItem = function (k: string, v: string) {
@@ -643,7 +586,6 @@ test('s3: a failed save shows a gentle notice and keeps the tap', async ({ page 
   await expect(page.locator('#notice')).toBeHidden()
   await task(page, 'gym').click()
   await expect(page.locator('#notice')).toBeVisible()
-  console.log('save-failed notice:', await page.locator('#notice-text').textContent())
   expect(await xp(page)).toBe(XP('gym'))
   await expect(page.locator('#toast-text')).toHaveText(`+${XP('gym')} XP · Gym / workout`)
   await settle(page) // let the CSS squish settle before measuring
@@ -652,7 +594,6 @@ test('s3: a failed save shows a gentle notice and keeps the tap', async ({ page 
   await page.locator('#notice-close').click()
   await task(page, 'walk').click()
   await expect(page.locator('#notice')).toBeHidden() // stays dismissed this session
-  console.log('save-failed console', msgs)
 })
 
 test('s3: reduced motion: no wobble/bounce/float/squish, bar jumps, overlay crossfades', async ({ page }) => {
@@ -688,14 +629,14 @@ test('s3: reduced motion: no wobble/bounce/float/squish, bar jumps, overlay cros
       fromAnim: cs('.overlay-layer.is-from .dragon-react')?.animationName,
     }
   })
-  console.log('reduced after log', r)
   expect(r.squish).toBe('none')
   expect(r.wiggle).toBe('none')
   expect(r.float).toBe('float-xp-calm')
   expect(r.toastTransform).toMatch(/matrix\(1, 0, 0, 1, -?[\d.]+, 0\)/)
   expect(r.overlayCalm).toBe(true)
   expect(r.fromAnim).toBe('none')
-  await page.waitForTimeout(1500)
+  await expect(page.locator('.overlay')).toHaveClass(/is-revealed/)
+  await settle(page)
   const after = await page.evaluate(() => {
     const cs = (s: string) => getComputedStyle(document.querySelector(s)!)
     return {
@@ -708,8 +649,7 @@ test('s3: reduced motion: no wobble/bounce/float/squish, bar jumps, overlay cros
       running: document.getAnimations().map((a) => (a as any).animationName ?? (a as any).transitionProperty),
     }
   })
-  console.log('reduced overlay', JSON.stringify(after))
-  expect(after.classes.some((c: string) => c.includes('is-popping'))).toBe(false)
+  expect((after.classes as string[]).some((c) => c.includes('is-popping'))).toBe(false)
   expect(after.toLayer.t).toBe('none')
   expect(after.toLayer.tr).toBe('opacity')
   expect(after.msg).toMatch(/^(none|matrix\(1, 0, 0, 1, 0, 0\))$/)
@@ -732,12 +672,10 @@ test('s3: offline log persists and the service worker controls the page', async 
   await page.goto('./')
   await page.evaluate(async () => navigator.serviceWorker.ready)
   await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 5000 }).catch(() => {})
-  const firstControlled = await page.evaluate(() => !!navigator.serviceWorker.controller)
   await context.setOffline(true)
   await task(page, 'read').click()
   await page.reload()
   const controlled = await page.evaluate(() => !!navigator.serviceWorker.controller)
-  console.log('controlled on first load', firstControlled, 'after offline reload', controlled)
   expect(controlled).toBe(true)
   await expect(task(page, 'read')).toBeDisabled()
   expect(await xp(page)).toBe(XP('read'))
@@ -770,7 +708,6 @@ test('s3: overlay keeps keyboard focus inside and returns it sensibly on close',
       return `${a?.tagName}.${a?.className}${behind ? ' (BEHIND)' : ''}`
     }))
   }
-  console.log('focus while overlay open', seen)
   for (const s of seen) expect(s).not.toContain('BEHIND')
   await page.keyboard.press('Escape')
   await expect(overlay).toHaveCount(0)
@@ -779,7 +716,6 @@ test('s3: overlay keeps keyboard focus inside and returns it sensibly on close',
     inert: (document.getElementById('app') as any).inert,
     active: `${document.activeElement?.tagName}#${document.activeElement?.id}.${document.activeElement?.className} ${(document.activeElement as HTMLElement)?.dataset?.taskId ?? ''}`,
   }))
-  console.log('after close', after)
   expect(after.inert).toBe(false)
   expect(after.active).not.toMatch(/^BODY/)
   expect(msgs, msgs.join('\n')).toEqual([])

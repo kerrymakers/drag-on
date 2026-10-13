@@ -1,6 +1,6 @@
 // Milestone 4, Slice 1: treats. A treat roll adds a second float, a happy hop, a
 // longer buzz and a toast that mentions it. A normal log feels exactly as before.
-import { test, expect, shot, type Page } from './fixtures'
+import { test, expect, shot, LAYOUT, type Page } from './fixtures'
 import { REWARDS } from '../../src/config/rewards'
 import { TASKS } from '../../src/config/tasks'
 
@@ -20,7 +20,7 @@ function collectConsole(page: Page) {
   return msgs
 }
 
-async function setUp(page: Page, roll: number | null) {
+async function setUp(page: Page, roll: number | null, opts: { install?: boolean } = {}) {
   await page.addInitScript((r) => {
     if (r !== null) Math.random = () => r
     ;(window as any).__buzz = []
@@ -32,7 +32,9 @@ async function setUp(page: Page, roll: number | null) {
       },
     })
   }, roll)
-  await page.clock.setFixedTime(NOW)
+  // install: timers are faked too, so a test can run the clock past the toast.
+  if (opts.install) await page.clock.install({ time: NOW })
+  else await page.clock.setFixedTime(NOW)
   await page.goto('./')
 }
 
@@ -52,7 +54,6 @@ test('a treat: second float, happy hop, longer buzz, toast, and the bonus saved'
   await setUp(page, TREAT_ROLL)
   await page.locator('button.task[data-task-id="read"]').click()
   const fb = await feedback(page)
-  console.log('treat feedback', JSON.stringify(fb))
   expect(fb.floats).toEqual([
     { text: `+${XP('read')} XP`, treat: false },
     { text: `+${BONUS('read')} treat`, treat: true },
@@ -103,22 +104,16 @@ test('a treat in dark mode', async ({ page }) => {
   await shot(page, `m4s1-treat-dark-${test.info().project.name}`, { delay: 350 })
 })
 
-test('reduced motion: no hop, the floats and toast still say it', async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: 'reduce' })
-  await setUp(page, TREAT_ROLL)
-  await page.locator('button.task[data-task-id="read"]').click()
-  const fb = await feedback(page)
-  expect(fb).toMatchObject({ log: false, treat: false })
-  expect(fb.floats.map((f) => f.text)).toEqual([`+${XP('read')} XP`, `+${BONUS('read')} treat`])
-  expect(fb.toast).toBe(`Treat! +${XP('read') + BONUS('read')} XP · Read for 20 minutes`)
-})
-
-test('reduced motion: the still floats sit above the tapped button, clear of its labels', async ({ page }) => {
+test('reduced motion: no hop, the floats and toast still say it, and the still floats sit above the tapped button, clear of its labels', LAYOUT, async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await setUp(page, TREAT_ROLL)
   const button = page.locator('button.task[data-task-id="avoided"]')
   await button.click()
-  await page.waitForTimeout(500) // both floats fully shown
+  const fb = await feedback(page)
+  expect(fb).toMatchObject({ log: false, treat: false })
+  expect(fb.floats.map((f) => f.text)).toEqual([`+${XP('avoided')} XP`, `+${BONUS('avoided')} treat`])
+  expect(fb.toast).toBe(`Treat! +${XP('avoided') + BONUS('avoided')} XP · Something I've been avoiding`)
+  // Still floats fade in place, so where they sit doesn't change while they show.
   // The button's own count and XP ("1/2 ✓ Done" or "+15 XP"), after the re-render.
   const labels = (await button.locator('.task-meta').boundingBox())!
   const floats = await page.$$eval('.float-xp', (els) => els.map((e) => e.getBoundingClientRect().bottom))
@@ -136,10 +131,11 @@ test('a treat that also hatches the egg is acknowledged again when the overlay c
       sessionStorage.setItem('seeded', '1')
     }
   })
-  await setUp(page, TREAT_ROLL)
+  await setUp(page, TREAT_ROLL, { install: true })
   await page.locator('button.task[data-task-id="gym"]').click()
   await expect(page.locator('.overlay')).toBeVisible()
-  await expect(page.locator('#toast')).not.toHaveClass(/is-showing/, { timeout: 10_000 }) // the toast ran out behind the overlay
+  await page.clock.runFor(6000) // past the toast's 5s
+  await expect(page.locator('#toast')).not.toHaveClass(/is-showing/) // the toast ran out behind the overlay
   await page.locator('.overlay-button').click()
   await expect(page.locator('.overlay')).toHaveCount(0)
   const toast = page.locator('#toast')

@@ -2,7 +2,7 @@
 // so by default the page's Math.random is pinned to a roll that brings nothing: specs
 // that check exact XP, floats and toasts stay deterministic. A spec that wants a
 // reward adds its own init script, which runs after this one and wins.
-import { test as base, type Page } from '@playwright/test'
+import { test as base, expect, type Locator, type Page } from '@playwright/test'
 
 export * from '@playwright/test'
 
@@ -22,8 +22,48 @@ export const test = base.extend({
  */
 export const SWEEPS_SIZES = { tag: '@sweeps-sizes' }
 
+/**
+ * For tests that check geometry, fit, overlap, tap-target size or anything else that
+ * depends on the width: they run in pixel10pro and again in narrow360 (see grep in
+ * playwright.config.ts). Every other test runs once, in pixel10pro.
+ * Use as `test('name', LAYOUT, async ...)` or on a `test.describe`.
+ */
+export const LAYOUT = { tag: '@layout' }
+
+/**
+ * Closes an overlay (the stage-up or a find card) with `close` (a tap or Escape), waiting
+ * out its close guard: overlays ignore taps for CLOSE_GUARD_MS after opening (see
+ * src/ui/overlay.ts), so this tries again until one lands (the overlay gets .is-closing),
+ * then waits for it to go. No fixed wait.
+ */
+export async function closePastGuard(overlay: Locator, close: () => Promise<unknown>) {
+  // It must be open first, or "gone" below would pass without closing anything.
+  await expect(overlay).toBeVisible()
+  // evaluateAll never waits, so an overlay removed mid-check (at once under reduced
+  // motion) can't hang it; an empty list means it's already gone.
+  const classes = () => overlay.evaluateAll((els) => els.map((e) => e.className))
+  await expect(async () => {
+    if ((await classes()).length) await close()
+    expect((await classes()).every((c) => /\bis-closing\b/.test(c))).toBe(true)
+  }).toPass({ intervals: [100], timeout: 5000 })
+  await expect(overlay).toHaveCount(0)
+}
+
 const SHOT_DIR = 'tests/screenshots'
 const SHOTS = process.env.SCREENSHOTS === '1' || process.env.E2E_FULL === '1'
+
+/**
+ * The colour schemes to check for the i-th entry of a sweep (a size, a stage-up).
+ * Light and dark lay out the same, so an ordinary run checks each entry in one scheme,
+ * in the pattern light, dark, dark, light (repeating): in a list that alternates 410 and
+ * 360 wide, both widths get both schemes. A screenshot run (SCREENSHOTS=1, or the full
+ * run) does both for every entry, for the pictures. Use for geometry, never for colour
+ * or contrast checks.
+ */
+export function schemesFor(i: number): readonly ('light' | 'dark')[] {
+  if (SHOTS) return ['light', 'dark']
+  return [i % 4 === 1 || i % 4 === 2 ? 'dark' : 'light']
+}
 
 /**
  * Saves a screenshot to tests/screenshots/<name>.png, but only when asked for

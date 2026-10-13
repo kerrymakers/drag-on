@@ -13,3 +13,6 @@ test-results/
 playwright-report/
 blob-report/
 playwright/.cache/
+
+# Phone-tester round checks: scratch, never committed (run with npm run test:e2e:full)
+tests/phone/

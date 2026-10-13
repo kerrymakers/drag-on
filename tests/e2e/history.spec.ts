@@ -1,6 +1,6 @@
 // Streaks, the History screen and the Home streak chip, on the phone (from M5 slice 1).
 // Screenshots (with SCREENSHOTS=1): tests/screenshots/m5s1-*
-import { test, expect, settle, shot, type Page, type Browser, type TestInfo } from './fixtures'
+import { test, expect, settle, shot, LAYOUT, type Page, type Browser, type TestInfo } from './fixtures'
 import { TASKS } from '../../src/config/tasks'
 
 test.use({ timezoneId: 'Europe/London', locale: 'en-GB' })
@@ -101,7 +101,7 @@ async function overflow(page: Page) {
 
 const tag = (info: TestInfo) => info.project.name
 
-test('screens: Home chip and History, light and dark, plus layout and tap targets', async ({ browser }, info) => {
+test('screens: Home chip and History, light and dark, plus layout and tap targets', LAYOUT, async ({ browser }, info) => {
   test.setTimeout(120_000)
   for (const scheme of ['light', 'dark'] as const) {
     const { page, context, msgs } = await fresh(browser, info, { scheme })
@@ -110,7 +110,6 @@ test('screens: Home chip and History, light and dark, plus layout and tap target
     await shot(page, `m5s1-home-${tag(info)}-${scheme}`)
 
     // Chip: visible box and effective tap area.
-    const chip = await box(page, '#streak-chip')
     const hit = await page.evaluate(() => {
       const c = document.getElementById('streak-chip')!
       const r = c.getBoundingClientRect()
@@ -130,7 +129,6 @@ test('screens: Home chip and History, light and dark, plus layout and tap target
     })
     const tapH = hit.up + hit.down + 1
     const tapW = hit.left + hit.right + 1
-    console.log(`[${tag(info)} ${scheme}] chip visible ${Math.round(chip.width)}x${Math.round(chip.height)}, tap area ~${tapW}x${tapH}`, hit)
     expect(tapH, 'chip tap height').toBeGreaterThanOrEqual(44)
     expect(tapW, 'chip tap width').toBeGreaterThanOrEqual(44)
 
@@ -149,7 +147,6 @@ test('screens: Home chip and History, light and dark, plus layout and tap target
     await expect(page.locator('.hs-month')).toHaveText('October 2026')
     await shot(page, `m5s1-history-${tag(info)}-${scheme}-top`)
     const ov = await overflow(page)
-    console.log(`[${tag(info)} ${scheme}] overflow`, ov)
     expect(ov.docW).toBeLessThanOrEqual(ov.vw)
     expect(ov.scrollW!).toBeLessThanOrEqual(ov.clientW!)
     expect(ov.wide).toEqual([])
@@ -159,7 +156,6 @@ test('screens: Home chip and History, light and dark, plus layout and tap target
     const sizes = await cells.evaluateAll((bs) => bs.map((b) => { const r = b.getBoundingClientRect(); return [r.width, r.height] }))
     const minW = Math.min(...sizes.map((s) => s[0]!))
     const minH = Math.min(...sizes.map((s) => s[1]!))
-    console.log(`[${tag(info)} ${scheme}] ${sizes.length} day cells, min ${minW.toFixed(1)}x${minH.toFixed(1)}`)
     expect(minW).toBeGreaterThanOrEqual(44)
     expect(minH).toBeGreaterThanOrEqual(44)
     for (const sel of ['.hs-month-btn >> nth=0', '.hs-month-btn >> nth=1']) {
@@ -195,7 +191,7 @@ test('screens: Home chip and History, light and dark, plus layout and tap target
   }
 })
 
-test('chip never moves the task buttons or the XP bar', async ({ browser }, info) => {
+test('chip never moves the task buttons or the XP bar', LAYOUT, async ({ browser }, info) => {
   const pos = async (data: object | null) => {
     const { page, context } = await fresh(browser, info, { data })
     const r = {
@@ -213,7 +209,6 @@ test('chip never moves the task buttons or the XP bar', async ({ browser }, info
   }
   const without = await pos(seed({ lastDay: '2026-10-05', startDay: '2026-10-05' })) // streak 0: last log 5 Oct, 6 Oct missed
   const withChip = await pos(seed())
-  console.log(`[${tag(info)}] no chip`, without, 'chip', withChip)
   expect(without.chip).toBe(false)
   expect(withChip.chip).toBe(true)
   expect(withChip.task).toBeCloseTo(without.task, 0)
@@ -221,7 +216,7 @@ test('chip never moves the task buttons or the XP bar', async ({ browser }, info
   expect(withChip.label.clipped).toBe(false)
 })
 
-test('a long streak with a big XP label still fits at this width', async ({ browser }, info) => {
+test('a long streak with a big XP label still fits at this width', LAYOUT, async ({ browser }, info) => {
   // 150 days in a row, lots of XP.
   const { page, context, msgs } = await fresh(browser, info, { data: seed({ startDay: '2026-05-10' }) })
   await expect(page.locator('#streak-chip')).toBeVisible()
@@ -234,7 +229,6 @@ test('a long streak with a big XP label still fits at this width', async ({ brow
     })
     return { row: { l: row.left, r: row.right, h: row.height }, els }
   })
-  console.log(`[${tag(info)}] long streak row`, JSON.stringify(r))
   await shot(page, `m5s1-home-${tag(info)}-long-streak`)
   for (const e of r.els) {
     expect(e.r).toBeLessThanOrEqual(Math.ceil(r.row.r))
@@ -247,7 +241,7 @@ test('a long streak with a big XP label still fits at this width', async ({ brow
   await context.close()
 })
 
-test('logging is one tap, the chip and calendar update, and undo puts them back', async ({ browser }, info) => {
+test('logging is one tap, the chip and calendar update, and undo puts them back', LAYOUT, async ({ browser }, info) => {
   const { page, context, msgs } = await fresh(browser, info)
   const chip = page.locator('#streak-chip')
   await expect(chip).toHaveText('26 days')
@@ -277,7 +271,6 @@ test('logging is one tap, the chip and calendar update, and undo puts them back'
     const c = chip.getBoundingClientRect()
     return { out, undo: { t: u.top, b: u.bottom, l: u.left, r: u.right }, chip: { t: c.top, b: c.bottom, l: c.left, r: c.right } }
   })
-  console.log(`[${tag(info)}] chip hit-area overlap with controls`, JSON.stringify(steal))
   expect(steal.out).toEqual({})
 
   // Toast Undo tap at its edge nearest the chip still undoes.
@@ -328,7 +321,6 @@ test('day tap shows logs, focus and month bounds', async ({ browser }, info) => 
   // Tap 4 Oct: item find shown.
   await page.locator('button.hs-cell[data-day="2026-10-04"]').tap()
   await expect(page.locator('.hs-day-list')).toContainText('Found the')
-  const detailText = await page.locator('.hs-day').innerText()
   const focused2 = await page.evaluate(() => (document.activeElement as HTMLElement)?.dataset.day ?? document.activeElement?.className)
   const titlePos = () =>
     page.locator('.hs-day-title').evaluate((e) => {
@@ -338,7 +330,6 @@ test('day tap shows logs, focus and month bounds', async ({ browser }, info) => 
   // The tapped day keeps focus, and its card is brought into view above the tab bar (it may scroll smoothly).
   expect(focused2).toBe('2026-10-04')
   await expect.poll(async () => { const p = await titlePos(); return p.top >= 0 && p.bottom <= p.tabTop }).toBe(true)
-  console.log(`[${tag(info)}] focus after day taps`, focused1, focused2, 'detail', JSON.stringify(detailText), 'detail title pos', await titlePos())
 
   // Month nav focus.
   await prev.focus()
@@ -349,7 +340,6 @@ test('day tap shows logs, focus and month bounds', async ({ browser }, info) => 
   await expect(page.locator('.hs-month')).toHaveText('August 2026')
   await expect(prev).toBeDisabled() // nothing before the first log
   const f4 = await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))
-  console.log(`[${tag(info)}] focus after month changes`, f3, f4)
   expect(f3).toBe('Previous month')
   expect(f4).toBe('Next month')
   await expect(page.locator('button.hs-cell[data-day="2026-08-25"]')).toHaveAttribute('data-status', 'logged')
@@ -382,8 +372,6 @@ test('Android back from History returns Home (chip and tab)', async ({ browser }
   await page.locator('.tabbar a.tab[data-route="dragon"]').tap()
   await page.goBack()
   await expect(page.locator('#home')).toBeVisible()
-  const len = await page.evaluate(() => history.length)
-  console.log(`[${tag(info)}] history.length after round trips`, len)
   await context.close()
 })
 
@@ -410,20 +398,12 @@ test('offline: log, reload, chip and calendar still show it', async ({ browser }
 
 test('reduced motion: no transitions or animations on chip and History', async ({ browser }, info) => {
   const { page, context, msgs } = await fresh(browser, info, { reduced: true, scheme: 'dark' })
-  const chipT = await page.locator('#streak-chip').evaluate((e) => getComputedStyle(e).transition)
   await page.locator('#streak-chip').tap()
   await page.locator('button.hs-cell[data-day="2026-10-03"]').tap()
   await page.locator('.hs-month-btn').first().tap()
   const anims = await page.evaluate(() =>
     document.getAnimations().map((a) => `${(a as CSSAnimation).animationName ?? (a as CSSTransition).transitionProperty} on ${((a.effect as KeyframeEffect).target as Element)?.className}`),
   )
-  const hsTransitions = await page.evaluate(() =>
-    [...document.querySelectorAll('#history-screen *')]
-      .map((e) => [e.className, getComputedStyle(e).transitionDuration, getComputedStyle(e).animationName] as const)
-      .filter(([, d, a]) => d.split(',').some((x) => parseFloat(x) > 0.01) || a !== 'none')
-      .slice(0, 10),
-  )
-  console.log(`[${tag(info)}] reduced: chip transition`, chipT, 'anims', anims, 'history transitions', hsTransitions)
   await shot(page, `m5s1-history-${tag(info)}-reduced-dark`)
   expect(anims).toEqual([])
   expect(msgs).toEqual([])
@@ -436,8 +416,6 @@ test('empty state: no logs ever, History and Home', async ({ browser }, info) =>
   await expect(page.locator('.hs-month-btn').nth(0)).toBeDisabled()
   await expect(page.locator('.hs-month-btn').nth(1)).toBeDisabled()
   await shot(page, `m5s1-history-${tag(info)}-empty`)
-  const text = await page.locator('.hs-summary').innerText()
-  console.log(`[${tag(info)}] empty summary`, JSON.stringify(text))
   expect(msgs).toEqual([])
   await context.close()
 })

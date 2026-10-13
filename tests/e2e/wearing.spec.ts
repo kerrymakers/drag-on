@@ -1,7 +1,7 @@
 // Milestone 4, Slice 3: the dragon wears found items. One item per spot; tap a found
 // tile in Collection to wear it, tap again to take it off; a new find goes on by
 // itself only if its spot is free.
-import { test, expect, settle, shot, SWEEPS_SIZES, type Page } from './fixtures'
+import { test, expect, closePastGuard, settle, shot, LAYOUT, SWEEPS_SIZES, type Page } from './fixtures'
 import { ITEMS } from '../../src/config/items'
 import { REWARDS } from '../../src/config/rewards'
 
@@ -9,7 +9,6 @@ test.use({ timezoneId: 'Europe/London', locale: 'en-GB' })
 const NOW = new Date('2026-10-13T10:00:00+01:00')
 const DAY = 86_400_000
 const RARE_ROLL = REWARDS.rareChance / 3
-const CLOSE_GUARD_MS = 600
 
 const item = (id: string) => ITEMS.find((i) => i.id === id)!
 const BOW = item('bow') // head, first in pick order
@@ -69,11 +68,7 @@ const csToast = (page: Page) => page.locator('#collection-screen .cs-toast')
 const csToastText = (page: Page) => page.locator('#collection-screen .cs-toast .toast-text')
 const card = (page: Page) => page.locator('.overlay.item-found')
 
-async function closeCard(page: Page) {
-  await page.waitForTimeout(CLOSE_GUARD_MS + 50) // past the card's close guard
-  await card(page).click()
-  await expect(card(page)).toHaveCount(0)
-}
+const closeCard = (page: Page) => closePastGuard(card(page), () => card(page).click())
 
 test('wear and take off from Collection, one item per spot', async ({ page }) => {
   const msgs = collectConsole(page)
@@ -284,7 +279,7 @@ test('old saves and malformed outfits load safely', async ({ page }) => {
 // Layout: the outfit on every screen at 410 and 360, light and dark. Adult, so the
 // hat is as high as it goes; sleepy, so the welcome bubble shows by the head.
 for (const scheme of ['light', 'dark'] as const) {
-  test(`layout with a full outfit (${scheme})`, async ({ page }) => {
+  test(`layout with a full outfit (${scheme})`, LAYOUT, async ({ page }) => {
     const msgs = collectConsole(page)
     await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' })
     const finds = ITEMS.slice(0, 9).map((i) => i.id)

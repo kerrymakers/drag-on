@@ -1,6 +1,6 @@
 // Settings: the dragon's name and the wake-up times, on the phone (from M6 slice 2).
 // Screenshots (with SCREENSHOTS=1): tests/screenshots/m6s2-*
-import { test, expect, settle, shot, type Page } from './fixtures'
+import { test, expect, settle, shot, LAYOUT, type Page } from './fixtures'
 import { DRAGON_NAME_MAX } from '../../src/config/settings'
 import { DEFAULT_WAKE_TIME } from '../../src/config/time'
 import { TASKS } from '../../src/config/tasks'
@@ -45,7 +45,7 @@ const nameInput = (page: Page) => page.getByRole('textbox', { name: SETTINGS.nam
 const wakeSwitch = (page: Page, day: string) => page.getByRole('switch', { name: `${day} wake-up` })
 const wakeTime = (page: Page, day: string) => page.getByLabel(`${day} wake-up time`)
 
-test('cards in order, tap targets, labels and no overflow, in light and dark', async ({ page }, info) => {
+test('cards in order, tap targets, labels and no overflow, in light and dark', LAYOUT, async ({ page }, info) => {
   const msgs = collectConsole(page)
   await open(page, FRI('10:00'), null, '#/settings')
   const titles = await page.locator('#settings-screen h2').allTextContents()

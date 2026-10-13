@@ -1,6 +1,6 @@
 // Settings: editing tasks, on the phone (from M6 slice 3; the effort picker from M7 slice 1).
 // Screenshots (with SCREENSHOTS=1): tests/screenshots/m6s3-*, m7s1-*
-import { test, expect, settle, shot, type Page } from './fixtures'
+import { test, expect, settle, shot, LAYOUT, type Page } from './fixtures'
 import {
   EFFORT_LEVELS,
   MAX_ACTIVE_TASKS,
@@ -77,7 +77,7 @@ async function bigEnough(page: Page, selectors: string[]) {
   }
 }
 
-test('the Tasks card sits after Name, with a row per task, and its sheets fit, in light and dark', async ({ page }, info) => {
+test('the Tasks card sits after Name, with a row per task, and its sheets fit, in light and dark', LAYOUT, async ({ page }, info) => {
   const msgs = collectConsole(page)
   await open(page, FRI('10:00'), null, '#/settings')
   const titles = await page.locator('#settings-screen h2').allTextContents()
@@ -383,7 +383,7 @@ test('at the cap, Add and Unarchive are off with a gentle note', async ({ page }
 })
 
 // Runs in both projects: pixel10pro (410 wide) and narrow360.
-test('Home copes with a full list of long names, and logging stays one tap', async ({ page }, info) => {
+test('Home copes with a full list of long names, and logging stays one tap', LAYOUT, async ({ page }, info) => {
   const msgs = collectConsole(page)
   await open(page, FRI('10:00'), { schemaVersion: 1, events: [], settings: { tasks: fullList() } })
   const width = page.viewportSize()!.width

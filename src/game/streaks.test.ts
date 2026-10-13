@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS } from '../config/settings'
-import type { StreakConfig } from '../config/streaks'
+import { STREAK_MILESTONES, type StreakConfig } from '../config/streaks'
 import { TASKS } from '../config/tasks'
 import { at, log, undo } from '../testing/helpers'
 import { instantInDay, shiftDayKey } from './day'
@@ -471,5 +471,11 @@ describe('nextMilestone', () => {
     expect(nextMilestone(99, [100, 7, 30])).toBe(100)
     expect(nextMilestone(100, [7, 30, 100])).toBeNull()
     expect(nextMilestone(3, [])).toBeNull()
+  })
+
+  it('uses the real milestones: 60 after 30, then nothing after the last (History hides the line)', () => {
+    expect(nextMilestone(6, STREAK_MILESTONES)).toBe(7)
+    expect(nextMilestone(43, STREAK_MILESTONES)).toBe(60)
+    expect(nextMilestone(104, STREAK_MILESTONES)).toBeNull()
   })
 })

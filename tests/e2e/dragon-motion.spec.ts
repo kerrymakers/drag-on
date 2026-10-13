@@ -2,7 +2,7 @@
 // any of it out of view: the Collection preview is the tightest spot (a small drawing
 // at the top of a scroll area), so the tallest stages are checked there through the
 // whole tap reaction, at the top of a happy hop.
-import { test, expect, type Page } from './fixtures'
+import { test, expect, LAYOUT, type Page } from './fixtures'
 import { STAGES } from '../../src/config/stages'
 
 test.use({ timezoneId: 'Europe/London', locale: 'en-GB' })
@@ -35,7 +35,7 @@ async function openCollection(page: Page, stage: string) {
 }
 
 for (const stage of ['adult', 'elder']) {
-  test(`the ${stage} stays inside the Collection preview's scroll area through a tap, mid-hop`, async ({ page }) => {
+  test(`the ${stage} stays inside the Collection preview's scroll area through a tap, mid-hop`, LAYOUT, async ({ page }) => {
     await openCollection(page, stage)
     await page.locator('#collection-screen .cs-art').click()
     await expect(page.locator('#collection-screen .cs-art .dragon-react')).toHaveClass(/react-tap/)

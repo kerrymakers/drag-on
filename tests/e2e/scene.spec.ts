@@ -1,7 +1,7 @@
 // The scene behind the dragon on Home: the sky follows the London clock (dawn, day,
 // evening, night), cross-fades without moving anything, keeps text readable in every
 // sky in light and dark mode, and stays clear of the heading and the task buttons.
-import { test, expect, settle, type Page } from './fixtures'
+import { test, expect, settle, LAYOUT, type Page } from './fixtures'
 import { SCENE } from '../../src/config/scene'
 import { sunOn } from '../../src/game/scene'
 
@@ -149,16 +149,14 @@ async function contrastOf(page: Page, selector: string): Promise<{ ratio: number
 test('shows each sky at the right time of day', async ({ page }) => {
   const msgs = collectConsole(page)
   await page.emulateMedia({ reducedMotion: 'reduce' })
+  // One time in each sky, read in the browser's London clock. The exact boundaries (a
+  // minute either side of each twilight, midnight, 04:00) are unit-tested in
+  // src/game/scene.test.ts.
   const cases: [Date, Sky][] = [
-    [at(RISE - T - 1), 'night'],
     [at(RISE - T), 'dawn'],
-    [at(RISE + T - 1), 'dawn'],
     [at(RISE + T), 'day'],
-    [at(SET - T - 1), 'day'],
     [at(SET - T), 'evening'],
-    [at(SET + T), 'night'],
     [new Date('2026-10-13T00:00:00+01:00'), 'night'],
-    [new Date('2026-10-14T04:00:00+01:00'), 'night'],
     // After the clocks go back (25 October), evening comes an hour earlier on the clock.
     [new Date(`2026-10-26T${pad(Math.floor(Math.round(sunOn(2026, 10, 26, SCENE.sun)!.set) / 60))}:${pad(Math.round(sunOn(2026, 10, 26, SCENE.sun)!.set) % 60)}:00Z`), 'evening'],
   ]
@@ -186,11 +184,19 @@ test('moves on to the next sky by itself, and on coming back, without moving any
   await expect(page.locator('#scene')).toHaveAttribute('data-sky', 'day')
   // Mid cross-fade (it takes 1.6s): dawn fading out and day fading in, both partly
   // showing, and nothing has moved.
-  await page.waitForTimeout(500)
-  const fading = await page.$$eval('#scene .scene-sky', (els) =>
-    els.map((e) => ({ cls: e.className, o: Number(getComputedStyle(e).opacity) })).filter(({ o }) => o > 0.02 && o < 0.98),
-  )
-  expect(fading.map((f) => f.cls).sort(), JSON.stringify(fading)).toEqual(['scene-sky scene-for-dawn', 'scene-sky scene-for-day'])
+  await expect
+    .poll(() =>
+      page.$$eval('#scene .scene-sky', (els) =>
+        els
+          .filter((e) => {
+            const o = Number(getComputedStyle(e).opacity)
+            return o > 0.02 && o < 0.98
+          })
+          .map((e) => e.className)
+          .sort(),
+      ),
+    )
+    .toEqual(['scene-sky scene-for-dawn', 'scene-sky scene-for-day'])
   const mid = await layout(page)
   for (const k of ['scene', 'top', 'name', 'stage', 'chip', 'dragon', 'floor', 'growth', 'firstTask'] as const) expect(mid[k], k).toEqual(before[k])
   await settle(page)
@@ -204,11 +210,10 @@ test('moves on to the next sky by itself, and on coming back, without moving any
 })
 
 for (const scheme of ['light', 'dark'] as const)
-  test(`keeps text readable and clear in every sky (${scheme})`, async ({ page }, info) => {
+  test(`keeps text readable and clear in every sky (${scheme})`, LAYOUT, async ({ page }, info) => {
     const msgs = collectConsole(page)
     await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' })
     const vp = page.viewportSize()!
-    const report: string[] = []
     for (const sky of SKIES) {
       await open(page, TIME[sky])
       await expect(page.locator('#scene')).toHaveAttribute('data-sky', sky)
@@ -225,7 +230,6 @@ for (const scheme of ['light', 'dark'] as const)
         ['speech bubble', '#speech'],
       ] as const) {
         const c = await contrastOf(page, sel)
-        report.push(`${sky} ${what} ${c.ratio}`)
         expect(c.ratio, `${info.project.name} ${scheme} ${sky}: ${what} (${c.color})`).toBeGreaterThanOrEqual(4.5)
       }
       const g = await layout(page)
@@ -248,7 +252,6 @@ for (const scheme of ['light', 'dark'] as const)
       expect((g.tasks[0]!.t + g.tasks.at(-1)!.b) / 2).toBeGreaterThanOrEqual(vp.height / 2)
       for (const t of g.tasks) expect(t.b - t.t).toBeGreaterThanOrEqual(44)
     }
-    console.log('CONTRAST', info.project.name, scheme, report.join(' | '))
     expect(msgs).toEqual([])
   })
 

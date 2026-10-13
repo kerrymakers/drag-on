@@ -1,6 +1,6 @@
 // Milestone 4, Slice 2: rare items and the Collection screen. Math.random is pinned to
 // a roll in the rare band, so every log finds the first item not found yet.
-import { test, expect, settle, shot, type Page } from './fixtures'
+import { test, expect, closePastGuard, settle, shot, LAYOUT, type Page } from './fixtures'
 import { ITEMS } from '../../src/config/items'
 import { REWARDS } from '../../src/config/rewards'
 import { TASKS } from '../../src/config/tasks'
@@ -12,7 +12,6 @@ const XP = (id: string) => TASKS.find((t) => t.id === id)!.xp
 const RARE_ROLL = REWARDS.rareChance / 3
 const FIRST = ITEMS[0]!
 const SECOND = ITEMS[1]!
-const CLOSE_GUARD_MS = 600
 
 function collectConsole(page: Page) {
   const msgs: string[] = []
@@ -32,7 +31,7 @@ async function seed(page: Page, events: object[]) {
   }, events)
 }
 
-async function setUp(page: Page, roll: number | null) {
+async function setUp(page: Page, roll: number | null, opts: { install?: boolean } = {}) {
   await page.addInitScript((r) => {
     if (r !== null) Math.random = () => r
     ;(window as any).__buzz = []
@@ -44,18 +43,16 @@ async function setUp(page: Page, roll: number | null) {
       },
     })
   }, roll)
-  await page.clock.setFixedTime(NOW)
+  // install: timers are faked too, so a test can run the clock past the toast.
+  if (opts.install) await page.clock.install({ time: NOW })
+  else await page.clock.setFixedTime(NOW)
   await page.goto('./')
 }
 
 const card = (page: Page) => page.locator('.overlay.item-found')
 const saved = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getItem('drag-on:v1')!).events.at(-1))
 
-async function closeCard(page: Page) {
-  await page.waitForTimeout(CLOSE_GUARD_MS + 50) // past the card's close guard
-  await card(page).click()
-  await expect(card(page)).toHaveCount(0)
-}
+const closeCard = (page: Page) => closePastGuard(card(page), () => card(page).click())
 
 test('a rare roll finds an item: card, toast, Collection, and undo takes it back', async ({ page }) => {
   const msgs = collectConsole(page)
@@ -76,16 +73,7 @@ test('a rare roll finds an item: card, toast, Collection, and undo takes it back
   await expect(card(page).locator('.overlay-button')).toBeVisible()
   expect(await page.evaluate(() => document.activeElement?.classList.contains('item-found'))).toBe(true)
   expect(await page.evaluate(() => document.getElementById('app')!.inert)).toBe(true)
-  await settle(page) // the card has finished arriving
-  await shot(page, `m4s2-card-${test.info().project.name}`)
-
-  // The card sits inside the screen.
-  const box = (await card(page).locator('.item-card').boundingBox())!
-  const vp = page.viewportSize()!
-  expect(box.x).toBeGreaterThanOrEqual(0)
-  expect(box.x + box.width).toBeLessThanOrEqual(vp.width)
-  expect(box.y).toBeGreaterThanOrEqual(0)
-  expect(box.y + box.height).toBeLessThanOrEqual(vp.height)
+  await shot(page, `m4s2-card-${test.info().project.name}`, { settled: true })
 
   // Close: tap anywhere. Focus returns to a task, and the toast comes back with Undo.
   await closeCard(page)
@@ -132,9 +120,9 @@ test('a quick double-tap on the task does not dismiss the card unseen', async ({
   const button = page.locator('button.task[data-task-id="avoided"]')
   await button.click()
   await expect(card(page)).toBeVisible()
-  // The second tap lands on the card within the guard.
+  // The second tap lands on the card within the guard: a close would start in the tap's own handler.
   await card(page).click()
-  await page.waitForTimeout(250)
+  await expect(card(page)).not.toHaveClass(/is-closing/)
   await expect(card(page)).toBeVisible()
   await closeCard(page)
   // Only one log was made.
@@ -160,7 +148,7 @@ test('a find that also hatches the egg: stage-up first, then the card, then the 
   const msgs = collectConsole(page)
   const t = Date.parse('2026-10-12T09:00:00+01:00')
   await seed(page, [{ id: 'a', type: 'log', taskId: 'read', timestamp: t, xpAwarded: 90 }])
-  await setUp(page, RARE_ROLL)
+  await setUp(page, RARE_ROLL, { install: true })
   await page.locator('button.task[data-task-id="gym"]').click()
   await expect(page.locator('.overlay:not(.item-found)')).toBeVisible()
   await expect(card(page)).toHaveCount(0)
@@ -171,7 +159,8 @@ test('a find that also hatches the egg: stage-up first, then the card, then the 
   // The same tap (or a quick second one) doesn't close the card.
   await card(page).click()
   await expect(card(page)).toBeVisible()
-  await expect(page.locator('#toast')).not.toHaveClass(/is-showing/, { timeout: 10_000 }) // the toast ran out behind the card
+  await page.clock.runFor(6000) // past the toast's 5s
+  await expect(page.locator('#toast')).not.toHaveClass(/is-showing/) // the toast ran out behind the card
   await closeCard(page)
   await expect(page.locator('.overlay')).toHaveCount(0)
   await expect(page.locator('#toast')).toHaveClass(/is-showing/)
@@ -195,7 +184,7 @@ test('Collection with nothing found: friendly empty state and "?" tiles', async 
 })
 
 for (const scheme of ['light', 'dark'] as const) {
-  test(`Collection with every item found (${scheme}): each tile has its own drawing and its name fits`, async ({ page }) => {
+  test(`Collection with every item found (${scheme}): own drawings, 3 columns, big tiles, names fit, no sideways scroll`, LAYOUT, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme })
     const t = Date.parse('2026-10-05T09:00:00+01:00')
     const events = ITEMS.map((item, k) => ({
@@ -214,38 +203,8 @@ for (const scheme of ['light', 'dark'] as const) {
     await expect(screen.locator('.cs-line')).toHaveText('Every one found! Your dragon is delighted.')
     await expect(screen.locator('.item-tile.is-unknown')).toHaveCount(0)
     await expect(screen.locator('.item-tile.is-found')).toHaveCount(ITEMS.length)
-    for (const item of ITEMS) await expect(screen.locator(`.item-tile.is-found svg[data-item="${item.id}"]`), item.id).toHaveCount(1)
-    const g = await page.evaluate(() => ({
-      docW: document.documentElement.scrollWidth,
-      vw: window.innerWidth,
-      nameOverflow: [...document.querySelectorAll<HTMLElement>('.item-tile-name')].filter((n) => n.scrollWidth > n.clientWidth + 1).map((n) => n.textContent),
-    }))
-    expect(g.docW).toBeLessThanOrEqual(g.vw)
-    expect(g.nameOverflow).toEqual([])
-    await shot(page, `m7s3-collection-all-${scheme}-${test.info().project.name}`, { settled: true })
-  })
-
-  test(`Collection layout (${scheme}): 3 columns, big enough tiles, no sideways scroll`, async ({ page }) => {
-    await page.emulateMedia({ colorScheme: scheme })
-    const t = Date.parse('2026-10-05T09:00:00+01:00')
-    // Five finds over a few days, plus an unknown id and a malformed reward that are ignored.
-    const events = ITEMS.slice(0, 5).map((item, k) => ({
-      id: `f${k}`,
-      type: 'log',
-      taskId: 'avoided',
-      timestamp: t + k * 86_400_000,
-      xpAwarded: 15,
-      reward: { kind: 'item', itemId: item.id },
-    }))
-    events.push({ id: 'x1', type: 'log', taskId: 'avoided', timestamp: t, xpAwarded: 15, reward: { kind: 'item', itemId: 'from-later' } })
-    events.push({ id: 'x2', type: 'log', taskId: 'avoided', timestamp: t, xpAwarded: 15, reward: { kind: 'item' } as never })
-    await seed(page, events)
-    await setUp(page, null)
-    await page.getByRole('link', { name: 'Collection' }).click()
-    const screen = page.locator('#collection-screen')
-    await expect(screen.locator('.cs-count')).toHaveText(`5 of ${ITEMS.length} found`)
     await expect(screen.locator('.item-tile.is-found .item-tile-date').first()).toHaveText('5 Oct')
-
+    for (const item of ITEMS) await expect(screen.locator(`.item-tile.is-found svg[data-item="${item.id}"]`), item.id).toHaveCount(1)
     const g = await page.evaluate(() => {
       const tiles = [...document.querySelectorAll('#collection-screen .item-tile')].map((e) => e.getBoundingClientRect())
       const firstRowTop = tiles[0]!.top
@@ -256,7 +215,7 @@ for (const scheme of ['light', 'dark'] as const) {
         minW: Math.min(...tiles.map((r) => r.width)),
         minH: Math.min(...tiles.map((r) => r.height)),
         right: Math.max(...tiles.map((r) => r.right)),
-        nameOverflow: [...document.querySelectorAll<HTMLElement>('.item-tile-name')].some((n) => n.scrollWidth > n.clientWidth + 1),
+        nameOverflow: [...document.querySelectorAll<HTMLElement>('.item-tile-name')].filter((n) => n.scrollWidth > n.clientWidth + 1).map((n) => n.textContent),
       }
     })
     expect(g.perRow).toBe(3)
@@ -264,10 +223,36 @@ for (const scheme of ['light', 'dark'] as const) {
     expect(g.minH).toBeGreaterThanOrEqual(44)
     expect(g.right).toBeLessThanOrEqual(g.vw)
     expect(g.docW).toBeLessThanOrEqual(g.vw)
-    expect(g.nameOverflow).toBe(false)
-    await shot(page, `m4s2-collection-${scheme}-${test.info().project.name}`)
+    expect(g.nameOverflow).toEqual([])
+    await shot(page, `m7s3-collection-all-${scheme}-${test.info().project.name}`, { settled: true })
   })
 }
+
+// Unknown ids and malformed rewards are ignored (unit-tested in collection-screen.test.ts
+// and rewards.test.ts); this checks the screen copes with them in saved data.
+test('Collection ignores an unknown item id and a malformed reward', async ({ page }) => {
+  const msgs = collectConsole(page)
+  const t = Date.parse('2026-10-05T09:00:00+01:00')
+  const events = ITEMS.slice(0, 5).map((item, k) => ({
+    id: `f${k}`,
+    type: 'log',
+    taskId: 'avoided',
+    timestamp: t + k * 86_400_000,
+    xpAwarded: 15,
+    reward: { kind: 'item', itemId: item.id },
+  }))
+  events.push({ id: 'x1', type: 'log', taskId: 'avoided', timestamp: t, xpAwarded: 15, reward: { kind: 'item', itemId: 'from-later' } })
+  events.push({ id: 'x2', type: 'log', taskId: 'avoided', timestamp: t, xpAwarded: 15, reward: { kind: 'item' } as never })
+  await seed(page, events)
+  await setUp(page, null)
+  await page.getByRole('link', { name: 'Collection' }).click()
+  const screen = page.locator('#collection-screen')
+  await expect(screen.locator('.cs-count')).toHaveText(`5 of ${ITEMS.length} found`)
+  await expect(screen.locator('.item-tile.is-found')).toHaveCount(5)
+  await expect(screen.locator('.item-tile.is-unknown')).toHaveCount(ITEMS.length - 5)
+  await shot(page, `m4s2-collection-${test.info().project.name}`)
+  expect(msgs).toEqual([])
+})
 
 test('reduced motion: the card appears without bouncing, and still closes the same way', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
@@ -284,15 +269,22 @@ test('reduced motion: the card appears without bouncing, and still closes the sa
   await closeCard(page)
 })
 
-test('the card in dark mode', async ({ page }) => {
+test('the card fits inside the screen (dark mode)', LAYOUT, async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' })
   await setUp(page, RARE_ROLL)
   await page.locator('button.task[data-task-id="read"]').click()
   await expect(card(page)).toBeVisible()
-  await shot(page, `m4s2-card-dark-${test.info().project.name}`, { settled: true })
+  await settle(page) // the card has finished arriving
+  const box = (await card(page).locator('.item-card').boundingBox())!
+  const vp = page.viewportSize()!
+  expect(box.x).toBeGreaterThanOrEqual(0)
+  expect(box.x + box.width).toBeLessThanOrEqual(vp.width)
+  expect(box.y).toBeGreaterThanOrEqual(0)
+  expect(box.y + box.height).toBeLessThanOrEqual(vp.height)
+  await shot(page, `m4s2-card-dark-${test.info().project.name}`)
 })
 
-test('the find toast keeps the whole task name, wrapping it rather than cutting it off', async ({ page }) => {
+test('the find toast keeps the whole task name, wrapping it rather than cutting it off', LAYOUT, async ({ page }) => {
   await setUp(page, RARE_ROLL)
   await page.locator('button.task[data-task-id="avoided"]').click()
   await closeCard(page)
@@ -318,7 +310,6 @@ test('the find toast keeps the whole task name, wrapping it rather than cutting 
       vw: innerWidth,
     }
   })
-  console.log(test.info().project.name, 'find toast', JSON.stringify(g))
   expect(g.nameCut).toBe(false)
   expect(g.leadCut).toBe(false)
   expect(g.wrapped).toBe(g.nameOnLine2)

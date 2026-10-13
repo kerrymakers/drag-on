@@ -1,7 +1,7 @@
 // Settings, export, import and the backup reminder, on the phone (from M6 slice 1).
 // Screenshots (with SCREENSHOTS=1): tests/screenshots/m6s1-*
 import { readFile } from 'node:fs/promises'
-import { test, expect, settle, shot, type Page } from './fixtures'
+import { test, expect, settle, shot, LAYOUT, type Page } from './fixtures'
 import { TASKS } from '../../src/config/tasks'
 import { BACKUP_REMINDER, IMPORT_REFUSED, SETTINGS, WELCOME_BACK } from '../../src/ui/copy'
 
@@ -50,7 +50,7 @@ const speechShowing = (page: Page) => page.evaluate(() => document.querySelector
 const soonAfterNow = (t: unknown) => typeof t === 'number' && t >= NOW.getTime() && t < NOW.getTime() + 60_000
 const settingsTab = (page: Page) => page.locator('.tabbar a.tab[data-route="settings"]')
 
-test('Settings tab: fifth tab, gear icon, route, layout and tap targets in light and dark', async ({ page }, info) => {
+test('Settings tab: fifth tab, gear icon, route, layout and tap targets in light and dark', LAYOUT, async ({ page }, info) => {
   const msgs = collectConsole(page)
   await open(page, { schemaVersion: 1, events: logs(RECENT), settings: { lastBackupAt: at('2026-10-05', '12:00') } })
   await expect(page.locator('.tabbar a.tab')).toHaveCount(5)
@@ -119,7 +119,7 @@ test('export downloads a dated backup with the save data and exportedAt, and rec
   expect(msgs).toEqual([])
 })
 
-test('import: pick a file, see what is in it, confirm, and the data is replaced with a safety copy kept', async ({ page }, info) => {
+test('import: pick a file, see what is in it, confirm, and the data is replaced with a safety copy kept', LAYOUT, async ({ page }, info) => {
   const msgs = collectConsole(page)
   const before = { schemaVersion: 1, events: logs(RECENT, 'old'), settings: { dragonName: 'Here' } }
   await open(page, before, '#/settings')
@@ -235,7 +235,7 @@ test('read-only: import is off with a note, export sends the stored data untouch
   expect(msgs.filter((m) => !m.includes('Not saving on this device'))).toEqual([])
 })
 
-test('backup reminder: once a day on Home, tap it to open Settings; welcome back comes first', async ({ page }, info) => {
+test('backup reminder: once a day on Home, tap it to open Settings; welcome back comes first', LAYOUT, async ({ page }, info) => {
   const msgs = collectConsole(page)
   // First log 30 days ago, never backed up, logged yesterday: due, nothing to welcome.
   await open(page, { schemaVersion: 1, events: logs(['2026-09-09', ...RECENT]) })

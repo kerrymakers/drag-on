@@ -1,5 +1,5 @@
 // Milestone 2, Slice 2: moods, the mood chip and the welcome back.
-import { test, expect, settle, shot, SWEEPS_SIZES, type Page } from './fixtures'
+import { test, expect, schemesFor, settle, shot, LAYOUT, SWEEPS_SIZES, type Page } from './fixtures'
 import { STAGES } from '../../src/config/stages'
 import { TASKS } from '../../src/config/tasks'
 import { MOODS } from '../../src/config/mood'
@@ -114,8 +114,8 @@ const SIZES = [
 ] as const
 
 // 1 + 2. Screenshots, chip labels, layout
-for (const [w, h] of SIZES) {
-  for (const scheme of ['light', 'dark'] as const) {
+for (const [i, [w, h]] of SIZES.entries()) {
+  for (const scheme of schemesFor(i)) {
     for (const [stage, baseXp] of [['egg', 50], ['hatchling', 150]] as const) {
       test(`moods ${stage} ${w}x${h} ${scheme}`, SWEEPS_SIZES, async ({ page }, info) => {
         test.skip(info.project.name !== 'pixel10pro')
@@ -152,7 +152,6 @@ for (const [w, h] of SIZES) {
             expect(g.speech!.r).toBeLessThanOrEqual(w)
             expect(g.speech!.t).toBeGreaterThanOrEqual(0)
           } else expect(g.speech).toBeNull()
-          console.log(`${stage} ${w}x${h} ${scheme} d${d}`, JSON.stringify({ speech: g.speech, zzz: g.zzz, art: g.art, speechOverZzz: overlap(g.speech, g.zzz), speechOverArt: overlap(g.speech, g.art) }))
           await shot(page, `m2s2-${w}x${h}-${scheme}-${stage}-${id}`)
         }
         expect(msgs, msgs.join('\n')).toEqual([])
@@ -162,8 +161,8 @@ for (const [w, h] of SIZES) {
 }
 
 // Quick pass: later stages, sleepy and curled up
-for (const [w, h] of SIZES) {
-  for (const scheme of ['light', 'dark'] as const) {
+for (const [i, [w, h]] of SIZES.entries()) {
+  for (const scheme of schemesFor(i)) {
     test(`moods later stages ${w}x${h} ${scheme}`, SWEEPS_SIZES, async ({ page }, info) => {
       test.skip(info.project.name !== 'pixel10pro')
       const msgs = collectConsole(page)
@@ -193,7 +192,6 @@ for (const [w, h] of SIZES) {
           expect(g.speech!.b).toBeLessThanOrEqual(g.firstTask!.t)
           expect(overlap(g.speech, g.head), 'bubble clear of head and headgear').toBe(0)
           expect(overlap(g.speech, g.zzz), 'bubble clear of zzz').toBe(0)
-          console.log(`later ${stage} ${w}x${h} ${scheme} ${id}`, JSON.stringify({ speechOverZzz: overlap(g.speech, g.zzz), speechOverArt: overlap(g.speech, g.art), speech: g.speech, art: g.art }))
           await shot(page, `m2s2-later-${w}x${h}-${scheme}-${stage}-${id}`)
         }
       }
@@ -214,12 +212,10 @@ test('welcome: shows when sleepy or curled up, not happy or content; not repeate
     }, [events(150, d), SETTINGS] as const)
     await page.reload()
     const showing = await speechShowing(page)
-    console.log(`welcome at ${d} days:`, showing, showing ? await page.locator('#speech').textContent() : '')
     expect(showing).toBe(d >= SLEEPY)
   }
   // Same gap and mood: a reload doesn't repeat it
   const ui = await page.evaluate(() => localStorage.getItem('drag-on:ui'))
-  console.log('drag-on:ui', ui)
   expect(JSON.parse(ui!)).toMatchObject({ gapFrom: expect.any(String), shown: ['grumpy'] })
   await page.reload()
   expect(await speechShowing(page)).toBe(false)
@@ -277,7 +273,6 @@ test('welcome: once at sleepy, once more at curled up in the same gap, then not 
     await visible(page)
     const days = SLEEPY + extra
     const showing = await speechShowing(page)
-    console.log(`day +${extra} (${days} days):`, await chip(page).textContent(), showing)
     if (days === startOf('grumpy')) {
       await expect(chip(page)).toHaveText('Curled up')
       expect(showing).toBe(true)
@@ -290,7 +285,6 @@ test('welcome: once at sleepy, once more at curled up in the same gap, then not 
   await page.locator('button.task[data-task-id="gym"]').click()
   await expect(chip(page)).toHaveText('Happy')
   const ui = await page.evaluate(() => JSON.parse(localStorage.getItem('drag-on:ui')!))
-  console.log('ui after the gap', ui)
   expect(ui.shown).toEqual(['sleepy', 'grumpy'])
   expect(msgs, msgs.join('\n')).toEqual([])
 })
@@ -326,7 +320,6 @@ test('recovery: first log after a long gap turns Happy at once with normal feedb
     toast: document.querySelector('#toast-text')!.textContent,
     wiggle: !!document.querySelector('#dragon-art .react-log'),
   }))
-  console.log('recovery feedback', fb)
   expect(fb).toEqual({ chip: 'Happy', svg: 'happy', float: `+${XP('read')} XP`, toast: `+${XP('read')} XP · Read for 20 minutes`, wiggle: true })
   expect(msgs).toEqual([])
 })
@@ -370,40 +363,23 @@ test('hop and log wiggle do not clash or leave stray transforms', async ({ page 
   await page.clock.setFixedTime(NOW)
   await page.goto('./')
   await expect(chip(page)).toHaveText('Happy')
-  const anims = await page.evaluate(() =>
-    document.getAnimations().map((a: any) => `${a.animationName}@${(a.effect?.target as Element)?.getAttribute?.('class')}`),
-  )
-  console.log('happy idle animations', anims)
   // Line up the log with the end-of-cycle hop (idle-hop: 11s, delay -2s, peak at 89%,
   // so the peak is at currentTime 9790 - 2000)
   await page.evaluate(() => {
     for (const a of document.getAnimations() as any[]) if (a.animationName === 'idle-hop') a.currentTime = 7400
   })
   await page.locator('button.task[data-task-id="read"]').click()
-  const samples: object[] = []
-  for (let i = 0; i < 8; i++) {
-    samples.push(
-      await page.evaluate(() => {
+  await expect(page.locator('#dragon-art .dragon-react')).toHaveClass(/react-log/)
+  await shot(page, `m2s2-${info.project.name}-hop-wiggle`, { delay: 180 })
+  // Once the wiggle is over, nothing is left behind on the wrapper.
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
         const wrap = document.querySelector('#dragon-art .dragon-react')!
-        const pose = document.querySelector('#dragon-art .dragon-pose')!
-        const art = document.querySelector('#dragon-art')!.getBoundingClientRect()
-        const svg = wrap.querySelector('svg')!.getBoundingClientRect()
-        return { wrap: getComputedStyle(wrap).transform, pose: getComputedStyle(pose).transform, svgTop: Math.round(svg.top - art.top) }
+        return { cls: wrap.className, transform: getComputedStyle(wrap).transform, inline: (wrap as HTMLElement).style.transform }
       }),
     )
-    if (i === 2) await shot(page, `m2s2-${info.project.name}-hop-wiggle`)
-    await page.waitForTimeout(90)
-  }
-  console.log('hop+wiggle samples', JSON.stringify(samples))
-  await page.waitForTimeout(900)
-  const after = await page.evaluate(() => {
-    const wrap = document.querySelector('#dragon-art .dragon-react')!
-    return { cls: wrap.className, transform: getComputedStyle(wrap).transform, inline: (wrap as HTMLElement).style.transform }
-  })
-  console.log('after wiggle', after)
-  expect(after.cls).toBe('dragon-react')
-  expect(after.transform).toBe('none')
-  expect(after.inline).toBe('')
+    .toEqual({ cls: 'dragon-react', transform: 'none', inline: '' })
   expect(msgs).toEqual([])
 })
 
@@ -411,6 +387,17 @@ test('hop and log wiggle do not clash or leave stray transforms', async ({ page 
 test('reduced motion: no hop, zzz drift, wag or pulses; moods still fade', async ({ page }) => {
   const msgs = collectConsole(page)
   await page.emulateMedia({ reducedMotion: 'reduce' })
+  // From each load on, note every animation seen on any frame, so a one-off that has
+  // already finished by the time we look still counts as a leak.
+  await page.addInitScript(() => {
+    const w = window as any
+    w.__anims = new Set()
+    const tick = () => {
+      for (const a of document.getAnimations() as any[]) w.__anims.add(a.animationName ?? `transition:${a.transitionProperty}`)
+      requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  })
   await page.clock.setFixedTime(NOW)
   await page.goto('./')
   const leaks: string[] = []
@@ -421,15 +408,9 @@ test('reduced motion: no hop, zzz drift, wag or pulses; moods still fade', async
         localStorage.setItem('drag-on:ui', JSON.stringify({}))
       }, [events(xp, d, stage === 'egg' || stage === 'hatchling' ? undefined : stage), SETTINGS] as const)
       await page.reload()
-      await page.waitForTimeout(300)
-      const running = await page.evaluate(() =>
-        document
-          .getAnimations()
-          .map((a: any) => a.animationName ?? `transition:${a.transitionProperty}`)
-          .filter((n: string) => !n.startsWith('transition:opacity')),
-      )
+      await settle(page) // everything that will run has run (and been noted)
+      const running = await page.evaluate(() => [...(window as any).__anims].filter((n: string) => !n.startsWith('transition:opacity')))
       if (running.length) {
-        console.log(`reduced ${stage} d${d} running`, running)
         leaks.push(`${stage} d${d}: ${running.join(',')}`)
       }
       const speechT = await page.locator('#speech').evaluate((e) => getComputedStyle(e).transform)
@@ -439,7 +420,6 @@ test('reduced motion: no hop, zzz drift, wag or pulses; moods still fade', async
   expect(leaks, leaks.join('\n')).toEqual([])
   // Moods still fade: mood parts keep an opacity transition
   const fade = await page.evaluate(() => getComputedStyle(document.querySelector('#dragon-art .mood-part')!).transition)
-  console.log('mood-part transition under reduce', fade)
   expect(fade).toContain('opacity')
   // Curled-up posture is static, not animated in
   const poseT = await page.evaluate(() => getComputedStyle(document.querySelector('#dragon-art .dragon-pose')!).transitionDuration)
@@ -468,7 +448,7 @@ test('offline: mood and welcome work offline; log persists', async ({ page, cont
   expect(msgs.filter((m) => !m.includes('ERR_INTERNET_DISCONNECTED'))).toEqual([])
 })
 
-test('tap targets with chip and bubble showing', async ({ page }) => {
+test('tap targets with chip and bubble showing', LAYOUT, async ({ page }) => {
   await seed(page, events(150, CURLED))
   await page.clock.setFixedTime(NOW)
   await page.goto('./')
@@ -481,13 +461,10 @@ test('tap targets with chip and bubble showing', async ({ page }) => {
         return { id: (e as HTMLElement).dataset.taskId ?? e.id ?? e.className, w: r.width, h: r.height }
       }),
   )
-  console.log('targets', JSON.stringify(t))
   for (const x of t) {
     expect(x.w, x.id).toBeGreaterThanOrEqual(44)
     expect(x.h, x.id).toBeGreaterThanOrEqual(44)
   }
-  const chipInteractive = await chip(page).evaluate((e) => e.tagName + ':' + (e.getAttribute('role') ?? '') + ':' + getComputedStyle(e).cursor)
-  console.log('chip element', chipInteractive)
 })
 
 test('welcome walk-through: 7 days with no logs, then a log and a new gap', async ({ page }) => {
@@ -506,7 +483,6 @@ test('welcome walk-through: 7 days with no logs, then a log and a new gap', asyn
     await visible(page)
     expect(await speechShowing(page), `day ${d} second return`).toBe(false)
   }
-  console.log('walk-through', JSON.stringify(seen))
   expect(seen[1]![1]).toBe(false)
   expect(seen[2]![1]).toBe(false)
   expect(seen[3]).toEqual(['Sleepy', true])
@@ -526,7 +502,6 @@ test('welcome walk-through: 7 days with no logs, then a log and a new gap', asyn
     await page.clock.setSystemTime(new Date(logDay + d * DAY))
     await visible(page)
     const s = await speechShowing(page)
-    console.log(`new gap day ${d}`, await chip(page).textContent(), s)
     expect(s).toBe(d === 3)
     await page.clock.runFor(5000)
   }
