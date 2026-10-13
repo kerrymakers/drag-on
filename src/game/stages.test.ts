@@ -2,6 +2,7 @@
 // so changing thresholds later can't take it away. Undo removes the record.
 
 import { describe, expect, it } from 'vitest'
+import { GOAL } from '../config/goal'
 import { REWARDS } from '../config/rewards'
 import { STREAKS } from '../config/streaks'
 import { DEFAULT_SETTINGS } from '../config/settings'
@@ -35,7 +36,7 @@ let minute = 0
 const NOON = at('2026-10-05T12:00:00+01:00')
 /** Logs through the real createLogEvent (so stageReached is recorded) and appends it. */
 function logXp(events: GameEvent[], xp: number, stages: readonly Stage[] = STAGES_A): GameEvent[] {
-  const e = createLogEvent(chunk(xp), events, DEFAULT_SETTINGS, NOON + ++minute * 1000, `e${minute}`, NO_REWARD, { stages, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })
+  const e = createLogEvent(chunk(xp), events, DEFAULT_SETTINGS, NOON + ++minute * 1000, `e${minute}`, NO_REWARD, { stages, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS, goal: GOAL })
   if (!e) throw new Error('refused')
   return [...events, e]
 }
@@ -120,7 +121,7 @@ describe('dragonStage', () => {
     expect(dragonStage(old, STAGES).id).toBe('hatchling')
     expect(dragonProgress(old, STAGES).stage.id).toBe('hatchling')
     // The next log quietly records the stage it's already at, so it's held from then on.
-    const next = createLogEvent(chunk(5), old, DEFAULT_SETTINGS, NOON + 2, 'n', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })
+    const next = createLogEvent(chunk(5), old, DEFAULT_SETTINGS, NOON + 2, 'n', NO_REWARD, { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS, goal: GOAL })
     expect(next?.stageReached).toBe('hatchling')
     expect(stageUp(old, [...old, next as GameEvent], STAGES)).toBeNull()
   })

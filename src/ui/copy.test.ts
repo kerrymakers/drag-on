@@ -7,6 +7,7 @@ import { COLLECTION, DRAGON_SCREEN, FREEZE_EARNED, ITEM_FOUND, milestoneFound, n
 import { ITEMS } from '../config/items'
 import { effortChoiceLabel, effortTimesHint, effortXp, legacyTimesHint, legacyXpHint, taskRowLabel } from './copy'
 import { IMPORT_CONFIRM, IMPORT_REFUSED, SETTINGS, importDropped, lastBackupLine } from './copy'
+import { GOAL_FLOAT, goalChip, goalChipCount, goalChipLabel, goalDays, goalWakeCap } from './copy'
 import { LOGGED, LOOK_CHANGE, TREAT_FLOAT, loggedToast, LOOK_NAMES, LOOK_REVEAL, STAGE_UP, STAGE_UP_FALLBACK, celebrationCopy, lookLabel, progressLabel } from './copy'
 
 const from = (id: string) => STAGES.find((s) => s.id === id)!.xpFrom
@@ -269,5 +270,29 @@ describe('effort level copy', () => {
     expect(effortXp(15)).toBe('+15 XP')
     expect(effortChoiceLabel('A little nudge', 15)).toBe('A little nudge, 15 XP')
     expect(taskRowLabel('Gym / workout', 'Strength', 'Really hard')).toBe('Gym / workout, Strength, Really hard. Edit')
+  })
+})
+
+describe('weekly goal copy', () => {
+  it('the Home chip counts days, ticks once met, keeps counting past the target, and has words for a screen reader', () => {
+    expect(goalChip('Gym', 1, 3, false)).toBe('Gym 1 of 3 this week')
+    expect(goalChip('Gym', 3, 3, true)).toBe('Gym 3 of 3 this week ✓')
+    expect(goalChipCount(4, 3, true)).toBe('4 of 3 this week ✓')
+    expect(goalChipLabel('Gym', 1, 3, false)).toBe('Weekly goal: Gym, 1 of 3 days this week')
+    expect(goalChipLabel('Gym', 1, 1, true)).toBe('Weekly goal met: Gym, 1 of 1 day this week')
+  })
+
+  it('the meeting log says Goal met with the total, and the float names the goal treat', () => {
+    expect(loggedToast(40, 'Gym', 30, false, false, true)).toEqual({ lead: 'Goal met! +70 XP · ', name: 'Gym' })
+    expect(LOGGED(40, 'Gym', 30, false, true, true)).toBe('Goal met! +70 XP · Gym …and a streak freeze!')
+    expect(GOAL_FLOAT(30)).toBe('+30 goal treat')
+    expect(goalDays(1)).toBe('1 day a week')
+    expect(goalDays(3)).toBe('3 days a week')
+    expect(goalWakeCap(5)).toBe('Up to 5 this week: the days with a wake-up time.')
+  })
+
+  it('is warm, never blaming', () => {
+    const all = [SETTINGS.goalTitle, SETTINGS.goalIntro, SETTINGS.goalArchived, SETTINGS.goalNone, SETTINGS.goalPick, goalChipLabel('Gym', 0, 3, false), goalWakeCap(3)]
+    for (const text of all) expect(text, text).not.toMatch(/\b(missed|failed|behind|lost|only|should|must)\b/i)
   })
 })

@@ -148,26 +148,43 @@ export const loggedToast = (
   treatBonus = 0,
   foundItem = false,
   earnedFreeze = false,
+  goalMet = false,
 ): LoggedToast => ({
   lead: foundItem
     ? `Found something! +${xp} XP · `
-    : treatBonus > 0
-      ? `Treat! +${xp + treatBonus} XP · `
-      : `+${xp} XP · `,
+    : goalMet
+      ? `Goal met! +${xp + treatBonus} XP · `
+      : treatBonus > 0
+        ? `Treat! +${xp + treatBonus} XP · `
+        : `+${xp} XP · `,
   name: taskName,
   ...(earnedFreeze ? { note: FREEZE_EARNED } : {}),
 })
 /** The whole toast as one string. */
-export const LOGGED = (xp: number, taskName: string, treatBonus = 0, foundItem = false, earnedFreeze = false): string => {
-  const { lead, name, note } = loggedToast(xp, taskName, treatBonus, foundItem, earnedFreeze)
+export const LOGGED = (
+  xp: number,
+  taskName: string,
+  treatBonus = 0,
+  foundItem = false,
+  earnedFreeze = false,
+  goalMet = false,
+): string => {
+  const { lead, name, note } = loggedToast(xp, taskName, treatBonus, foundItem, earnedFreeze, goalMet)
   return note ? `${lead}${name} ${note}` : lead + name
 }
 /** The second float on a treat, e.g. "+13 treat". */
 export const TREAT_FLOAT = (bonus: number) => `+${bonus} treat`
+/** The second float on the log that meets the weekly goal, e.g. "+30 goal treat". */
+export const GOAL_FLOAT = (bonus: number) => `+${bonus} goal treat`
 export const UNDONE = 'Undone'
 /** Undoing a log that found something: the find goes back, gently. */
 export const UNDONE_ITEM = 'Undone. That find is hiding again for now.'
 export const undoneToast = (hadItem: boolean): string => (hadItem ? UNDONE_ITEM : UNDONE)
+
+/** "3 days a week", "1 day a week": the weekly goal's stepper. */
+export const goalDays = (n: number): string => `${n} ${n === 1 ? 'day' : 'days'} a week`
+/** Under the stepper when the wake-up task allows fewer than the usual most. */
+export const goalWakeCap = (n: number): string => `Up to ${n} this week: the days with a wake-up time.`
 
 /** The "found something" card: a little heading, the item's name, and a line from the dragon. */
 export const ITEM_FOUND = {
@@ -367,6 +384,21 @@ export const streakChip = (n: number): string => dayCount(n)
 /** Its accessible name. */
 export const streakChipLabel = (n: number): string => `${dayCount(n)} in a row. Open History`
 
+/**
+ * The Home goal chip, in two parts so only the task name ever shortens to "…":
+ * "Gym 1 of 3 this week", and once met "Gym 3 of 3 this week ✓". Logs past the target
+ * keep counting ("Gym 4 of 3 this week ✓"). Never a warning.
+ */
+export const goalChipCount = (done: number, target: number, met: boolean): string =>
+  `${done} of ${target} this week${met ? ' ✓' : ''}`
+export const goalChip = (name: string, done: number, target: number, met: boolean): string =>
+  `${name} ${goalChipCount(done, target, met)}`
+/** Its words for a screen reader. */
+export function goalChipLabel(name: string, done: number, target: number, met: boolean): string {
+  const days = `${done} of ${target} ${target === 1 ? 'day' : 'days'} this week`
+  return met ? `Weekly goal met: ${name}, ${days}` : `Weekly goal: ${name}, ${days}`
+}
+
 const MONTH_NAMES = [
   'January',
   'February',
@@ -431,6 +463,18 @@ export const SETTINGS = {
   wakeIntro: 'Changes start from today. Days gone by keep the times they had.',
   /** In place of the time on a day with no wake-up target. */
   wakeOff: 'Lie-in',
+  goalTitle: 'Weekly goal',
+  goalIntro: 'One thing to aim for each week, Monday to Sunday. Changes count from this week.',
+  /** The task picker's label. */
+  goalTaskLabel: 'Goal task',
+  /** The picker's first choice. */
+  goalNone: 'No goal',
+  /** In the picker while the goal's task is archived. */
+  goalPick: 'Pick a task',
+  /** Under the picker while the goal's task is archived. The goal waits; nothing's lost. */
+  goalArchived: "That task is archived, so the goal's resting. Pick another task to carry on.",
+  goalFewer: 'Fewer days',
+  goalMore: 'More days',
   soundTitle: 'Sounds',
   /** Beside the sound switch, which is its label too. */
   soundLabel: 'Little chirps and jingles',

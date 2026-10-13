@@ -112,6 +112,21 @@ export interface Settings {
    * (older saves and backups) means off. Read through soundIsOn.
    */
   soundOn?: boolean
+  /**
+   * The weekly goal: a task and how many days a week (Milestone 8). Absent or null
+   * means no goal (older saves and backups have none). Checked on load; a malformed
+   * one is dropped (see cleanGoal). Kept while its task is archived, so unarchiving
+   * brings it back. Progress always counts this week's logs from its first day, so an
+   * edit applies from the current week on; past weeks are fixed by the rewards saved
+   * on their logs.
+   */
+  goal?: Goal | null
+}
+
+/** One weekly goal: log `taskId` on `daysPerWeek` different days, Monday to Sunday. */
+export interface Goal {
+  taskId: string
+  daysPerWeek: number
 }
 
 /** One item id, or null for nothing, per spot on the dragon. */
@@ -119,12 +134,14 @@ export type Wearing = Record<ItemSlot, string | null>
 
 /**
  * A variable reward, rolled once at log time and saved on the log.
- * - treat: bonus XP on top of `xpAwarded`, counted toward the task's stat.
+ * - treat: bonus XP on top of `xpAwarded`, counted toward the task's stat. `goal` is
+ *   set when it was the goal treat for meeting the week's goal (see goalRewardFor),
+ *   rather than a lucky roll.
  * - item: a rare collectible from config/items.ts, worth no XP. `milestone` is set
  *   when it was the guaranteed find for reaching an overall streak milestone for the
  *   first time (e.g. 7), rather than a lucky roll.
  */
-export type Reward = { kind: 'treat'; bonusXp: number } | { kind: 'item'; itemId: string; milestone?: number }
+export type Reward = { kind: 'treat'; bonusXp: number; goal?: true } | { kind: 'item'; itemId: string; milestone?: number }
 
 /** Where an item sits on the dragon. One item per spot. */
 export type ItemSlot = 'head' | 'neck' | 'held'

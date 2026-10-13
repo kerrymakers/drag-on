@@ -1,8 +1,10 @@
 // Creating events. The caller supplies the time and the id; nothing here reads the clock.
 
+import type { GoalConfig } from '../config/goal'
 import type { RewardConfig } from '../config/rewards'
 import type { StreakConfig } from '../config/streaks'
 import { dayKey } from './day'
+import { goalRewardFor } from './goal'
 import { milestoneReward, rollReward } from './rewards'
 import { activeLogs, dragonStage, heldStage, stageFor, taskAvailability } from './state'
 import { streakMilestoneReached } from './streaks'
@@ -10,14 +12,15 @@ import { taskXp } from './tasks'
 import type { EffortLevel, GameEvent, LogEvent, RewardRoll, Settings, Stage, Task, UndoEvent } from './types'
 
 /**
- * The config a new log is judged by: stage thresholds, reward odds, streak rules and
- * the effort levels that set a task's XP.
+ * The config a new log is judged by: stage thresholds, reward odds, streak rules, the
+ * effort levels that set a task's XP and the weekly goal's treat.
  */
 export interface LogRules {
   stages: readonly Stage[]
   rewards: RewardConfig
   streaks: StreakConfig
   effortLevels: readonly EffortLevel[]
+  goal: GoalConfig
 }
 
 /**
@@ -38,6 +41,10 @@ export interface LogRules {
  * time ever (judged from `events`, so undoing it lets it be earned again) brings a
  * guaranteed item instead of the roll, saved with the milestone. With every item
  * already found, the normal roll applies.
+ *
+ * Next, a log that earns the week's goal treat (see goalRewardFor) brings it instead
+ * of the roll. One reward per log: if a milestone takes the meeting log, the goal
+ * treat falls to the goal task's next new day that week.
  */
 export function createLogEvent(
   task: Task,
@@ -46,7 +53,7 @@ export function createLogEvent(
   now: number,
   id: string,
   roll: RewardRoll,
-  { stages, rewards, streaks, effortLevels }: LogRules,
+  { stages, rewards, streaks, effortLevels, goal }: LogRules,
 ): LogEvent | null {
   if (!taskAvailability(task, events, settings, now).canLog) return null
   const xp = taskXp(task, effortLevels)
@@ -54,6 +61,7 @@ export function createLogEvent(
   const milestone = streakMilestoneReached(events, event, streaks)
   const reward =
     (milestone !== null ? milestoneReward(events, roll, rewards, milestone) : undefined) ??
+    goalRewardFor(events, event, task, settings, goal) ??
     rollReward(xp === task.xp ? task : { ...task, xp }, events, roll, rewards)
   if (reward) event.reward = reward
   const after = dragonStage([...events, event], stages)

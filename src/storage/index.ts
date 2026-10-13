@@ -1,10 +1,12 @@
 // Saving and loading the event log and settings in localStorage.
 // Everything is kept under one key, so a save is a single atomic write.
 
+import { GOAL } from '../config/goal'
 import { DEFAULT_SETTINGS } from '../config/settings'
 import type { GameEvent, ScheduleEntry, Settings, WakeSchedule, Wearing } from '../game/types'
 import { isReadableTask } from '../game/tasks'
 import { isClockTime } from '../game/day'
+import { cleanGoal } from '../game/goal'
 import { WEEKDAYS } from '../game/settings'
 import { WEAR_SLOTS } from '../game/wearing'
 
@@ -148,7 +150,9 @@ function readTasks(v: unknown): unknown[] | undefined {
  * so data written by a later version survives a round trip. A wake time that isn't
  * a real "HH:MM" becomes null (skipped), never a guessed time. `lastBackupAt` is kept
  * only if it's a finite number. The wake schedule history is checked entry by entry
- * (see readScheduleHistory), and the task list task by task (see readTasks).
+ * (see readScheduleHistory), and the task list task by task (see readTasks). A goal
+ * is kept only if it's well formed (see cleanGoal); null (no goal) stays null, and
+ * anything else is dropped, so it reads as no goal.
  */
 function readSettings(v: unknown): Settings {
   const defaults = defaultData().settings
@@ -156,7 +160,8 @@ function readSettings(v: unknown): Settings {
   const schedule = isObject(v.wakeSchedule) ? readSchedule(v.wakeSchedule, defaults.wakeSchedule) : defaults.wakeSchedule
   const history = readScheduleHistory(v.wakeScheduleHistory)
   const tasks = readTasks(v.tasks)
-  const { lastBackupAt, wakeScheduleHistory: _history, tasks: _tasks, ...rest } = v
+  const goal = v.goal === null ? null : cleanGoal(v.goal, GOAL)
+  const { lastBackupAt, wakeScheduleHistory: _history, tasks: _tasks, goal: _goal, ...rest } = v
   return {
     ...rest,
     wakeSchedule: schedule,
@@ -170,6 +175,8 @@ function readSettings(v: unknown): Settings {
     ...(typeof lastBackupAt === 'number' && Number.isFinite(lastBackupAt) ? { lastBackupAt } : {}),
     // Older saves have none: then the config's tasks apply (see effectiveTasks).
     ...(tasks ? { tasks } : {}),
+    // Older saves have none: no goal. A goal this version can't read is dropped.
+    ...(goal !== null || v.goal === null ? { goal } : {}),
   }
 }
 

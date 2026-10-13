@@ -313,7 +313,7 @@ test('backup reminder: once a day on Home, tap it to open Settings; welcome back
 })
 
 
-test('backup reminder: a welcome back takes the open, the reminder waits for the next one', async ({ page }) => {
+test('backup reminder: a welcome back takes the open and the reminder waits; none with no logs or a recent backup', async ({ page }) => {
   // First log long ago, last log 4 days ago: sleepy, and a backup is due.
   await open(page, { schemaVersion: 1, events: logs(['2026-09-01', '2026-10-05']) })
   await expect(page.locator('#mood-chip')).toHaveText('Sleepy')
@@ -322,20 +322,100 @@ test('backup reminder: a welcome back takes the open, the reminder waits for the
   await page.reload()
   await expect(page.locator('#speech')).toHaveClass(/is-showing/)
   expect(BACKUP_REMINDER).toContain(await page.locator('#speech').textContent())
+
+  // No logs at all: nothing to back up.
+  const reopen = async (data: object | null) => {
+    await page.evaluate((d) => (d === null ? localStorage.clear() : localStorage.setItem('drag-on:v1', d)), data === null ? null : JSON.stringify(data))
+    await page.reload()
+    await expect(page.locator('#tabbar a').first()).toBeVisible()
+    await settle(page)
+    expect(await speechShowing(page)).toBe(false)
+    await expect(settingsTab(page).locator('.tab-dot')).toBeHidden()
+  }
+  await reopen(null)
+  // A recent backup.
+  await reopen({ schemaVersion: 1, events: logs(['2026-09-01', ...RECENT]), settings: { lastBackupAt: at('2026-09-25', '12:00') } })
 })
 
-test('no reminder and no dot with no logs, or with a recent backup', async ({ page }) => {
-  await open(page, null)
-  await settle(page)
-  expect(await speechShowing(page)).toBe(false)
-  await expect(settingsTab(page).locator('.tab-dot')).toBeHidden()
+test('weekly goal: set it in Settings, the Home chip counts, and the log that meets it celebrates', LAYOUT, async ({ page }, info) => {
+  const msgs = collectConsole(page)
+  // Hatched already (no stage-up in the way); gym on Wed and Thu this week (Mon 5 to Sun 11 Oct).
+  await open(page, { schemaVersion: 1, events: logs(['2026-09-01', '2026-09-02', '2026-09-03', ...RECENT]), settings: { lastBackupAt: at('2026-10-08', '12:00') } })
+  const gymButton = page.locator('button.task[data-task-id="gym"]')
+  const tasksTop = (await gymButton.boundingBox())!.y
+  await expect(page.locator('#goal-row')).toBeHidden()
+
+  await settingsTab(page).tap()
+  await expect(page.getByRole('heading', { name: SETTINGS.goalTitle })).toBeVisible()
+  await expect(page.locator('#ss-goal-task')).toHaveValue('')
+  await expect(page.locator('.ss-stepper')).toBeHidden()
+  await page.locator('#ss-goal-task').selectOption('gym')
+  await expect(page.locator('#ss-goal-days')).toHaveText('3 days a week')
+  await expect(page.locator('.ss-goal .ss-saved')).toHaveText(SETTINGS.saved)
+  await page.locator('#ss-goal-more').tap()
+  await expect(page.locator('#ss-goal-days')).toHaveText('4 days a week')
+  await page.locator('#ss-goal-fewer').tap()
+  await expect(page.locator('#ss-goal-days')).toHaveText('3 days a week')
+  expect((await stored(page)).settings.goal).toEqual({ taskId: 'gym', daysPerWeek: 3 })
+  for (const sel of ['#ss-goal-task', '#ss-goal-fewer', '#ss-goal-more']) {
+    const b = (await page.locator(sel).boundingBox())!
+    expect(b.height, sel).toBeGreaterThanOrEqual(44)
+    expect(b.width, sel).toBeGreaterThanOrEqual(44)
+  }
+  await page.locator('.ss-goal').scrollIntoViewIfNeeded()
+  await shot(page, `m8s1-goal-card-${info.project.name}`, { settled: true })
+
+  // Home: the chip says where the week is, fits, and never moves the task buttons.
+  await page.locator('.tabbar a.tab[data-route="home"]').tap()
+  const chip = page.locator('#goal-chip')
+  await expect(page.locator('#goal-chip-name')).toHaveText(TASKS.find((t) => t.id === 'gym')!.name)
+  await expect(page.locator('#goal-chip-count')).toHaveText('2 of 3 this week')
+  await expect(page.locator('#goal-chip-label')).toHaveText(/^Weekly goal: .+, 2 of 3 days this week$/)
+  expect((await gymButton.boundingBox())!.y).toBeCloseTo(tasksTop, 0)
+  const fit = await page.evaluate(() => {
+    const r = (s: string) => document.querySelector(s)!.getBoundingClientRect()
+    return { chip: r('#goal-chip'), row: r('.growth-row'), vw: innerWidth, doc: document.documentElement.scrollWidth }
+  })
+  expect(fit.chip.right).toBeLessThanOrEqual(fit.vw)
+  expect(fit.chip.bottom).toBeLessThanOrEqual(fit.row.top + 0.5)
+  expect(fit.doc).toBeLessThanOrEqual(fit.vw)
+  await shot(page, `m8s1-goal-chip-${info.project.name}`, { settled: true })
+
+  // The third gym day meets it: a goal treat on the log, the toast and float say so, the chip ticks.
+  await gymButton.tap()
+  await expect(page.locator('#toast-text')).toHaveText(/^Goal met! \+70 XP · /)
+  await expect(page.locator('.float-xp.float-treat')).toHaveText('+30 goal treat')
+  await expect(chip).toHaveClass(/is-met/)
+  await expect(page.locator('#goal-chip-count')).toHaveText('3 of 3 this week ✓')
+  const events = (await stored(page)).events
+  expect(events[events.length - 1].reward).toEqual({ kind: 'treat', bonusXp: 30, goal: true })
+
+  // Undo takes it back, and the chip with it.
+  await page.locator('#toast-undo').tap()
+  await expect(page.locator('#goal-chip-count')).toHaveText('2 of 3 this week')
+  await expect(chip).not.toHaveClass(/is-met/)
+
+  // A very long task name shortens with "…"; nothing on Home goes wider than the screen.
+  const long = 'Gym / workout at the very far end of the road with friends'
   await page.evaluate(
-    (d) => localStorage.setItem('drag-on:v1', d),
-    JSON.stringify({ schemaVersion: 1, events: logs(['2026-09-01', ...RECENT]), settings: { lastBackupAt: at('2026-09-25', '12:00') } }),
+    ({ name, tasks }) => {
+      const d = JSON.parse(localStorage.getItem('drag-on:v1')!)
+      d.settings.tasks = tasks.map((t: { id: string }) => (t.id === 'gym' ? { ...t, name } : t))
+      localStorage.setItem('drag-on:v1', JSON.stringify(d))
+    },
+    { name: long, tasks: TASKS },
   )
   await page.reload()
-  await expect(page.locator('#tabbar a').first()).toBeVisible()
+  await expect(page.locator('#goal-chip-name')).toHaveText(long)
   await settle(page)
-  expect(await speechShowing(page)).toBe(false)
-  await expect(settingsTab(page).locator('.tab-dot')).toBeHidden()
+  const longFit = await page.evaluate(() => {
+    const name = document.querySelector('#goal-chip-name')!
+    const right = (s: string) => document.querySelector(s)!.getBoundingClientRect().right
+    return { chip: right('#goal-chip'), task: right('button.task[data-task-id="gym"]'), xp: right('.growth-total'), vw: innerWidth, doc: document.documentElement.scrollWidth, cut: name.scrollWidth > name.clientWidth }
+  })
+  expect(longFit.cut).toBe(true)
+  expect(Math.max(longFit.chip, longFit.task, longFit.xp)).toBeLessThanOrEqual(longFit.vw)
+  expect(longFit.doc).toBeLessThanOrEqual(longFit.vw)
+  await shot(page, `m8s1-goal-chip-long-${info.project.name}`)
+  expect(msgs).toEqual([])
 })

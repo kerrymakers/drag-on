@@ -4,6 +4,7 @@
 import { react, renderDragon, renderScene, speechAnchor, speechKeepClear, speechLowerPart, type WearLook } from '../art'
 import { BACKUP_REMINDER_DAYS } from '../config/backup'
 import { EVOLVES_AT_STAGE, LOOK_CHANGE_MARGIN } from '../config/evolution'
+import { GOAL } from '../config/goal'
 import { REWARDS } from '../config/rewards'
 import { DRAGON_NAME_MAX } from '../config/settings'
 import { DEFAULT_WAKE_TIME } from '../config/time'
@@ -19,6 +20,7 @@ import { evolutionLook, lookChange, type Evolution } from '../game/evolution'
 import { skyPeriod } from '../game/scene'
 import { createLogEvent, createUndoEvent, undoableLog } from '../game/log'
 import { foundItems, itemFor, rewardMilestone, treatBonus } from '../game/rewards'
+import { goalMaxDays, goalProgress, isGoalTreat, withGoal } from '../game/goal'
 import { soundIsOn, withScheduleEdit } from '../game/settings'
 import {
   nextRefreshAt,
@@ -43,7 +45,7 @@ import {
   type NewTask,
   type TaskChanges,
 } from '../game/tasks'
-import type { GameEvent, Item, RewardRoll, Settings, Task, TaskAvailability, WakeSchedule, Wearing } from '../game/types'
+import type { GameEvent, Goal, Item, RewardRoll, Settings, Task, TaskAvailability, WakeSchedule, Wearing } from '../game/types'
 import { isWorn, toggleWear, wearOnFind, wornItems, type WornItems } from '../game/wearing'
 import { STORAGE_KEY, load, requestPersistence, save } from '../storage'
 import { backupFileName, exportContents, importBackup, type ListableStore } from '../storage/backup'
@@ -53,9 +55,12 @@ import {
   MOOD_LABELS,
   IMPORT_REFUSED,
   SETTINGS,
+  GOAL_FLOAT,
   TREAT_FLOAT,
   backupReminderLine,
   freezeUsedLine,
+  goalChipCount,
+  goalChipLabel,
   loggedToast,
   NOTICES,
   noticeFor,
@@ -162,6 +167,14 @@ function taskButton(
   return li
 }
 
+/** Replays a little bounce on `chip` (none under reduced motion: see home.css). */
+function cheer(chip: HTMLElement) {
+  chip.classList.remove('is-cheering')
+  void chip.offsetWidth // restart the animation if it's still playing
+  chip.classList.add('is-cheering')
+  chip.addEventListener('animationend', () => chip.classList.remove('is-cheering'), { once: true })
+}
+
 function prefersReducedMotion(): boolean {
   return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 }
@@ -262,6 +275,11 @@ export function startApp(doc: Document): App {
     historyScreen: byId(doc, 'history-screen'),
     settingsScreen: byId(doc, 'settings-screen'),
     streakChip: byId<HTMLButtonElement>(doc, 'streak-chip'),
+    goalRow: byId(doc, 'goal-row'),
+    goalChip: byId(doc, 'goal-chip'),
+    goalName: byId(doc, 'goal-chip-name'),
+    goalCount: byId(doc, 'goal-chip-count'),
+    goalLabel: byId(doc, 'goal-chip-label'),
   }
   const dragonScreen = createDragonScreen(doc, el.dragonScreen, { stats: STATS, stages: STAGES })
   const collectionScreen = createCollectionScreen(doc, el.collectionScreen, { items: REWARDS.items, onWear: wear })
@@ -281,6 +299,9 @@ export function startApp(doc: Document): App {
     onArchiveTask: archive,
     onUnarchiveTask: unarchive,
     onSound: setSound,
+    goal: GOAL,
+    onGoal: setGoal,
+    goalMaxDays: (task) => goalMaxDays(task, data.settings, Date.now(), GOAL),
     onExport: exportBackup,
     onImport: importFile,
     now: () => Date.now(),
@@ -474,6 +495,17 @@ export function startApp(doc: Document): App {
       el.streakChip.setAttribute('aria-label', streakChipLabel(streak))
     }
 
+    // The weekly goal chip: quiet, just the count. Hidden with no goal, or while its
+    // task is archived. Never a warning.
+    const goal = goalProgress(data.events, tasks, data.settings, now, GOAL)
+    el.goalRow.hidden = goal === null
+    if (goal) {
+      el.goalChip.classList.toggle('is-met', goal.met)
+      el.goalName.textContent = goal.task.name
+      el.goalCount.textContent = goalChipCount(goal.done, goal.target, goal.met)
+      el.goalLabel.textContent = goalChipLabel(goal.task.name, goal.done, goal.target, goal.met)
+    }
+
     // Only rebuild the buttons when something about them changed, so a tick never
     // swaps a button out from under a finger or drops keyboard focus.
     const visible = tasks.map((task) => ({
@@ -526,6 +558,7 @@ export function startApp(doc: Document): App {
         tasks,
         lastBackupAt: data.settings.lastBackupAt,
         soundOn: soundIsOn(data.settings),
+        goal: data.settings.goal ?? null,
         readOnly,
         now,
       })
@@ -591,6 +624,14 @@ export function startApp(doc: Document): App {
     data = { ...data, settings: { ...data.settings, soundOn: on } }
     persist()
     sound.play('tap')
+    render()
+  }
+
+  /** The weekly goal from Settings (null for none). It counts from this week on. */
+  function setGoal(goal: Goal | null) {
+    if (readOnly) return
+    data = { ...data, settings: withGoal(data.settings, goal) }
+    persist()
     render()
   }
 
@@ -678,7 +719,7 @@ export function startApp(doc: Document): App {
     const before = data.events
     // The outfit before this log, for any stage-up moment: a find stays a surprise until its card.
     const outfitBefore: WearLook = outfitOf(wornNow(before, data.settings.wearing))
-    const event = createLogEvent(task, data.events, data.settings, now, newId(), rewardRoll(), { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })
+    const event = createLogEvent(task, data.events, data.settings, now, newId(), rewardRoll(), { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS, goal: GOAL })
     if (!event) {
       render(now) // the screen was stale (e.g. the wake window just closed)
       return
@@ -689,6 +730,7 @@ export function startApp(doc: Document): App {
     commit(event)
     // A treat or a find is always good news, on top of the usual feedback. A normal log is unchanged.
     const bonus = treatBonus(event)
+    const goalMet = isGoalTreat(event)
     const item = itemFor(event, REWARDS.items)
     // After the save: a find goes straight on if its spot is free. Never replaces a choice.
     if (item) {
@@ -704,10 +746,12 @@ export function startApp(doc: Document): App {
     const fresh = el.list.querySelector<HTMLElement>(`button.task[data-task-id="${task.id}"]`)
     fresh?.classList.add('is-logged')
     floatXp(doc, rect, `+${event.xpAwarded} XP`)
-    if (bonus > 0) floatXp(doc, rect, TREAT_FLOAT(bonus), true)
+    if (bonus > 0) floatXp(doc, rect, goalMet ? GOAL_FLOAT(bonus) : TREAT_FLOAT(bonus), true)
+    // Meeting the weekly goal: the chip gives a little cheer too.
+    if (goalMet) cheer(el.goalChip)
     react(el.art, item ? 'perk' : bonus > 0 ? 'treat' : 'log')
     const earnedFreeze = logEarnsFreeze(before, event, STREAKS)
-    const logged = loggedToast(event.xpAwarded, task.name, bonus, item !== null, earnedFreeze)
+    const logged = loggedToast(event.xpAwarded, task.name, bonus, item !== null, earnedFreeze, goalMet)
     toast.show(logged, undoLast)
     // After a find's card the card has already celebrated it, so the toast is just the log.
     const afterCard = item ? loggedToast(event.xpAwarded, task.name, 0, false, earnedFreeze) : logged
@@ -760,7 +804,7 @@ export function startApp(doc: Document): App {
     const lookAfter = evolution(data.events, tasks)
     const newLook = lookChange(lookBefore, lookAfter)
     // One sound now, and any bigger ones in turn as their moments arrive (never piled up).
-    const sounds = logSounds({ treat: bonus > 0, item: item !== null, stageUp: reached !== null, newLook: newLook?.firstTime === true })
+    const sounds = logSounds({ treat: bonus > 0, item: item !== null, stageUp: reached !== null, newLook: newLook?.firstTime === true, goal: goalMet })
     sound.play(sounds.now)
     if (reached || newLook?.firstTime) {
       const from = dragonStage(before, STAGES)

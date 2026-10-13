@@ -41,6 +41,9 @@ describe('logSounds', () => {
     expect(logSounds(none)).toEqual({ now: 'log', reveal: null, card: null })
     expect(logSounds({ ...none, treat: true })).toEqual({ now: 'treat', reveal: null, card: null })
     expect(logSounds({ ...none, item: true })).toEqual({ now: 'item', reveal: null, card: null })
+    // Meeting the weekly goal: the jingle on the tap, and still the fanfare for a stage-up.
+    expect(logSounds({ ...none, treat: true, goal: true })).toEqual({ now: 'item', reveal: null, card: null })
+    expect(logSounds({ ...none, treat: true, goal: true, stageUp: true })).toEqual({ now: 'item', reveal: 'stageUp', card: null })
   })
 
   it('saves the fanfare for the stage-up reveal, and a find after it for its card', () => {

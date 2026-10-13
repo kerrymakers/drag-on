@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { GOAL } from '../config/goal'
 import { REWARDS } from '../config/rewards'
 import { STREAKS } from '../config/streaks'
 import { DEFAULT_SETTINGS } from '../config/settings'
@@ -30,7 +31,7 @@ const chunk = (xp: number): Task => ({
 let n = 0
 /** Logs through createLogEvent, so stageReached is recorded as in the app. */
 function logXp(events: GameEvent[], xp: number, when: number, stages: readonly Stage[] = STAGES_A): GameEvent[] {
-  const e = createLogEvent(chunk(xp), events, DEFAULT_SETTINGS, when, `h${++n}`, NO_REWARD, { stages, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS })
+  const e = createLogEvent(chunk(xp), events, DEFAULT_SETTINGS, when, `h${++n}`, NO_REWARD, { stages, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS, goal: GOAL })
   if (!e) throw new Error('refused')
   return [...events, e]
 }

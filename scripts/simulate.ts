@@ -44,6 +44,7 @@ import { TIME_ZONE } from '../src/config/time'
 import { REWARDS } from '../src/config/rewards'
 import type { RewardConfig } from '../src/config/rewards'
 import { STREAKS, STREAK_MILESTONES } from '../src/config/streaks'
+import { GOAL } from '../src/config/goal'
 
 // The sims set XP directly on their what-if tasks, so no effort level overrides it.
 const NO_LEVELS: readonly never[] = []
@@ -77,7 +78,13 @@ const RUNS = Number(process.argv[3] ?? 100)
 //                    first = each milestone once ever; repeat = every time a streak reaches it.
 //   --twins          also run the no-treat twins (twice the time; adds the treat comparison lines)
 const VARIANT = process.argv.find((a) => a.startsWith('--variant='))?.split('=')[1] ?? null
-const EXACT = process.argv.includes('--exact')
+// --goal=N: weekly goal of gym N days a week (default off); --goalxp=N: goal treat bonus XP.
+// A goal passes the full log (as --exact) so goalRewardFor sees the week's logs.
+const GOAL_ARG = process.argv.find((a) => a.startsWith('--goal='))?.split('=')[1]
+const GOAL_XP_ARG = process.argv.find((a) => a.startsWith('--goalxp='))?.split('=')[1]
+const SIM_GOAL = GOAL_XP_ARG === undefined ? GOAL : { ...GOAL, bonusXp: Number(GOAL_XP_ARG) }
+const SIM_SETTINGS = GOAL_ARG && GOAL_ARG !== 'off' ? { ...DEFAULT_SETTINGS, goal: { taskId: 'gym', daysPerWeek: Number(GOAL_ARG) } } : DEFAULT_SETTINGS
+const EXACT = process.argv.includes('--exact') || SIM_SETTINGS !== DEFAULT_SETTINGS
 const MARGIN_ARG = process.argv.find((a) => a.startsWith('--margin='))?.split('=')[1]
 const MARGIN = MARGIN_ARG === undefined ? LOOK_CHANGE_MARGIN : Number(MARGIN_ARG) / 100
 const PROFILES_ARG = process.argv.find((a) => a.startsWith('--profiles='))?.split('=')[1] ?? 'keen,typical,patchy'
@@ -496,7 +503,7 @@ function simulate(profile: Profile, seed: number, rewardCfg: RewardConfig = REWA
           forced = true
         }
       }
-      const ev = createLogEvent(t, todays, DEFAULT_SETTINGS, a.ts, `e${id++}`, roll, { stages: STAGE_LIST, rewards: rewardCfg, streaks: SIM_STREAKS, effortLevels: NO_LEVELS })
+      const ev = createLogEvent(t, todays, SIM_SETTINGS, a.ts, `e${id++}`, roll, { stages: STAGE_LIST, rewards: rewardCfg, streaks: SIM_STREAKS, effortLevels: NO_LEVELS, goal: SIM_GOAL })
       if (!ev) {
         refused[a.taskId] = (refused[a.taskId] ?? 0) + 1
         continue

@@ -118,6 +118,8 @@ When I come back after a gap, the dragon gives a warm "welcome back" reaction. I
 
 I can set one weekly goal: a task and how many days a week I want to do it (for example, gym 3 days a week). Weeks run Monday to Sunday, as in History. Home shows a small goal chip ("Gym 1 of 3 this week"); logging stays exactly as it is. Meeting the goal gets a celebration and a small reward (sized in config by simulation). A goal edit applies from the current week on, so past weeks never change. The goal is optional.
 
+Decided 2026-10-13 (Milestone 8, slice 1): the reward is a goal treat of bonus XP (`GOAL_BONUS_XP`, 30), not an item, because a guaranteed weekly item would empty the collection months early. It goes to the first log of the goal task on a new day once the week's count reaches the target, at most once a week, and takes that log's reward roll. A streak-milestone item still wins its log, and the treat then comes on the next goal day. For the wake-up task the target is capped at the days with a wake-up time that week. If the goal task is archived, the chip hides and the goal rests until another task is picked. Simulation (gym, 3 days a week): at 30 Elder comes 2 to 6 days sooner and the collection about a week later. A gym goal usually makes Strength the top stat by a year, which is a fair reflection of the habit.
+
 ### Goal mood
 
 Decided 2026-10-13: for accountability, the dragon can be wistful about the goal. This sits alongside the mood above and never replaces its warmth.

@@ -1,4 +1,4 @@
-/* Settings: switch, Tasks card, task sheet, Settings toast, confirm sheet. */
+/* Settings: switch, Tasks card, Weekly goal card, task sheet, Settings toast, confirm sheet. */
 /* Settings screen */
 .settings-screen {
   position: relative;
@@ -192,6 +192,91 @@
   color: var(--text-soft);
   font-weight: 600;
   text-align: center;
+}
+
+/* Weekly goal: a task picker and a days-a-week stepper. */
+.ss-goal {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ss-select {
+  padding: 0 44px 0 16px;
+  appearance: none;
+  /* A soft chevron, drawn in the text colour of each scheme. */
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-soft) 50%),
+    linear-gradient(135deg, var(--text-soft) 50%, transparent 50%);
+  background-position:
+    calc(100% - 22px) 50%,
+    calc(100% - 16px) 50%;
+  background-size: 6px 6px;
+  background-repeat: no-repeat;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.ss-select:focus-visible {
+  outline: 3px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+.ss-select:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.ss-stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+  border-radius: 16px;
+  background: var(--bg);
+}
+.ss-stepper[hidden] {
+  display: none;
+}
+.ss-step {
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font: inherit;
+  font-size: 1.4rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 160ms var(--bounce);
+}
+.ss-step:active:not(:disabled) {
+  transform: scale(0.92);
+}
+.ss-step:disabled {
+  opacity: 0.4;
+  box-shadow: none;
+  cursor: default;
+}
+.ss-step:focus-visible {
+  outline: 3px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+.ss-step-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ss-step {
+    transition: none;
+  }
+  .ss-step:active:not(:disabled) {
+    transform: none;
+  }
 }
 
 /* Sounds: a label and its switch on one row. */

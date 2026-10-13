@@ -4,6 +4,7 @@ import { STAGES } from '../config/stages'
 import { STATS } from '../config/stats'
 import { STREAKS } from '../config/streaks'
 import { EFFORT_LEVELS, NEW_TASK_EFFORT, NEW_TASK_ID_PREFIX, TASK_LIMITS, TASKS } from '../config/tasks'
+import { GOAL } from '../config/goal'
 import { REWARDS } from '../config/rewards'
 import { at, NO_REWARD } from '../testing/helpers'
 import { createLogEvent } from './log'
@@ -58,7 +59,7 @@ const byId = (tasks: readonly Task[], id: string): Task => {
 const ids = (tasks: readonly Task[]) => tasks.map((t) => t.id)
 // Fri 9 Oct 2026 (BST): a weekday, so the wake-up task has a target.
 const FRI = (hm: string) => at(`2026-10-09T${hm}:00+01:00`)
-const RULES = { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: LEVELS }
+const RULES = { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: LEVELS, goal: GOAL }
 
 function logAll(tasks: readonly Task[], taps: [string, number][], events: GameEvent[] = [], levels = LEVELS): GameEvent[] {
   let out = events

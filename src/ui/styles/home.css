@@ -1,4 +1,4 @@
-/* Home: notice, header, speech bubble, dragon, growth bar, tasks, toast, XP floats. (Home streak chip .streak-chip: collection.css.) */
+/* Home: notice, header, speech bubble, dragon, growth bar, weekly goal chip, tasks, toast, XP floats. (Home streak chip .streak-chip: collection.css.) */
 /* Notice */
 .notice {
   grid-area: notice;
@@ -247,6 +247,86 @@
 .growth-total {
   color: var(--text-soft);
   font-size: 0.85rem;
+}
+
+/* The weekly goal chip: a quiet line of its own just above the growth row, at the
+   right, over the streak chip. Not tappable. Only the task name shortens to "…". The
+   row takes its height from the dragon's space, so the task buttons never move. */
+.goal-row {
+  display: flex;
+  justify-content: flex-end;
+  /* Never widens Home's column (it's sized to its content): the row adds nothing to
+     that width and takes the column's, so a long name shortens instead. */
+  width: 0;
+  min-width: 100%;
+  margin: 0 0 6px;
+}
+.goal-row[hidden] {
+  display: none;
+}
+.goal-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3em;
+  min-width: 0;
+  max-width: 100%;
+  padding: 1px 10px;
+  border-radius: 999px;
+  background: var(--goal-bg);
+  color: var(--goal-text);
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.goal-chip-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.goal-chip-count {
+  flex-shrink: 0;
+}
+.goal-chip.is-met {
+  background: var(--goal-met-bg);
+  color: var(--goal-met-text);
+}
+.goal-chip.is-cheering {
+  animation: goal-cheer 520ms var(--bounce);
+}
+@keyframes goal-cheer {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.14) rotate(-2deg);
+  }
+  70% {
+    transform: scale(0.97) rotate(1deg);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+:root {
+  --goal-bg: #f4e6f7;
+  --goal-text: #74437f;
+  --goal-met-bg: #e2f0d8;
+  --goal-met-text: #3f6a2c;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --goal-bg: #4a3352;
+    --goal-text: #f0d6f6;
+    --goal-met-bg: #34472b;
+    --goal-met-text: #d4ecc4;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .goal-chip.is-cheering {
+    animation: none;
+  }
 }
 
 .xp-bar {

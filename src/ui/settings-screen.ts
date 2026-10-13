@@ -1,4 +1,5 @@
-// The Settings screen: the dragon's name, the tasks, the wake-up times and Backup
+// The Settings screen: the dragon's name, the tasks, the weekly goal, the wake-up
+// times, sounds and Backup
 // (export and import), each a card in one scrolling column. The Tasks card and its
 // edit sheet live in tasks-card.ts.
 //
@@ -8,12 +9,13 @@
 // Import asks first, in a sheet that says what's in the file. That's fine here: it's
 // nowhere near the logging path, and it replaces everything on the phone.
 
+import type { GoalConfig } from '../config/goal'
 import { activeLogs } from '../game/active'
 import { dayKey, isClockTime } from '../game/day'
 import { cleanDragonName, WEEKDAYS } from '../game/settings'
 import { dragonStage } from '../game/state'
 import type { NewTask, TaskChanges, TaskLimits } from '../game/tasks'
-import type { EffortId, EffortLevel, Stage, Stat, Task, WakeSchedule, Weekday } from '../game/types'
+import type { EffortId, EffortLevel, Goal, Stage, Stat, Task, WakeSchedule, Weekday } from '../game/types'
 import type { SaveData } from '../storage'
 import { readBackup, type BackupCheck } from '../storage/backup'
 import {
@@ -22,6 +24,8 @@ import {
   SETTINGS,
   WEEKDAY_NAMES,
   friendlyDay,
+  goalDays,
+  goalWakeCap,
   importDropped,
   lastBackupLine,
   wakeSwitchLabel,
@@ -43,6 +47,8 @@ export interface SettingsScreenState {
   lastBackupAt: number | undefined
   /** Whether sounds are on. */
   soundOn: boolean
+  /** The weekly goal as saved (its task may be archived), or null for none. */
+  goal: Goal | null
   /** Import, the name, the tasks and the wake-up times are off while the app can't save on this phone. */
   readOnly: boolean
   now: number
@@ -75,6 +81,12 @@ export interface SettingsScreenConfig {
   onUnarchiveTask(id: string): boolean
   /** Turn sounds on or off. */
   onSound(on: boolean): void
+  /** The weekly goal's bounds (config). */
+  goal: GoalConfig
+  /** Save the weekly goal (null for none), from this week on. */
+  onGoal(goal: Goal | null): void
+  /** The most days a week a goal for `task` can ask for this week (fewer for wake-up). */
+  goalMaxDays(task: Task): number
   /** Download a backup file. */
   onExport(): SettingsOutcome
   /** Replace this phone's data with a checked backup the user has confirmed. */
@@ -214,6 +226,37 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
   }
   wakeCard.append(wakeHead, wakeIntro, dayList)
 
+  // Weekly goal: a task picker (active tasks, or none) and a days-a-week stepper.
+  const goalCard = el(doc, 'section', 'ds-card ss-goal')
+  goalCard.setAttribute('aria-labelledby', 'ss-goal-title')
+  const goalHead = el(doc, 'div', 'ss-card-head')
+  const goalTitle = el(doc, 'h2', 'ds-card-title', SETTINGS.goalTitle)
+  goalTitle.id = 'ss-goal-title'
+  const goalSaved = savedNote()
+  goalHead.append(goalTitle, goalSaved.el)
+  const goalIntro = el(doc, 'p', 'ss-text', SETTINGS.goalIntro)
+  const goalTask = el(doc, 'select', 'ss-input ss-select')
+  goalTask.id = 'ss-goal-task'
+  goalTask.setAttribute('aria-label', SETTINGS.goalTaskLabel)
+  const goalArchived = el(doc, 'p', 'ss-note', SETTINGS.goalArchived)
+  goalArchived.id = 'ss-goal-archived'
+  goalArchived.hidden = true
+  const goalStepper = el(doc, 'div', 'ss-stepper')
+  const goalFewer = button(doc, 'ss-step', '−')
+  goalFewer.id = 'ss-goal-fewer'
+  goalFewer.setAttribute('aria-label', SETTINGS.goalFewer)
+  const goalCount = el(doc, 'span', 'ss-step-value')
+  goalCount.id = 'ss-goal-days'
+  goalCount.setAttribute('aria-live', 'polite')
+  const goalMore = button(doc, 'ss-step', '+')
+  goalMore.id = 'ss-goal-more'
+  goalMore.setAttribute('aria-label', SETTINGS.goalMore)
+  goalStepper.append(goalFewer, goalCount, goalMore)
+  const goalCap = el(doc, 'p', 'ss-note')
+  goalCap.id = 'ss-goal-cap'
+  goalCap.hidden = true
+  goalCard.append(goalHead, goalIntro, goalTask, goalArchived, goalStepper, goalCap)
+
   // Sounds: one switch, off to start with.
   const soundCard = el(doc, 'section', 'ds-card ss-sound')
   soundCard.setAttribute('aria-labelledby', 'ss-sound-title')
@@ -235,7 +278,7 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
   soundCard.append(soundHead, soundRow)
 
   // While nothing can be saved, each card says so rather than pretending to save.
-  const editsPaused = [nameCard, wakeCard, soundCard].map((card) => {
+  const editsPaused = [nameCard, goalCard, wakeCard, soundCard].map((card) => {
     const note = el(doc, 'p', 'ss-note', SETTINGS.editsPaused)
     note.hidden = true
     card.append(note)
@@ -260,7 +303,7 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
   })
   tasksCard.head.append(tasksSaved.el)
 
-  scroller.append(title, nameCard, tasksCard.el, wakeCard, soundCard, backup)
+  scroller.append(title, nameCard, tasksCard.el, goalCard, wakeCard, soundCard, backup)
 
   // A short, warm toast above the tab bar.
   const dock = el(doc, 'div', 'ss-toast-dock')
@@ -360,6 +403,79 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
     config.onSound(on)
     soundSaved.show()
   })
+
+  // The weekly goal: saves as soon as it changes, like the rest of Settings.
+  let shownGoal: Goal | null = null
+  let goalTasks: readonly Task[] = []
+  const NO_GOAL = ''
+  /** The picker's placeholder value while the goal's task is archived (task ids are never written like this). */
+  const ARCHIVED_GOAL_TASK = '__archived-goal-task__'
+  /** The most days a goal on `taskId` can ask for this week (at least the config's least). */
+  function topDays(taskId: string): number {
+    const task = goalTasks.find((t) => t.id === taskId)
+    const cap = task ? config.goalMaxDays(task) : config.goal.maxDays
+    return Math.max(config.goal.minDays, Math.min(config.goal.maxDays, cap))
+  }
+  function saveGoal(goal: Goal | null) {
+    shownGoal = goal
+    config.onGoal(goal)
+    goalSaved.show()
+  }
+  goalTask.addEventListener('change', () => {
+    const id = goalTask.value
+    if (id === ARCHIVED_GOAL_TASK) return
+    if (id === NO_GOAL) return saveGoal(null)
+    // Keep the days already chosen, held to what the new task allows this week.
+    const days = Math.min(shownGoal?.daysPerWeek ?? config.goal.defaultDays, topDays(id))
+    saveGoal({ taskId: id, daysPerWeek: Math.max(config.goal.minDays, days) })
+  })
+  function step(delta: number) {
+    if (!shownGoal) return
+    const days = Math.min(topDays(shownGoal.taskId), Math.max(config.goal.minDays, shownGoal.daysPerWeek + delta))
+    if (days === shownGoal.daysPerWeek) return
+    saveGoal({ ...shownGoal, daysPerWeek: days })
+  }
+  goalFewer.addEventListener('click', () => step(-1))
+  goalMore.addEventListener('click', () => step(1))
+
+  function showGoal(goal: Goal | null, tasks: readonly Task[], readOnly: boolean) {
+    shownGoal = goal
+    goalTasks = tasks
+    const active = tasks.filter((t) => !t.archived)
+    const resting = goal !== null && !active.some((t) => t.id === goal.taskId)
+    const options: HTMLOptionElement[] = []
+    const option = (value: string, text: string) => {
+      const o = el(doc, 'option', '', text)
+      o.value = value
+      options.push(o)
+      return o
+    }
+    if (resting) option(ARCHIVED_GOAL_TASK, SETTINGS.goalPick).disabled = true
+    option(NO_GOAL, SETTINGS.goalNone)
+    for (const t of active) option(t.id, t.name)
+    // Only rebuild the list when it changed, so an open picker isn't swapped out.
+    const signature = options.map((o) => `${o.value}:${o.textContent}`).join('|')
+    if (goalTask.dataset.options !== signature) {
+      goalTask.dataset.options = signature
+      goalTask.replaceChildren(...options)
+    }
+    goalTask.value = resting ? ARCHIVED_GOAL_TASK : (goal?.taskId ?? NO_GOAL)
+    goalTask.disabled = readOnly
+    goalArchived.hidden = !resting
+    const editing = goal !== null && !resting
+    goalStepper.hidden = !editing
+    goalCap.hidden = true
+    if (!editing || !goal) return
+    const top = topDays(goal.taskId)
+    const days = Math.min(goal.daysPerWeek, top)
+    goalCount.textContent = goalDays(days)
+    goalFewer.disabled = readOnly || days <= config.goal.minDays
+    goalMore.disabled = readOnly || days >= top
+    if (top < config.goal.maxDays) {
+      goalCap.textContent = goalWakeCap(top)
+      goalCap.hidden = false
+    }
+  }
 
   function saveSchedule(schedule: WakeSchedule) {
     shownSchedule = schedule
@@ -488,7 +604,7 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
   }
 
   return {
-    render({ dragonName, wakeSchedule, tasks, lastBackupAt, soundOn, readOnly, now }) {
+    render({ dragonName, wakeSchedule, tasks, lastBackupAt, soundOn, goal, readOnly, now }) {
       // Never rewrite the name while it's being typed.
       shownName = dragonName
       if (doc.activeElement !== nameInput) nameInput.value = dragonName ?? ''
@@ -504,6 +620,7 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
       readOnlyNow = readOnly
       for (const note of editsPaused) note.hidden = !readOnly
       tasksCard.render(tasks, readOnly)
+      showGoal(goal, tasks, readOnly)
 
       last.textContent = lastBackupLine(
         lastBackupAt === undefined ? null : friendlyDay(dayKey(lastBackupAt), dayKey(now)),

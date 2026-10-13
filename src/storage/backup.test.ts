@@ -60,7 +60,7 @@ function sample(): SaveData {
       { id: 'u', type: 'undo', targetEventId: 'b', timestamp: at('2026-10-02T18:01:00+01:00') },
       gym('c', at('2026-10-03T18:00:00+01:00')),
     ],
-    settings: { ...d.settings, dragonName: 'Ember', wearing: { head: 'bow', neck: null, held: null }, soundOn: true },
+    settings: { ...d.settings, dragonName: 'Ember', wearing: { head: 'bow', neck: null, held: null }, soundOn: true, goal: { taskId: 'gym', daysPerWeek: 3 } },
   }
 }
 
@@ -92,6 +92,14 @@ describe('export then import', () => {
     const check = readBackup(JSON.stringify({ ...sample(), settings: older, exportedAt: NOW }))
     expect(check.ok && check.data.settings.soundOn).toBe(false)
     expect(check.ok && check.data.settings.dragonName).toBe('Ember')
+  })
+
+  it('imports a backup from before goals existed as no goal, and a malformed goal as none', () => {
+    const { goal: _goal, ...older } = sample().settings
+    const check = readBackup(JSON.stringify({ ...sample(), settings: older, exportedAt: NOW }))
+    expect(check.ok && 'goal' in check.data.settings).toBe(false)
+    const odd = readBackup(JSON.stringify({ ...sample(), settings: { ...older, goal: { taskId: 'gym', daysPerWeek: 'lots' } }, exportedAt: NOW }))
+    expect(odd.ok && 'goal' in odd.data.settings).toBe(false)
   })
 
   it('carries the wake schedule history both ways', () => {

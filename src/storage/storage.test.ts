@@ -319,6 +319,15 @@ describe('settings', () => {
     for (const bad of [undefined, false, 'yes', 1, null, {}]) expect(loadSettings({ soundOn: bad }).soundOn, String(bad)).toBe(false)
   })
 
+  it('keeps a well-formed goal or null, and drops a malformed one (older saves have none)', () => {
+    expect(loadSettings({ goal: { taskId: 'gym', daysPerWeek: 3 } }).goal).toEqual({ taskId: 'gym', daysPerWeek: 3 })
+    expect(loadSettings({ goal: null }).goal).toBeNull()
+    expect('goal' in loadSettings({})).toBe(false)
+    for (const bad of ['gym', 3, [], {}, { taskId: 'gym', daysPerWeek: 9 }, { taskId: '', daysPerWeek: 3 }, { taskId: 'gym', daysPerWeek: 1.5 }]) {
+      expect('goal' in loadSettings({ goal: bad }), JSON.stringify(bad)).toBe(false)
+    }
+  })
+
   it('ignores a non-string dragon name', () => {
     expect(loadSettings({ dragonName: 42 }).dragonName).toBeNull()
   })

@@ -38,8 +38,11 @@ export interface OverallStreak {
   days: ReadonlyMap<string, DayStatus>
 }
 
-/** The distinct game days with an active log, up to and including `today`. */
-function loggedDays(events: readonly GameEvent[], today: string, taskIds?: ReadonlySet<string>): Set<string> {
+/**
+ * The distinct game days with an active log, up to and including `today`; only logs
+ * of `taskIds`, if given. Shared with the weekly goal (goal.ts).
+ */
+export function loggedDays(events: readonly GameEvent[], today: string, taskIds?: ReadonlySet<string>): Set<string> {
   const days = new Set<string>()
   for (const log of activeLogs(events)) {
     if (taskIds && !taskIds.has(log.taskId)) continue
@@ -171,7 +174,7 @@ export interface WakeStreak {
 }
 
 /** Whether `weekday` has a usable wake target in the schedule (a malformed time counts as none). */
-function hasTarget(schedule: WakeSchedule, weekday: Weekday): boolean {
+export function hasTarget(schedule: WakeSchedule, weekday: Weekday): boolean {
   const target = schedule[weekday]
   return target != null && clockToDayMinutes(target) !== null
 }
