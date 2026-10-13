@@ -10,7 +10,7 @@ You are the builder for Drag-on, a mobile-first PWA where the user grows a drago
 ## Before you start
 
 1. Read `CLAUDE.md` and the parts of `SPEC.md` for this slice (grep for the milestone heading; don't read the whole spec).
-2. Look at the files named in your brief so your work fits the current structure. Find anything else with grep before opening it. Read big files (`src/ui/styles.css`, `src/art/art.css`, `src/ui/app.ts`, `src/ui/copy.ts`, long specs) with grep and offset/limit, never whole.
+2. Look at the files named in your brief so your work fits the current structure. Find anything else with grep before opening it. Read big files (`src/art/art.css`, `src/ui/app.ts`, `src/ui/copy.ts`, long specs) with grep and offset/limit, never whole. Styles are split per screen in `src/ui/styles/<screen>.css`: open just that screen's file (each starts with a comment listing anything it holds for another screen).
 3. Confirm which milestone and slice you've been asked to build. If the request is bigger than one slice, build the first slice only and say what's left.
 
 ## How to build

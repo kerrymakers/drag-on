@@ -1,0 +1,74 @@
+/* Tab bar. (Tab dot: history.css.) */
+/* Tab bar: thumb height, safe-area aware, room for five tabs at 360px. */
+.tabbar {
+  grid-area: nav;
+  display: flex;
+  justify-content: space-around;
+  gap: 4px;
+  padding: 4px 8px calc(env(safe-area-inset-bottom) + 4px);
+  background: var(--surface);
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -4px 16px rgb(160 100 60 / 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  .tabbar {
+    box-shadow: 0 -4px 16px rgb(0 0 0 / 0.3);
+  }
+}
+
+.tab {
+  flex: 1 1 0;
+  min-width: 48px;
+  max-width: 120px;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 16px;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.tab-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 28px;
+  border-radius: 14px;
+  transition:
+    background-color 200ms ease-out,
+    transform 260ms var(--bounce);
+}
+
+.tab-icon .icon {
+  width: 22px;
+  height: 22px;
+}
+
+.tab.is-active {
+  color: var(--text);
+}
+
+.tab.is-active .tab-icon {
+  background: var(--tab-active, #ffe2c2);
+  color: var(--accent-strong);
+}
+
+.tab:active .tab-icon {
+  transform: scale(0.92);
+}
+
+@media (prefers-color-scheme: dark) {
+  .tab.is-active .tab-icon {
+    --tab-active: #5a3a24;
+  }
+}
+

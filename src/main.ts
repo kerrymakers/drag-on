@@ -1,6 +1,13 @@
 import { registerSW } from 'virtual:pwa-register'
 import { startApp } from './ui/app'
-import './ui/styles.css'
+import './ui/styles/base.css'
+import './ui/styles/home.css'
+import './ui/styles/celebrate.css'
+import './ui/styles/tabs.css'
+import './ui/styles/dragon.css'
+import './ui/styles/collection.css'
+import './ui/styles/history.css'
+import './ui/styles/settings.css'
 
 const app = startApp(document)
 

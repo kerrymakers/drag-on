@@ -1,0 +1,563 @@
+/* Home: notice, header, speech bubble, dragon, growth bar, tasks, toast, XP floats. (Home streak chip .streak-chip: collection.css.) */
+/* Notice */
+.notice {
+  grid-area: notice;
+  margin: 8px var(--space) 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 4px 4px 14px;
+  border-radius: 16px;
+  background: var(--notice-bg);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.notice-text {
+  margin: 0;
+  flex: 1;
+  text-wrap: balance;
+}
+
+.notice-close {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 22px;
+  background: transparent;
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 1.4rem;
+  cursor: pointer;
+}
+
+/* Header */
+.top {
+  text-align: center;
+}
+
+.dragon-name {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.95rem;
+}
+
+.stage-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.mood-chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--chip-bg, var(--surface-done));
+  color: var(--chip-text, var(--text-soft));
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+  transition:
+    background-color 400ms ease,
+    color 400ms ease;
+}
+.mood-chip[data-mood='happy'] {
+  --chip-bg: #ffe2c2;
+  --chip-text: #9a4c1c;
+}
+.mood-chip[data-mood='sleepy'] {
+  --chip-bg: #e6e2f6;
+  --chip-text: #5c4f8a;
+}
+.mood-chip[data-mood='grumpy'] {
+  --chip-bg: #dcebe2;
+  --chip-text: #3f6a52;
+}
+@media (prefers-color-scheme: dark) {
+  .mood-chip[data-mood='happy'] {
+    --chip-bg: #5a3a24;
+    --chip-text: #ffd2a8;
+  }
+  .mood-chip[data-mood='sleepy'] {
+    --chip-bg: #3d3757;
+    --chip-text: #d9d0f5;
+  }
+  .mood-chip[data-mood='grumpy'] {
+    --chip-bg: #31463a;
+    --chip-text: #cfe6d7;
+  }
+}
+
+/* Welcome-back speech bubble, by the dragon and clear of the task buttons. */
+.speech {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  max-width: 240px;
+  width: max-content;
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 18px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-wrap: balance;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px) scale(0.92);
+  transform-origin: 0% 100%;
+  transition:
+    opacity 220ms ease-out,
+    transform 220ms ease-out;
+}
+/* On short screens, when the normal size won't fit beside the head. */
+.speech.is-compact {
+  padding: 6px 10px;
+  border-radius: 14px;
+  font-size: 0.82rem;
+  line-height: 1.25;
+}
+/* The little tail points at the dragon's head. */
+.speech::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: inherit;
+  transform: rotate(45deg);
+  border-radius: 3px;
+}
+.speech[data-tail='down']::after {
+  left: calc(var(--tail-x, 50%) - 7px);
+  bottom: -6px;
+}
+/* --tail-x: set when the bubble sits to one side, so the tail still points at the head. */
+.speech[data-tail='up']::after {
+  left: calc(var(--tail-x, 50%) - 7px);
+  top: -6px;
+}
+.speech[data-tail='right']::after {
+  right: -6px;
+  top: 16px;
+}
+.speech[data-tail='left']::after {
+  left: -6px;
+  top: 16px;
+}
+.speech[data-tail='down'] {
+  transform-origin: 50% 100%;
+}
+.speech[data-tail='up'] {
+  transform-origin: var(--tail-x, 50%) 0%;
+}
+.speech[data-tail='right'] {
+  transform-origin: 100% 20%;
+}
+.speech[data-tail='left'] {
+  transform-origin: 0% 20%;
+}
+
+.speech.is-showing {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 220ms ease-out,
+    transform 380ms var(--bounce);
+}
+
+.stage-name {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+/* Dragon: takes the spare height, shrinking on short screens. */
+.dragon {
+  position: relative;
+  min-height: 0;
+}
+
+.dragon-art,
+.scene-floor {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dragon-art {
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* On short screens, keep a little air between the heading and the tallest stages. */
+@media (max-height: 720px) {
+  .dragon-art,
+  .scene-floor {
+    top: 10px;
+  }
+}
+/* The floor takes the same box as the drawing (.dragon-react), so the ground meets the feet. */
+.scene-floor {
+  pointer-events: none;
+}
+.scene-floor > svg {
+  max-width: 82%;
+  max-height: 340px;
+}
+
+.dragon-art:focus {
+  outline: none;
+}
+
+.dragon-art .dragon-react {
+  max-width: 82%;
+  max-height: 340px;
+}
+/* Above the floor, in the same spot; the nest's lip (.scene-front) above that. */
+.dragon-art,
+.scene-front {
+  z-index: 1;
+}
+
+/* Growth bar */
+.growth {
+  position: relative;
+}
+
+.growth-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.growth-label {
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.growth-total {
+  color: var(--text-soft);
+  font-size: 0.85rem;
+}
+
+.xp-bar {
+  height: 14px;
+  border-radius: 7px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.xp-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 7px;
+  background: linear-gradient(90deg, var(--fill-from), var(--fill-to));
+  transition: width 480ms var(--bounce);
+}
+
+/* Tasks: the only part of Home that scrolls. It runs edge to edge so the buttons'
+   shadows aren't clipped, with the usual side padding inside. */
+.tasks {
+  position: relative;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 calc(-1 * var(--space));
+  padding: 6px var(--space) 2px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.tasks::-webkit-scrollbar {
+  display: none;
+}
+
+/* A soft fade at whichever edge has more to scroll to (set by scroll-fade.ts). */
+.scroll-fade[data-fade='top'] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 24px);
+  mask-image: linear-gradient(to bottom, transparent, #000 24px);
+}
+.scroll-fade[data-fade='bottom'] {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent);
+}
+.scroll-fade[data-fade='both'] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 32px), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 32px), transparent);
+}
+
+.task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task {
+  width: 100%;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 18px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    transform 120ms ease-out,
+    box-shadow 120ms ease-out;
+}
+
+.task:active:not(:disabled) {
+  transform: scale(0.96);
+  box-shadow: var(--shadow-pressed);
+}
+
+/* The squish-and-settle right after a log. */
+.task.is-logged {
+  animation: task-logged 340ms var(--bounce);
+}
+
+@keyframes task-logged {
+  0% {
+    transform: scale(0.94);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.task:focus-visible,
+.tab:focus-visible,
+.undo:focus-visible,
+.toast-undo:focus-visible,
+.notice-close:focus-visible,
+.overlay-button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.task.is-done {
+  background: var(--surface-done);
+  color: var(--text-soft);
+  box-shadow: none;
+  cursor: default;
+}
+
+.task-label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* A long task name (up to TASK_NAME_MAX) wraps, even with no spaces in it. */
+.task-name,
+.hs-row-name,
+.hs-entry-name {
+  overflow-wrap: anywhere;
+}
+
+.task-hint {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-soft);
+}
+
+.task-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  font-size: 0.95rem;
+}
+
+.task-xp {
+  color: var(--accent-strong);
+}
+
+.task-count {
+  color: var(--text-soft);
+  font-weight: 500;
+}
+
+.task-tick {
+  color: var(--tick);
+}
+
+.undo {
+  align-self: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 22px;
+  background: transparent;
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 0.95rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* Nothing to undo: keep the space, hide it from eyes, taps and screen readers. */
+.undo.is-idle {
+  visibility: hidden;
+}
+
+/* Toast: floats just above the growth bar, clear of the bar and the task buttons. */
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  /* left: 50% would cap a shrink-to-fit width at half the bar, wrapping short names */
+  width: max-content;
+  max-width: 100%;
+  padding: 0 4px 0 16px;
+  border-radius: 24px;
+  background: var(--toast-bg);
+  color: var(--toast-text);
+  box-shadow: var(--shadow);
+  font-size: 0.95rem;
+  font-weight: 600;
+  white-space: nowrap;
+  visibility: hidden;
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  transition:
+    opacity 180ms ease-out,
+    transform 180ms ease-out,
+    visibility 0s linear 180ms;
+}
+
+.toast.is-showing {
+  visibility: visible;
+  opacity: 1;
+  transform: translate(-50%, 0);
+  transition:
+    opacity 180ms ease-out,
+    transform 320ms var(--bounce),
+    visibility 0s;
+}
+
+.toast-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 12px 0;
+}
+
+/*
+ * A log's toast: the XP part always shows. A task name that doesn't fit beside it
+ * wraps onto a second line (the toast grows upward, clear of the task buttons), and
+ * only shortens to "…" if it's too long even for a line of its own.
+ */
+.toast-text:has(.toast-lead) {
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.toast.is-wrapped .toast-sep {
+  visibility: hidden;
+}
+.toast-lead {
+  flex-shrink: 0;
+  white-space: pre;
+}
+.toast-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* "…and a streak freeze!": its own line under the XP and name. */
+.toast-note {
+  flex-basis: 100%;
+  margin-top: 2px;
+  font-weight: 500;
+  white-space: normal;
+}
+
+.toast:not(:has(.toast-undo:not([hidden]))) {
+  padding-right: 16px;
+}
+
+.toast-undo {
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 22px;
+  background: transparent;
+  color: var(--toast-action);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* "+40 XP" floating up from the button */
+.float-xp {
+  position: fixed;
+  z-index: 10;
+  pointer-events: none;
+  color: var(--accent-strong);
+  font-weight: 800;
+  font-size: 1.1rem;
+  white-space: nowrap;
+  transform: translate(-100%, -50%);
+  animation: float-xp 800ms ease-out forwards;
+}
+
+@keyframes float-xp {
+  0% {
+    opacity: 0;
+    transform: translate(-100%, -50%) scale(0.8);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-100%, -90%) scale(1.08);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-100%, -260%) scale(1);
+  }
+}
+
+/* A treat: a second float just after the XP one, a soft berry-pink pill. */
+.float-xp.float-treat {
+  color: var(--treat);
+  background: var(--treat-bg);
+  font-size: 1rem;
+  padding: 2px 10px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-pressed);
+  animation: float-xp 950ms ease-out 220ms both;
+}
+

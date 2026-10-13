@@ -1,0 +1,153 @@
+/* Base: tokens, light/dark, the page, the scene frame. Loaded first (see src/main.ts for the order). */
+:root {
+  color-scheme: light dark;
+
+  --bg: #fff6ec;
+  --surface: #ffffff;
+  --surface-done: #fbeee0;
+  --text: #4a3328;
+  --text-soft: #7d6152;
+  /* The dragon's name sits on the sky (see .scene): a little deeper, so it reads on every sky. */
+  --text-on-sky: #5e4538;
+  --accent: #f6b98a;
+  --accent-strong: #a65624;
+  --track: #f6e2cf;
+  --fill-from: #f7b37d;
+  --fill-to: #ee8f5a;
+  --tick: #5f8a4c;
+  /* Small green text (Settings' "Saved"): darker than --tick, for 4.5:1 on the card. */
+  --saved: #557d43;
+  /* An off switch's track: clearly a switch against the card (about 1.7:1). */
+  --switch-off: #e3bf9f;
+  --switch-off-knob: #ffffff;
+  --treat: #a3305f;
+  --treat-bg: #ffe1ec;
+  --toast-bg: #4a3328;
+  --toast-text: #fff6ec;
+  --toast-action: #ffcfa6;
+  --notice-bg: #fdebd7;
+  --scrim: #fff6ec;
+  --shadow: 0 6px 18px rgb(160 100 60 / 0.14);
+  --shadow-pressed: 0 2px 6px rgb(160 100 60 / 0.18);
+
+  --radius-lg: 28px;
+  --radius-md: 20px;
+  --space: 16px;
+  --bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  font-family:
+    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  line-height: 1.35;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #2b211c;
+    --surface: #3a2d26;
+    --surface-done: #33271f;
+    --text: #fbeee2;
+    --text-soft: #d6bfae;
+    --text-on-sky: #e4d0c1;
+    --accent: #e8a173;
+    --accent-strong: #f3b98f;
+    --track: #45362d;
+    --fill-from: #e9a06c;
+    --fill-to: #f3b98f;
+    --tick: #a9d18e;
+    --saved: #a9d18e;
+    --switch-off: #665145;
+    /* Dimmer than the on knob, so an off switch never stands out more than an on one. */
+    --switch-off-knob: #c4ab98;
+    --treat: #ffc2d8;
+    --treat-bg: #5a2f40;
+    --toast-bg: #fbeee2;
+    --toast-text: #2b211c;
+    --toast-action: #a4531f;
+    --notice-bg: #43332a;
+    --scrim: #2b211c;
+    --shadow: 0 6px 18px rgb(0 0 0 / 0.35);
+    --shadow-pressed: 0 2px 6px rgb(0 0 0 / 0.4);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* The page itself never scrolls: only the task list (and the Dragon screen) do. */
+body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/*
+ * The shell fills exactly the visible area: an optional notice, the current screen,
+ * then the tab bar. Named areas keep each row in place when the notice is hidden.
+ */
+.app {
+  height: 100vh;
+  height: 100dvh;
+  max-width: 480px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'notice'
+    'screen'
+    'nav';
+  overflow: hidden;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+}
+
+.screen {
+  grid-area: screen;
+  min-height: 0;
+}
+
+/*
+ * Home: header and dragon up top, tasks in the thumb zone. The dragon takes the
+ * spare height and shrinks to a minimum; after that the task area scrolls.
+ */
+.home {
+  --dragon-min: 96px;
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(var(--dragon-min), 1fr) auto minmax(0, auto);
+  row-gap: 10px;
+  padding: 12px var(--space) 0;
+}
+
+/* The scene (src/art/scene.ts): a rounded window of sky and hills behind the heading
+   and the dragon (the first two rows), and the ground under the dragon. */
+.home > .scene {
+  position: absolute;
+  /* Explicit end lines: for an absolutely placed item, an auto end means the padding edge. */
+  grid-row: 1 / 3;
+  grid-column: 1 / 2;
+  inset: -6px -8px 0;
+  border-radius: var(--radius-lg);
+}
+.home > .top {
+  position: relative;
+  z-index: 1;
+}
+.home > .top .dragon-name {
+  color: var(--text-on-sky);
+}
+

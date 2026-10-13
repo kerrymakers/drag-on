@@ -10,7 +10,7 @@ import { openOverlay } from './overlay'
 
 /**
  * How each stage arrives. Built from shared pieces (the from/to layers, a glow and
- * a burst of sparkles); the CSS for each lives under .reveal-<kind> in styles.css.
+ * a burst of sparkles); the CSS for each lives under .reveal-<kind> in styles/celebrate.css.
  * The egg hatch has its own shake, crack and pop.
  */
 export type RevealKind = 'hatch' | 'spring' | 'flutter' | 'soar' | 'radiant' | 'shimmer'

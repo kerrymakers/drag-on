@@ -1,0 +1,406 @@
+/* Celebrations: stage-up overlay, stage reveals, new-look shimmer, calm versions. */
+/* Stage-up overlay */
+.overlay {
+  outline: none;
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding:
+    calc(env(safe-area-inset-top) + 24px) 24px
+    calc(env(safe-area-inset-bottom) + 24px);
+  background: var(--scrim);
+  animation: overlay-in 200ms ease-out;
+}
+
+.overlay.is-closing {
+  opacity: 0;
+  transition: opacity 200ms ease-in;
+}
+
+.overlay-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  max-width: 360px;
+  text-align: center;
+}
+
+.overlay-art {
+  position: relative;
+  width: min(72vw, 280px);
+  height: min(72vw, 280px, 40dvh);
+}
+
+.overlay-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.overlay-layer.is-to {
+  opacity: 0;
+  transform: scale(0.6);
+}
+
+.overlay.is-popping .overlay-layer.is-from {
+  opacity: 0;
+  transform: scale(1.18);
+  transition:
+    opacity 220ms ease-out,
+    transform 220ms ease-out;
+}
+
+.overlay.is-revealed .overlay-layer.is-from {
+  opacity: 0;
+}
+
+.overlay.is-revealed .overlay-layer.is-to {
+  opacity: 1;
+  transform: scale(1);
+  transition:
+    opacity 200ms ease-out,
+    transform 460ms var(--bounce);
+}
+
+.overlay-message,
+.overlay-sub,
+.overlay-button {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.overlay.is-revealed .overlay-message,
+.overlay.is-revealed .overlay-sub,
+.overlay.is-revealed .overlay-button {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 260ms ease-out 160ms,
+    transform 360ms var(--bounce) 160ms;
+}
+
+.overlay-message {
+  margin: 0;
+  text-wrap: balance;
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.overlay-sub {
+  margin: -6px 0 0;
+  text-wrap: balance;
+  color: var(--text-soft);
+  font-size: 1.02rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.overlay-button {
+  min-height: 56px;
+  min-width: 200px;
+  padding: 0 28px;
+  border: 0;
+  border-radius: 28px;
+  background: var(--accent);
+  color: #3b2418;
+  box-shadow: var(--shadow);
+  font: inherit;
+  font-size: 1.15rem;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Calm versions: no wobble, bounce or float. Fades only, and the bar jumps. */
+@media (prefers-reduced-motion: reduce) {
+  .task,
+  .xp-fill {
+    transition: none;
+  }
+  .task:active:not(:disabled) {
+    transform: none;
+  }
+  .task.is-logged {
+    animation: none;
+  }
+  .mood-chip {
+    transition: none;
+  }
+  .speech,
+  .speech.is-showing {
+    transform: none;
+    transition: opacity 220ms ease-out;
+  }
+  .toast,
+  .toast.is-showing {
+    transform: translate(-50%, 0);
+    transition:
+      opacity 180ms ease-out,
+      visibility 0s;
+  }
+  .toast:not(.is-showing) {
+    transition:
+      opacity 180ms ease-out,
+      visibility 0s linear 180ms;
+  }
+  .float-xp {
+    animation: float-xp-calm 800ms ease-out forwards;
+  }
+  .float-xp.float-treat {
+    animation: float-xp-calm 950ms ease-out 220ms both;
+  }
+}
+
+/*
+ * Overlays under reduced motion: the JS adds .is-calm (it also shortens the timings),
+ * so every overlay rule for reduced motion hangs off that one class. Fades only.
+ */
+.overlay.is-calm .overlay-layer.is-to,
+.overlay.is-calm.is-revealed .overlay-layer.is-to,
+.overlay.is-calm .overlay-message,
+.overlay.is-calm .overlay-sub,
+.overlay.is-calm .overlay-button {
+  transform: none;
+}
+.overlay.is-calm .overlay-layer.is-from,
+.overlay.is-calm .overlay-layer.is-to {
+  transition: opacity 400ms ease-in-out !important;
+}
+.overlay.is-calm.is-revealed .overlay-message,
+.overlay.is-calm.is-revealed .overlay-sub,
+.overlay.is-calm.is-revealed .overlay-button {
+  transition: opacity 300ms ease-out 200ms;
+}
+
+@keyframes float-xp-calm {
+  0%,
+  100% {
+    opacity: 0;
+    transform: translate(-100%, -50%);
+  }
+  25%,
+  70% {
+    opacity: 1;
+    transform: translate(-100%, -50%);
+  }
+}
+
+/* Stage reveals after hatching: shared glow and sparkles, a different entrance each. */
+.overlay-glow {
+  position: absolute;
+  inset: 4%;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--glow, rgb(255 205 150 / 0.75)) 0%, transparent 68%);
+  opacity: 0;
+  transform: scale(0.6);
+}
+
+.overlay-sparks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.overlay-sparks span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: var(--spark, #ffd59a);
+  opacity: 0;
+}
+
+.overlay.is-revealed .overlay-sparks span {
+  animation: spark-burst 760ms ease-out var(--delay, 0ms) both;
+}
+
+.overlay.is-revealed .overlay-glow {
+  animation: glow-in 900ms ease-out both;
+}
+
+.overlay.is-popping .overlay-layer.is-from {
+  transition:
+    opacity 200ms ease-out,
+    transform 200ms ease-out;
+}
+
+.reveal-spring.is-revealed .overlay-layer.is-to {
+  animation: reveal-spring 560ms var(--bounce) both;
+}
+.reveal-flutter.is-revealed .overlay-layer.is-to {
+  animation: reveal-flutter 680ms ease-out both;
+}
+.reveal-soar.is-revealed .overlay-layer.is-to {
+  animation: reveal-soar 720ms var(--bounce) both;
+}
+.reveal-radiant {
+  --glow: rgb(255 214 120 / 0.85);
+  --spark: #ffe08a;
+}
+.reveal-radiant.is-revealed .overlay-layer.is-to {
+  animation: reveal-radiant 1100ms ease-out both;
+}
+.reveal-radiant.is-revealed .overlay-sparks span {
+  animation-duration: 1300ms;
+}
+.reveal-radiant.is-revealed .overlay-glow {
+  animation: glow-in 1400ms ease-out both, glow-pulse 2.8s ease-in-out 1.4s infinite;
+}
+
+/* A new look on the same stage: a soft shimmer, no pop. The old look fades as the new one arrives. */
+.reveal-shimmer {
+  --spark: #fff0c9;
+}
+.reveal-shimmer .overlay-layer.is-to {
+  transform: scale(0.96);
+}
+.reveal-shimmer.is-revealed .overlay-layer.is-from {
+  transition: opacity 500ms ease-in-out;
+}
+.reveal-shimmer.is-revealed .overlay-layer.is-to {
+  animation: reveal-shimmer 700ms ease-out both;
+}
+.reveal-shimmer.is-revealed .overlay-sparks span {
+  animation-duration: 1100ms;
+}
+
+@keyframes reveal-shimmer {
+  0% {
+    opacity: 0;
+    transform: scale(0.96);
+    filter: brightness(1.25);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .overlay-glow {
+    --glow: rgb(255 180 110 / 0.45);
+  }
+  .reveal-radiant .overlay-glow {
+    --glow: rgb(255 210 120 / 0.5);
+  }
+}
+
+@keyframes spark-burst {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.4);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) scale(1);
+  }
+}
+
+@keyframes glow-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+
+@keyframes reveal-spring {
+  0% {
+    opacity: 0;
+    transform: translateY(30px) scale(0.6);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes reveal-flutter {
+  0% {
+    opacity: 0;
+    transform: scale(0.7) rotate(-8deg);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.05) rotate(6deg);
+  }
+  70% {
+    transform: scale(0.98) rotate(-3deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes reveal-soar {
+  0% {
+    opacity: 0;
+    transform: translateY(70px) scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes reveal-radiant {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+    filter: brightness(1.4);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+/* Calm: no sparkles or entrances, just the crossfade. */
+.overlay.is-calm .overlay-sparks,
+.overlay.is-calm .overlay-glow {
+  display: none;
+}
+.overlay.is-calm.is-revealed .overlay-layer.is-to {
+  animation: none !important;
+}
+

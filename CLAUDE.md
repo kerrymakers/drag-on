@@ -87,7 +87,7 @@ Models: `builder` runs on Opus; `reviewer`, `phone-tester` and `balance-checker`
 ### Keeping usage down
 
 - The main session coordinates; it doesn't read source files the agents will read anyway. Agent reports go back to the next agent summarised, not pasted whole.
-- Read big files (`src/ui/styles.css`, `src/art/art.css`, `src/ui/app.ts`, `src/ui/copy.ts`, long specs) with grep and offset/limit, never whole.
+- Read big files (`src/art/art.css`, `src/ui/app.ts`, `src/ui/copy.ts`, long specs) with grep and offset/limit, never whole. Styles are split per screen in `src/ui/styles/<screen>.css`: open just that screen's file (each starts with a comment listing anything it holds for another screen).
 - Pipe test output through `tail` or a failure filter; never print a whole test log or JSON report.
 - Agents run `npm test`, `npm run build` and only the related e2e specs (picked from `tests/e2e/README.md`). The full e2e run happens in GitHub Actions.
 - Start a fresh session (`/clear`) between slices; memory holds progress.

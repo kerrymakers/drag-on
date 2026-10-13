@@ -1,0 +1,424 @@
+/* Collection: found card, Collection screen. Also for other screens: worn chips .wear-list (Dragon screen), Home streak chip .streak-chip (its reduced-motion rule is in history.css). */
+/* "Found something!": a small card over a soft, see-through scrim. */
+.overlay.item-found {
+  background: color-mix(in srgb, var(--scrim) 84%, transparent);
+}
+
+.item-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 320px;
+  padding: 22px 22px 24px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  text-align: center;
+  animation: item-card-in 380ms var(--bounce) both;
+}
+
+.item-found-heading {
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.item-found-art {
+  width: min(40vw, 150px);
+  height: min(40vw, 150px, 22dvh);
+  padding: 14px;
+  border-radius: 50%;
+  background: var(--item-bed);
+  animation: item-pop 520ms var(--bounce) 120ms both;
+}
+
+.item-found-name {
+  margin: 4px 0 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+.overlay.item-found .item-found-line {
+  margin: 0;
+}
+
+.item-found-saved {
+  margin: 0 0 8px;
+  color: var(--text-soft);
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.overlay.item-found .overlay-button {
+  min-width: 180px;
+}
+
+@keyframes item-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes item-pop {
+  0% {
+    transform: scale(0.4) rotate(-12deg);
+  }
+  70% {
+    transform: scale(1.06) rotate(3deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+/* Collection screen */
+.collection-screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* A small preview of the dragon in its outfit. */
+.cs-art {
+  height: clamp(96px, 15dvh, 132px);
+  /* Headroom so the tallest horns stay in the scroll area through a tap reaction. */
+  margin: 16px auto 4px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.cs-art .dragon-react {
+  margin: 0 auto;
+}
+
+.cs-hint {
+  margin: 4px 0 0;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-wrap: balance;
+}
+
+/* The wear toast floats just above the tab bar. */
+.cs-toast-dock {
+  position: absolute;
+  left: var(--space);
+  right: var(--space);
+  bottom: 4px;
+  height: 0;
+  pointer-events: none;
+}
+/* No Undo here, so the toast never catches a tap meant for a tile below it. */
+.cs-toast {
+  pointer-events: none;
+}
+
+.cs-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  /* Room below the last row, so it can scroll clear of the wear toast. */
+  padding: 12px var(--space) 72px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.cs-header {
+  text-align: center;
+}
+
+.cs-title {
+  margin: 4px 0 2px;
+  font-size: 1.6rem;
+  font-weight: 800;
+}
+
+.cs-count {
+  display: inline-block;
+  margin: 0;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: #ffe2c2;
+  color: #9a4c1c;
+  font-weight: 800;
+}
+
+.cs-line {
+  margin: 10px 0 0;
+  color: var(--text-soft);
+  font-weight: 600;
+  text-wrap: balance;
+}
+
+/* Three across at 410px and still at 360px (each tile ~100px). */
+.item-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.item-cell {
+  display: flex;
+}
+
+.item-tile {
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 10px 6px 10px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+/* A found tile is a button: tap to wear, tap again to take off. */
+button.item-tile {
+  margin: 0;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  transition:
+    transform 160ms var(--bounce),
+    box-shadow 160ms ease;
+}
+button.item-tile:active {
+  transform: scale(0.96);
+  box-shadow: var(--shadow-pressed);
+}
+button.item-tile:focus-visible {
+  outline: 3px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+.item-tile.is-worn {
+  box-shadow:
+    0 0 0 3px var(--worn-ring),
+    var(--shadow);
+}
+.item-tile-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--worn-ring);
+  color: var(--worn-text);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.4;
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    opacity 160ms ease,
+    transform 220ms var(--bounce);
+}
+.item-tile.is-worn .item-tile-badge {
+  opacity: 1;
+  transform: none;
+}
+
+.item-tile-art {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  max-width: 72px;
+  aspect-ratio: 1;
+  padding: 8px;
+  border-radius: 50%;
+  background: var(--item-bed);
+}
+
+.item-tile-name {
+  margin-top: 4px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.item-tile-date {
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.item-tile.is-unknown {
+  justify-content: center;
+  background: transparent;
+  box-shadow: none;
+  border: 2px dashed var(--track);
+}
+
+.item-tile.is-unknown .item-tile-art {
+  background: var(--track);
+  color: var(--text-soft);
+  font-size: 1.8rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+:root {
+  --item-bed: #ffeedd;
+  /* Text on --item-bed: it stays light in dark mode, so its text stays dark. */
+  --item-bed-text: #4a3328;
+  --worn-ring: #b4561f;
+  --worn-text: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --item-bed: #f3dcc4;
+    --item-bed-text: #3a2418;
+    --worn-ring: #f3b98f;
+    --worn-text: #3a2418;
+  }
+  .cs-count {
+    background: #5a3a24;
+    color: #ffd2a8;
+  }
+}
+
+/* Reduced motion (.is-calm, like the stage-up): the card fades in, nothing bounces. */
+.overlay.item-found.is-calm .item-card {
+  animation: overlay-in 200ms ease-out both;
+}
+.overlay.item-found.is-calm .item-found-art {
+  animation: none;
+}
+
+/* Reduced motion: wearing still shows straight away, nothing bounces. */
+@media (prefers-reduced-motion: reduce) {
+  button.item-tile,
+  .item-tile-badge {
+    transition: none;
+  }
+  button.item-tile:active {
+    transform: none;
+  }
+}
+
+/* Dragon screen: what's worn, as little chips. */
+.wear-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.wear-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 4px 14px 4px 4px;
+  border-radius: 999px;
+  background: var(--item-bed);
+  color: var(--item-bed-text);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.wear-icon {
+  display: block;
+  width: 36px;
+  height: 36px;
+  padding: 3px;
+}
+.wear-list[hidden] + .wear-empty {
+  margin-top: 0;
+}
+.wear-empty:not([hidden]) {
+  margin-top: 0;
+}
+
+/* Home: the streak chip beside the XP total. Small and soft, never an alarm. Its tap
+   area reaches 44px tall without making the row any taller. It grows down and
+   sideways only (over the XP bar, which isn't tappable), never up, so it can't reach
+   the toast's Undo button or the dragon above. */
+.growth-label {
+  min-width: 0;
+}
+.growth-side {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.streak-chip {
+  position: relative;
+  align-self: center;
+  /* Negative margins so the chip never makes the row taller and nudges the tasks down. */
+  margin: -4px 0;
+  padding: 1px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--streak-bg);
+  color: var(--streak-text);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1.5;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 160ms var(--bounce);
+}
+.streak-chip::before {
+  content: '';
+  position: absolute;
+  inset: 0 -6px -23px;
+}
+.streak-chip:active {
+  transform: scale(0.94);
+}
+.streak-chip:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+:root {
+  --streak-bg: #e3eef8;
+  --streak-text: #3d5f80;
+  --cal-dot: #ee8f5a;
+  --cal-frost: #3f6a96;
+  --cal-selected: #ffe2c2;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --streak-bg: #2f4256;
+    --streak-text: #cfe2f5;
+    --cal-dot: #f3b98f;
+    --cal-frost: #bcdcff;
+    --cal-selected: #5a3a24;
+  }
+}
+
