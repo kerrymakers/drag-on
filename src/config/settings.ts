@@ -6,6 +6,8 @@ export const DEFAULT_SETTINGS: Settings = {
   dragonName: null,
   // Nothing worn to start with. Older saves without `wearing` load as this.
   wearing: { head: null, neck: null, held: null },
+  // Sounds are off until switched on in Settings. Older saves without `soundOn` load as this.
+  soundOn: false,
 }
 
 /** The longest dragon name, in characters. Longer names are cut to this. */

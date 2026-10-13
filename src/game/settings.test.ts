@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS } from '../config/settings'
 import { at } from '../testing/helpers'
-import { cleanDragonName, SCHEDULE_BASELINE_FROM, sameSchedule, scheduleOn, withScheduleEdit } from './settings'
+import { cleanDragonName, SCHEDULE_BASELINE_FROM, sameSchedule, scheduleOn, soundIsOn, withScheduleEdit } from './settings'
 import type { Settings, WakeSchedule } from './types'
 
 const WEEKDAYS_ONLY: WakeSchedule = { ...DEFAULT_SETTINGS.wakeSchedule } // weekdays 06:30, weekends none
@@ -192,5 +192,15 @@ describe('cleanDragonName', () => {
   it('makes a blank name null', () => {
     expect(cleanDragonName('', 20)).toBeNull()
     expect(cleanDragonName('   ', 20)).toBeNull()
+  })
+})
+
+describe('soundIsOn', () => {
+  it('is off by default, and when absent (older saves); on only when switched on', () => {
+    expect(DEFAULT_SETTINGS.soundOn).toBe(false)
+    expect(soundIsOn(DEFAULT_SETTINGS)).toBe(false)
+    const { soundOn: _soundOn, ...older } = DEFAULT_SETTINGS
+    expect(soundIsOn(older)).toBe(false)
+    expect(soundIsOn({ ...DEFAULT_SETTINGS, soundOn: true })).toBe(true)
   })
 })

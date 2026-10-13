@@ -193,6 +193,8 @@ Decided 2026-10-09: the reminder is the dragon mentioning it in its speech bubbl
 
 Decided 2026-10-12 (Milestone 7, slice 5): Home has a cosy background scene behind the dragon: a sky, soft rolling hills, and a grassy patch under the dragon (a nest for the egg). The sky follows the real London clock, not the 04:00 game day: dawn and evening run from half an hour before to half an hour after sunrise and sunset, day is in between, and night is the rest. Sunrise and sunset come from a small table of London times for the 15th of each month (`src/config/scene.ts`), blended in a straight line for the days in between so there's no jump at the turn of a month. In dark mode each sky is a dimmer, muted version of itself. The scene moves gently (drifting clouds, twinkling stars) and stands still under reduced motion. On the egg, when there's no room for a speech bubble above or beside it, the bubble may sit on the lower part of the egg, above the nest, but never over its middle or its face.
 
+Decided 2026-10-13 (Milestone 7, slice 2): sounds are off by default, with a switch in Settings (saved in settings and in backups; older backups without it import as off). They're made on the spot with Web Audio, no audio files, so they work offline: a chirp on every log, a jingle for a treat, a sparkle for a find (and for a new look), a small fanfare when the new stage is revealed, and a squeak when the dragon is tapped. One log never plays a pile of sounds at once: the tap gets one sound, and a stage-up's fanfare or a find's card after it plays when that moment arrives. Sound follows only the switch, not reduced motion, and a phone that can't play it just stays quiet; logging never waits for it.
+
 ## Milestones
 
 Each milestone is usable on its own.

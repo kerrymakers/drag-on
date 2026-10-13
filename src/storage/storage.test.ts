@@ -314,6 +314,11 @@ describe('settings', () => {
     })
   })
 
+  it('keeps sound on only for a real true; anything else, or nothing (older saves), is off', () => {
+    expect(loadSettings({ soundOn: true }).soundOn).toBe(true)
+    for (const bad of [undefined, false, 'yes', 1, null, {}]) expect(loadSettings({ soundOn: bad }).soundOn, String(bad)).toBe(false)
+  })
+
   it('ignores a non-string dragon name', () => {
     expect(loadSettings({ dragonName: 42 }).dragonName).toBeNull()
   })

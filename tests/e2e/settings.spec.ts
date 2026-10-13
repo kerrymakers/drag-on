@@ -74,7 +74,7 @@ test('Settings tab: fifth tab, gear icon, route, layout and tap targets in light
     await shot(page, `m6s1-settings-${info.project.name}-${scheme}`)
   }
 
-  for (const sel of ['#ss-export', '#ss-import', ...[0, 1, 2, 3, 4].map((i) => `.tabbar a.tab >> nth=${i}`)]) {
+  for (const sel of ['#ss-export', '#ss-import', '#ss-sound-on', ...[0, 1, 2, 3, 4].map((i) => `.tabbar a.tab >> nth=${i}`)]) {
     const b = (await page.locator(sel).boundingBox())!
     expect(b.height, sel).toBeGreaterThanOrEqual(44)
     expect(b.width, sel).toBeGreaterThanOrEqual(44)
@@ -90,6 +90,24 @@ test('Settings tab: fifth tab, gear icon, route, layout and tap targets in light
   // Back returns to Home.
   await page.goBack()
   await expect(page.locator('#home')).toBeVisible()
+
+  // Sounds: off to start with. Switched on, it stays on after a reload, and logging
+  // (a hatch, with its fanfare) and a tap on the dragon make no errors.
+  await settingsTab(page).tap()
+  const soundSwitch = page.getByRole('switch', { name: SETTINGS.soundLabel })
+  await expect(soundSwitch).toHaveAttribute('aria-checked', 'false')
+  await soundSwitch.tap()
+  await expect(soundSwitch).toHaveAttribute('aria-checked', 'true')
+  expect((await stored(page)).settings.soundOn).toBe(true)
+  await page.reload()
+  await expect(soundSwitch).toHaveAttribute('aria-checked', 'true')
+  await page.locator('.tabbar a.tab[data-route="home"]').tap()
+  await page.locator('button.task[data-task-id="gym"]').tap()
+  // This log hatches the egg: the fanfare plays as it's revealed.
+  await expect(page.locator('.overlay.is-revealed')).toBeVisible()
+  await page.locator('.overlay-button').tap()
+  await expect(page.locator('.overlay')).toHaveCount(0)
+  await page.locator('#dragon-art').tap()
   expect(msgs).toEqual([])
 })
 

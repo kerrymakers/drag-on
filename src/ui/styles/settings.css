@@ -194,6 +194,25 @@
   text-align: center;
 }
 
+/* Sounds: a label and its switch on one row. */
+.ss-sound {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ss-sound-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+}
+.ss-sound-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 /* An on/off switch: a soft pill with a sliding knob, in a 44px-tall tap area. */
 .ss-switch {
   flex: 0 0 auto;

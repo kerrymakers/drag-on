@@ -19,7 +19,7 @@ import { evolutionLook, lookChange, type Evolution } from '../game/evolution'
 import { skyPeriod } from '../game/scene'
 import { createLogEvent, createUndoEvent, undoableLog } from '../game/log'
 import { foundItems, itemFor, rewardMilestone, treatBonus } from '../game/rewards'
-import { withScheduleEdit } from '../game/settings'
+import { soundIsOn, withScheduleEdit } from '../game/settings'
 import {
   nextRefreshAt,
   dragonProgress,
@@ -73,6 +73,7 @@ import { createNav, type Route } from './nav'
 import { outfitOf } from './outfit'
 import { watchScrollFade } from './scroll-fade'
 import { createSettingsScreen, type ReadyBackup, type SettingsOutcome } from './settings-screen'
+import { createSoundPlayer, logSounds } from './sound'
 import { placeSpeech } from './speech'
 import { createToast } from './toast'
 import { createUpdateGate } from './updates'
@@ -279,6 +280,7 @@ export function startApp(doc: Document): App {
     onUpdateTask: editTask,
     onArchiveTask: archive,
     onUnarchiveTask: unarchive,
+    onSound: setSound,
     onExport: exportBackup,
     onImport: importFile,
     now: () => Date.now(),
@@ -292,6 +294,8 @@ export function startApp(doc: Document): App {
     byId<HTMLButtonElement>(doc, 'toast-undo'),
   )
   const updates = createUpdateGate(doc)
+  // Off unless switched on in Settings. Asked at each sound, so the switch works at once.
+  const sound = createSoundPlayer(() => soundIsOn(data.settings))
   // While read-only, nothing at all is written to this device, UI state included.
   // The store is chosen at each write, so a session that turns read-only later is covered.
   const welcome = createWelcome(() => (readOnly ? undefined : globalThis.localStorage))
@@ -521,6 +525,7 @@ export function startApp(doc: Document): App {
         wakeSchedule: data.settings.wakeSchedule,
         tasks,
         lastBackupAt: data.settings.lastBackupAt,
+        soundOn: soundIsOn(data.settings),
         readOnly,
         now,
       })
@@ -577,6 +582,15 @@ export function startApp(doc: Document): App {
     if (readOnly) return
     data = { ...data, settings: withScheduleEdit(data.settings, schedule, Date.now()) }
     persist()
+    render()
+  }
+
+  /** Sounds on or off, from Settings. Switching on plays a little squeak, to say hello. */
+  function setSound(on: boolean) {
+    if (readOnly) return
+    data = { ...data, settings: { ...data.settings, soundOn: on } }
+    persist()
+    sound.play('tap')
     render()
   }
 
@@ -726,6 +740,7 @@ export function startApp(doc: Document): App {
     // A find gets its own little card, after any stage-up or new-look moment.
     const showFind = () => {
       if (!item) return done()
+      if (sounds.card) sound.play(sounds.card)
       showItemFound(doc, {
         item,
         wearing: wearingFind,
@@ -744,6 +759,9 @@ export function startApp(doc: Document): App {
     const lookBefore = evolution(before, tasks)
     const lookAfter = evolution(data.events, tasks)
     const newLook = lookChange(lookBefore, lookAfter)
+    // One sound now, and any bigger ones in turn as their moments arrive (never piled up).
+    const sounds = logSounds({ treat: bonus > 0, item: item !== null, stageUp: reached !== null, newLook: newLook?.firstTime === true })
+    sound.play(sounds.now)
     if (reached || newLook?.firstTime) {
       const from = dragonStage(before, STAGES)
       updates.setBusy(true)
@@ -759,6 +777,9 @@ export function startApp(doc: Document): App {
         // With a find to show next, focus goes straight to its card instead.
         returnFocus: item ? undefined : returnFocus,
         onClose: showFind,
+        onReveal: () => {
+          if (sounds.reveal) sound.play(sounds.reveal)
+        },
       })
     } else if (item) {
       updates.setBusy(true)
@@ -776,6 +797,7 @@ export function startApp(doc: Document): App {
   el.art.addEventListener('click', () => {
     hush()
     react(el.art, 'tap')
+    sound.play('tap')
   })
 
   doc.addEventListener('visibilitychange', () => {

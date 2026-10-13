@@ -107,6 +107,11 @@ export interface Settings {
    * effectiveTasks and write through withTasks.
    */
   tasks?: unknown[]
+  /**
+   * Whether the app makes its little sounds. Off unless switched on in Settings; absent
+   * (older saves and backups) means off. Read through soundIsOn.
+   */
+  soundOn?: boolean
 }
 
 /** One item id, or null for nothing, per spot on the dragon. */

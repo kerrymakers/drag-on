@@ -164,6 +164,8 @@ function readSettings(v: unknown): Settings {
     ...(history ? { wakeScheduleHistory: history } : {}),
     dragonName: typeof v.dragonName === 'string' ? v.dragonName : defaults.dragonName,
     wearing: readWearing(v.wearing, defaults.wearing),
+    // Older saves and backups have none: off. Only a real `true` turns sound on.
+    soundOn: v.soundOn === true,
     // Older saves have none (never backed up). Anything that isn't a real time is dropped.
     ...(typeof lastBackupAt === 'number' && Number.isFinite(lastBackupAt) ? { lastBackupAt } : {}),
     // Older saves have none: then the config's tasks apply (see effectiveTasks).

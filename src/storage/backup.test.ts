@@ -60,7 +60,7 @@ function sample(): SaveData {
       { id: 'u', type: 'undo', targetEventId: 'b', timestamp: at('2026-10-02T18:01:00+01:00') },
       gym('c', at('2026-10-03T18:00:00+01:00')),
     ],
-    settings: { ...d.settings, dragonName: 'Ember', wearing: { head: 'bow', neck: null, held: null } },
+    settings: { ...d.settings, dragonName: 'Ember', wearing: { head: 'bow', neck: null, held: null }, soundOn: true },
   }
 }
 
@@ -85,6 +85,13 @@ describe('export then import', () => {
     const loaded = load(store)
     expect(loaded.notice).toBe('ok')
     expect(loaded.data).toEqual({ ...data, settings: { ...data.settings, lastBackupAt: NOW } })
+  })
+
+  it('imports a backup from before sounds existed as sound off', () => {
+    const { soundOn: _soundOn, ...older } = sample().settings
+    const check = readBackup(JSON.stringify({ ...sample(), settings: older, exportedAt: NOW }))
+    expect(check.ok && check.data.settings.soundOn).toBe(false)
+    expect(check.ok && check.data.settings.dragonName).toBe('Ember')
   })
 
   it('carries the wake schedule history both ways', () => {

@@ -42,13 +42,15 @@ export interface CelebrateOptions {
   /** Where focus goes when the dialog closes. Leave out when another overlay follows. */
   returnFocus?: (() => HTMLElement | null) | undefined
   onClose?: () => void
+  /** When the new dragon (or look) appears: for the fanfare, timed with the reveal. */
+  onReveal?: () => void
 }
 
 let overlayCount = 0
 
 export function celebrate(
   doc: Document,
-  { from, to, fromLook, toLook, newLook = null, wearing, reducedMotion, background, returnFocus, onClose }: CelebrateOptions,
+  { from, to, fromLook, toLook, newLook = null, wearing, reducedMotion, background, returnFocus, onClose, onReveal }: CelebrateOptions,
 ): void {
   const lookOnly = from.id === to.id
   const copy = celebrationCopy(lookOnly ? null : to.id, newLook)
@@ -123,7 +125,10 @@ export function celebrate(
     onClose,
   })
   const later = (ms: number, fn: () => void) => timers.push(window.setTimeout(fn, ms))
-  const reveal = () => overlay.classList.add('is-revealed')
+  const reveal = () => {
+    overlay.classList.add('is-revealed')
+    onReveal?.()
+  }
 
   if (reducedMotion) {
     // A calm crossfade from the old look to the new one.

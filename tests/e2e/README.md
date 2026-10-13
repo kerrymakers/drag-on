@@ -23,7 +23,7 @@ The whole suite runs in GitHub Actions on every push, and deploy waits for it. R
 | `streak-rewards.spec.ts` | Streak milestone finds, freeze notes, the "kept our streak cosy" line |
 | `dragon-screen.spec.ts` | Shared layout and the tab bar, the Dragon screen, scrolling on short screens |
 | `short-viewport.spec.ts` | Toasts, the hatch overlay and notices on short screens |
-| `settings.spec.ts` | The Settings tab, export, import, the backup reminder |
+| `settings.spec.ts` | The Settings tab, the sound switch, export, import, the backup reminder |
 | `settings-name-wake.spec.ts` | Settings: the dragon's name and wake-up times |
 | `settings-tasks.spec.ts` | Settings: editing tasks and the effort picker |
 

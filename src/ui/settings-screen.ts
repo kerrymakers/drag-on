@@ -41,6 +41,8 @@ export interface SettingsScreenState {
   tasks: readonly Task[]
   /** When the last backup was made (or the imported one was exported), if ever. */
   lastBackupAt: number | undefined
+  /** Whether sounds are on. */
+  soundOn: boolean
   /** Import, the name, the tasks and the wake-up times are off while the app can't save on this phone. */
   readOnly: boolean
   now: number
@@ -71,6 +73,8 @@ export interface SettingsScreenConfig {
   onUpdateTask(id: string, changes: TaskChanges): boolean
   onArchiveTask(id: string): boolean
   onUnarchiveTask(id: string): boolean
+  /** Turn sounds on or off. */
+  onSound(on: boolean): void
   /** Download a backup file. */
   onExport(): SettingsOutcome
   /** Replace this phone's data with a checked backup the user has confirmed. */
@@ -209,8 +213,29 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
     rows.set(day, { time, off, toggle })
   }
   wakeCard.append(wakeHead, wakeIntro, dayList)
+
+  // Sounds: one switch, off to start with.
+  const soundCard = el(doc, 'section', 'ds-card ss-sound')
+  soundCard.setAttribute('aria-labelledby', 'ss-sound-title')
+  const soundHead = el(doc, 'div', 'ss-card-head')
+  const soundTitle = el(doc, 'h2', 'ds-card-title', SETTINGS.soundTitle)
+  soundTitle.id = 'ss-sound-title'
+  const soundSaved = savedNote()
+  soundHead.append(soundTitle, soundSaved.el)
+  const soundRow = el(doc, 'div', 'ss-sound-row')
+  const soundLabel = el(doc, 'span', 'ss-sound-label', SETTINGS.soundLabel)
+  soundLabel.id = 'ss-sound-label'
+  const soundToggle = button(doc, 'ss-switch', '')
+  soundToggle.id = 'ss-sound-on'
+  soundToggle.setAttribute('role', 'switch')
+  soundToggle.setAttribute('aria-labelledby', 'ss-sound-label')
+  soundToggle.setAttribute('aria-checked', 'false')
+  soundToggle.append(el(doc, 'span', 'ss-switch-track'))
+  soundRow.append(soundLabel, soundToggle)
+  soundCard.append(soundHead, soundRow)
+
   // While nothing can be saved, each card says so rather than pretending to save.
-  const editsPaused = [nameCard, wakeCard].map((card) => {
+  const editsPaused = [nameCard, wakeCard, soundCard].map((card) => {
     const note = el(doc, 'p', 'ss-note', SETTINGS.editsPaused)
     note.hidden = true
     card.append(note)
@@ -235,7 +260,7 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
   })
   tasksCard.head.append(tasksSaved.el)
 
-  scroller.append(title, nameCard, tasksCard.el, wakeCard, backup)
+  scroller.append(title, nameCard, tasksCard.el, wakeCard, soundCard, backup)
 
   // A short, warm toast above the tab bar.
   const dock = el(doc, 'div', 'ss-toast-dock')
@@ -325,6 +350,15 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
     e.preventDefault()
     saveName()
     nameInput.blur()
+  })
+
+  // The whole row is the switch's tap area: the label taps it too.
+  soundLabel.addEventListener('click', () => soundToggle.click())
+  soundToggle.addEventListener('click', () => {
+    const on = soundToggle.getAttribute('aria-checked') !== 'true'
+    soundToggle.setAttribute('aria-checked', String(on))
+    config.onSound(on)
+    soundSaved.show()
   })
 
   function saveSchedule(schedule: WakeSchedule) {
@@ -454,7 +488,7 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
   }
 
   return {
-    render({ dragonName, wakeSchedule, tasks, lastBackupAt, readOnly, now }) {
+    render({ dragonName, wakeSchedule, tasks, lastBackupAt, soundOn, readOnly, now }) {
       // Never rewrite the name while it's being typed.
       shownName = dragonName
       if (doc.activeElement !== nameInput) nameInput.value = dragonName ?? ''
@@ -465,6 +499,8 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
         row.time.disabled = readOnly
         row.toggle.disabled = readOnly
       }
+      soundToggle.setAttribute('aria-checked', String(soundOn))
+      soundToggle.disabled = readOnly
       readOnlyNow = readOnly
       for (const note of editsPaused) note.hidden = !readOnly
       tasksCard.render(tasks, readOnly)

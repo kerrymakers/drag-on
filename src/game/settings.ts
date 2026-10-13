@@ -117,3 +117,8 @@ export function cleanText(raw: string, max: number): string | null {
   const text = characters(raw.trim()).slice(0, Math.max(0, max)).join('').trim()
   return text === '' ? null : text
 }
+
+/** Whether sounds are on: only when switched on (absent, in older saves, is off). */
+export function soundIsOn(settings: Settings): boolean {
+  return settings.soundOn === true
+}

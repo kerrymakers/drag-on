@@ -431,6 +431,9 @@ export const SETTINGS = {
   wakeIntro: 'Changes start from today. Days gone by keep the times they had.',
   /** In place of the time on a day with no wake-up target. */
   wakeOff: 'Lie-in',
+  soundTitle: 'Sounds',
+  /** Beside the sound switch, which is its label too. */
+  soundLabel: 'Little chirps and jingles',
   /** Beside a card's title, briefly, after a change is saved. */
   saved: 'Saved',
   /** Under the name, tasks and wake-up cards while the app can't save on this phone. */
