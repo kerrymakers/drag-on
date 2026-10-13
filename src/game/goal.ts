@@ -16,8 +16,9 @@
 
 import type { GoalConfig } from '../config/goal'
 import { activeLogs } from './active'
-import { dayKey, daysBetween, shiftDayKey, weekdayOf } from './day'
+import { dayKey, daysBetween, minutesSinceDayStart, shiftDayKey, weekdayOf } from './day'
 import { scheduleOn } from './settings'
+import { wakeDeadline } from './state'
 import { hasTarget, loggedDays, weekStartKey } from './streaks'
 import type { GameEvent, Goal, LogEvent, Reward, Settings, Task } from './types'
 
@@ -31,6 +32,14 @@ export interface GoalProgress {
   daysLeft: number
   /** Whether `done` has reached `target`. */
   met: boolean
+  /** Whether the goal task has an active log today (game day). */
+  loggedToday: boolean
+  /**
+   * Days left this week, today included, on which a log of the task could still count:
+   * `daysLeft`, except for the wake-up task, where it's the days left with a wake
+   * target, today only while its window is still open (see wakeDeadline).
+   */
+  chancesLeft: number
 }
 
 /** The goal's days a week as set, held to the config's bounds. */
@@ -87,9 +96,41 @@ export function goalProgress(
   if (target < 1) return null
   const today = dayKey(now)
   const start = weekStartKey(today, config.weekStart)
-  const done = daysThisWeek(events, task.id, start, today).size
+  const days = daysThisWeek(events, task.id, start, today)
+  const done = days.size
   const daysLeft = daysBetween(today, shiftDayKey(start, 6)) + 1
-  return { task, done, target, daysLeft, met: done >= target }
+  const chancesLeft = task.rules.kind === 'wakeUp' ? wakeChancesLeft(settings, now, today, daysLeft) : daysLeft
+  return { task, done, target, daysLeft, met: done >= target, loggedToday: days.has(today), chancesLeft }
+}
+
+/** The wake-up task's chances left this week (see GoalProgress.chancesLeft). */
+function wakeChancesLeft(settings: Settings, now: number, today: string, daysLeft: number): number {
+  const deadline = wakeDeadline(settings, now)
+  let chances = deadline !== null && minutesSinceDayStart(now) <= deadline ? 1 : 0
+  for (let i = 1; i < daysLeft; i++) {
+    const d = shiftDayKey(today, i)
+    if (hasTarget(scheduleOn(settings, d), weekdayOf(d))) chances++
+  }
+  return chances
+}
+
+/**
+ * Whether the dragon is wistful about the weekly goal (Milestone 8, slice 2). It's a
+ * soft touch on top of the mood, about the goal and never about me, and it changes
+ * nothing else (XP, stats, stage, streaks, rewards). True only while all hold:
+ * - there's a goal this week and it isn't met yet;
+ * - the goal task hasn't been logged today, so a log lifts it straight away;
+ * - the week can still be met: the days needed fit in the chances left (the days
+ *   left, today included; for the wake-up task only those with a wake target, and
+ *   today only while its window is open). Once it can't, it goes quiet: a lost week
+ *   is never dwelt on;
+ * - it's tight: the days needed are more than the chances left less the buffer.
+ * A new week starts with nothing done and seven days left, so it resets on Monday.
+ */
+export function goalWistful(progress: GoalProgress | null, config: Pick<GoalConfig, 'wistfulBuffer'>): boolean {
+  if (!progress || progress.met || progress.loggedToday) return false
+  const needed = progress.target - progress.done
+  return needed <= progress.chancesLeft && needed > progress.chancesLeft - config.wistfulBuffer
 }
 
 /** Whether a log holds a goal treat. Checks the shape at run time, like treatBonus. */

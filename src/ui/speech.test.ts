@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { placeSpeech, type Box } from './speech'
+import { clearAbove, placeSpeech, type Box } from './speech'
 
 /** A bubble whose text wraps: narrower max widths make it taller. */
 const measure = (maxWidth: number) => {
@@ -14,6 +14,28 @@ const toPage = (area: Box, p: ReturnType<typeof placeSpeech>): Box => {
 }
 const inside = (inner: Box, outer: Box) =>
   inner.left >= outer.left && inner.top >= outer.top && inner.right <= outer.right && inner.bottom <= outer.bottom
+
+describe('clearAbove (a showing toast)', () => {
+  it('keeps every placement above the toast, the egg and the short-screen fallbacks included', () => {
+    const area = { left: 16, top: 100, right: 394, bottom: 420 }
+    expect(clearAbove(area, null)).toEqual(area)
+    expect(clearAbove(area, 500)).toEqual(area)
+    expect(clearAbove(area, 50)).toEqual({ ...area, bottom: 100 })
+    const toastTop = 330
+    const room = clearAbove(area, toastTop)
+    const heads: Box[] = [
+      { left: 120, top: 260, right: 290, bottom: 380 }, // low: above it is the only room
+      { left: 60, top: 102, right: 350, bottom: 250 }, // wide and high: below it, now short
+      { left: 150, top: 102, right: 260, bottom: 200 },
+    ]
+    for (const head of heads) {
+      for (const lower of [undefined, { top: 300, bottom: 400 }]) {
+        const bubble = toPage(room, placeSpeech(room, head, measure, [], lower))
+        expect(bubble.bottom, JSON.stringify({ head, lower })).toBeLessThanOrEqual(toastTop - 10)
+      }
+    }
+  })
+})
 
 describe('placeSpeech', () => {
   it('sits just above the head when there is room, pointing down at it', () => {

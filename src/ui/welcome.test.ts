@@ -217,3 +217,18 @@ describe('backup reminder', () => {
     }
   })
 })
+
+describe('wistful goal line', () => {
+  it('is said at most once per game day, remembered across reloads beside the other fields', () => {
+    const store = new FakeStore()
+    const w = createWelcome(() => store)
+    expect(w.shouldSayWistful('2026-10-08')).toBe(true)
+    w.markBackupReminded('2026-10-08')
+    w.markWistful('2026-10-08')
+    expect(w.shouldSayWistful('2026-10-08')).toBe(false)
+    expect(w.shouldSayWistful('2026-10-07')).toBe(false)
+    expect(w.shouldSayWistful('2026-10-09')).toBe(true)
+    expect(JSON.parse(store.map.get(UI_KEY) as string)).toEqual({ backupReminderDay: '2026-10-08', wistfulDay: '2026-10-08' })
+    expect(createWelcome(() => store).shouldSayWistful('2026-10-08')).toBe(false)
+  })
+})

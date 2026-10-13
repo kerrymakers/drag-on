@@ -2,7 +2,8 @@
 // finds the dragon sleepy during a gap, and once more if the same gap reaches curled
 // up. A new log starts a new gap. Also "kept our streak cosy": said once per day a
 // streak freeze covered, and "shall we save a backup?" at most once per game day
-// while a backup is due. State lives under its own UI key, never in the game data,
+// while a backup is due, and "still hoping we make our goal" at most once per game day
+// while the dragon is wistful about the weekly goal. State lives under its own UI key, never in the game data,
 // and falls back to memory if storage isn't available.
 
 import type { MoodId } from '../game/types'
@@ -35,6 +36,10 @@ export interface Welcome {
   shouldRemindBackup(today: string): boolean
   /** Remember that the backup reminder has been said on `today`. */
   markBackupReminded(today: string): void
+  /** True if the wistful goal line hasn't been said on game day `today` (or a later one). */
+  shouldSayWistful(today: string): boolean
+  /** Remember that the wistful goal line has been said on `today`. */
+  markWistful(today: string): void
 }
 
 const isMood = (v: unknown): v is MoodId =>
@@ -66,6 +71,8 @@ export function createWelcome(getStore: () => KeyValueStore | undefined): Welcom
   let cosyDay: string | null = typeof saved.cosyDay === 'string' ? saved.cosyDay : null
   /** The game day the backup reminder was last said. */
   let backupDay: string | null = typeof saved.backupReminderDay === 'string' ? saved.backupReminderDay : null
+  /** The game day the wistful goal line was last said. */
+  let wistfulDay: string | null = typeof saved.wistfulDay === 'string' ? saved.wistfulDay : null
 
   /** Merge `fields` into the UI key, keeping anything else there. */
   function write(fields: Record<string, unknown>) {
@@ -107,6 +114,13 @@ export function createWelcome(getStore: () => KeyValueStore | undefined): Welcom
     markBackupReminded(today) {
       backupDay = today
       write({ backupReminderDay: today })
+    },
+    shouldSayWistful(today) {
+      return wistfulDay === null || today > wistfulDay
+    },
+    markWistful(today) {
+      wistfulDay = today
+      write({ wistfulDay: today })
     },
   }
 }

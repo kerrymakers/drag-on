@@ -3,7 +3,7 @@
 import { readFile } from 'node:fs/promises'
 import { test, expect, settle, shot, LAYOUT, type Page } from './fixtures'
 import { TASKS } from '../../src/config/tasks'
-import { BACKUP_REMINDER, IMPORT_REFUSED, SETTINGS, WELCOME_BACK } from '../../src/ui/copy'
+import { BACKUP_REMINDER, GOAL_WISTFUL, GOAL_WISTFUL_LIFTED, IMPORT_REFUSED, SETTINGS, WELCOME_BACK } from '../../src/ui/copy'
 
 test.use({ timezoneId: 'Europe/London', locale: 'en-GB' })
 // Friday 9 October 2026, 10:00 BST.
@@ -337,7 +337,7 @@ test('backup reminder: a welcome back takes the open and the reminder waits; non
   await reopen({ schemaVersion: 1, events: logs(['2026-09-01', ...RECENT]), settings: { lastBackupAt: at('2026-09-25', '12:00') } })
 })
 
-test('weekly goal: set it in Settings, the Home chip counts, and the log that meets it celebrates', LAYOUT, async ({ page }, info) => {
+test('weekly goal: set it in Settings, the Home chip counts, the log that meets it celebrates, and a tight week turns wistful until logged', LAYOUT, async ({ page }, info) => {
   const msgs = collectConsole(page)
   // Hatched already (no stage-up in the way); gym on Wed and Thu this week (Mon 5 to Sun 11 Oct).
   await open(page, { schemaVersion: 1, events: logs(['2026-09-01', '2026-09-02', '2026-09-03', ...RECENT]), settings: { lastBackupAt: at('2026-10-08', '12:00') } })
@@ -394,6 +394,30 @@ test('weekly goal: set it in Settings, the Home chip counts, and the log that me
   await page.locator('#toast-undo').tap()
   await expect(page.locator('#goal-chip-count')).toHaveText('2 of 3 this week')
   await expect(chip).not.toHaveClass(/is-met/)
+  await expect(chip).not.toHaveClass(/is-wistful/)
+  await expect(page.locator('#dragon-art .dragon-svg')).not.toHaveAttribute('data-goal', 'wistful')
+
+  // Four a week, two done, Friday not logged yet: tight, so the dragon turns wistful.
+  // Back on Home it says a hopeful line once, the chip softens, and a puff shows.
+  await settingsTab(page).tap()
+  await page.locator('#ss-goal-more').tap()
+  await expect(page.locator('#ss-goal-days')).toHaveText('4 days a week')
+  await page.locator('.tabbar a.tab[data-route="home"]').tap()
+  await expect(chip).toHaveClass(/is-wistful/)
+  await expect(page.locator('#dragon-art .dragon-svg')).toHaveAttribute('data-goal', 'wistful')
+  await expect(page.locator('#speech')).toHaveClass(/is-showing/)
+  expect(GOAL_WISTFUL).toContain(await page.locator('#speech').textContent())
+  await shot(page, `m8s2-goal-wistful-${info.project.name}`, { settled: true })
+  // Logging the goal task lifts it at once, with a happy line.
+  await gymButton.tap()
+  await expect(page.locator('#speech')).toHaveText(GOAL_WISTFUL_LIFTED)
+  // The happy line sits clear above the log's toast, never under it.
+  await expect(page.locator('#toast')).toHaveClass(/is-showing/)
+  const lift = await page.evaluate(() => ({ speech: document.querySelector('#speech')!.getBoundingClientRect().bottom, toast: document.querySelector('#toast')!.getBoundingClientRect().top }))
+  expect(lift.speech).toBeLessThanOrEqual(lift.toast)
+  await expect(chip).not.toHaveClass(/is-wistful/)
+  await expect(page.locator('#dragon-art .dragon-svg')).not.toHaveAttribute('data-goal', 'wistful')
+  await expect(page.locator('#goal-chip-count')).toHaveText('3 of 4 this week')
 
   // A very long task name shortens with "…"; nothing on Home goes wider than the screen.
   const long = 'Gym / workout at the very far end of the road with friends'

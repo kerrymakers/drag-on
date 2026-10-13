@@ -37,6 +37,11 @@ export interface DragonLook {
    * wears nothing (the choice is kept, and shows once it hatches).
    */
   wearing?: WearLook | undefined
+  /**
+   * Wistful about the weekly goal: a small sigh puff on top of whatever the mood is
+   * (data-goal="wistful" on the drawing). The mood and its look don't change.
+   */
+  wistful?: boolean
 }
 
 export type MoodLook = 'happy' | 'content' | 'sleepy' | 'grumpy'
@@ -104,7 +109,7 @@ export function hasLookArt(stage: string): boolean {
  * Draws the dragon into `container`. Calling it again with a look that draws the
  * same picture (same stage, look and outfit) keeps the drawing, so idle animations
  * don't restart on every render.
- * A mood change only updates data-mood. CSS fades the mood overlays, eases the
+ * A mood change only updates data-mood, and wistful only data-goal. CSS fades the mood overlays, eases the
  * posture, and eases how much each idle motion moves without restarting it. Only
  * breathing and blinking change speed with the mood, which can shift them by a few
  * pixels mid-cycle, under the fade.
@@ -127,6 +132,11 @@ export function renderDragon(container: HTMLElement, look: DragonLook): void {
     const box = drawing.querySelector('.dragon-head-box')
     const xywh = box?.getAttribute(`data-box-${mood}`)?.split(' ')
     if (box && xywh?.length === 4) (['x', 'y', 'width', 'height'] as const).forEach((a, i) => box.setAttribute(a, xywh[i]!))
+  }
+  // Wistful about the goal: a layer of its own, so the mood (and the mood chip) stay as they are.
+  if (drawing) {
+    if (look.wistful) drawing.setAttribute('data-goal', 'wistful')
+    else drawing.removeAttribute('data-goal')
   }
 }
 

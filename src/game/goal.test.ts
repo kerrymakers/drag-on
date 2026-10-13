@@ -6,7 +6,7 @@ import { STAGES } from '../config/stages'
 import type { StreakConfig } from '../config/streaks'
 import { EFFORT_LEVELS, TASKS } from '../config/tasks'
 import { at, log, NO_REWARD, undo } from '../testing/helpers'
-import { cleanGoal, goalMaxDays, goalProgress, goalRewardFor, isGoalTreat, withGoal } from './goal'
+import { cleanGoal, goalMaxDays, goalProgress, goalRewardFor, goalWistful, isGoalTreat, withGoal } from './goal'
 import { createLogEvent } from './log'
 import { treatBonus } from './rewards'
 import { withScheduleEdit } from './settings'
@@ -14,7 +14,7 @@ import { totalXp } from './state'
 import type { GameEvent, Goal, LogEvent, Settings, Task } from './types'
 
 /** Fixed numbers, so these tests don't move when the real config is rebalanced. */
-const CONFIG: GoalConfig = { bonusXp: 30, minDays: 1, maxDays: 7, defaultDays: 3, weekStart: 'mon' }
+const CONFIG: GoalConfig = { bonusXp: 30, minDays: 1, maxDays: 7, defaultDays: 3, weekStart: 'mon', wistfulBuffer: 2 }
 const GOAL_TREAT = { kind: 'treat', bonusXp: 30, goal: true }
 
 const task = (id: string): Task => {
@@ -97,6 +97,94 @@ describe('goalProgress', () => {
     const none = withGoalOn({ taskId: 'wake', daysPerWeek: 3 }, { ...DEFAULT_SETTINGS, wakeSchedule: { mon: null, tue: null, wed: null, thu: null, fri: null, sat: null, sun: null } })
     expect(goalMaxDays(wake, none, when('mon'), CONFIG)).toBe(0)
     expect(progress([], when('mon'), none)).toBeNull()
+  })
+})
+
+describe('goalWistful', () => {
+  const wistful = (events: readonly GameEvent[], now: number, settings: Settings = GYM3, tasks: readonly Task[] = TASKS) =>
+    goalWistful(progress(events, now, settings, tasks), CONFIG)
+  const WEEK: Day[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+  /** The days before `day` this week, the first `n` of them logged. */
+  const doneBefore = (day: Day, n: number) => gymWeek(WEEK.slice(0, WEEK.indexOf(day)).slice(0, n))
+
+  it('gym 3 a week: wistful from Thursday with none done, Friday with one, Saturday with two; quiet once out of reach or met', () => {
+    // [day, days done before it, wistful that morning]
+    const table: [Day, number, boolean][] = [
+      ['mon', 0, false], ['tue', 0, false], ['wed', 0, false], ['thu', 0, true],
+      ['thu', 1, false], ['fri', 0, true], ['fri', 1, true], ['fri', 2, false],
+      ['sat', 0, false], ['sat', 1, true], ['sat', 2, true], ['sun', 1, false], ['sun', 2, true], ['sun', 3, false],
+    ]
+    for (const [day, n, expected] of table) expect(wistful(doneBefore(day, n), when(day, '09:00')), `${day} after ${n}`).toBe(expected)
+    // The progress behind it.
+    expect(progress(doneBefore('fri', 1), when('fri', '09:00'))).toMatchObject({ done: 1, daysLeft: 3, chancesLeft: 3, loggedToday: false })
+  })
+
+  it('a log of the goal task lifts it straight away, even while the week stays tight; undoing brings it back', () => {
+    const before = doneBefore('sat', 1)
+    expect(wistful(before, when('sat', '09:00'))).toBe(true)
+    const sat = log(gym, when('sat', '09:00'))
+    const after = [...before, sat]
+    expect(progress(after, when('sat', '09:01'))).toMatchObject({ done: 2, loggedToday: true })
+    expect(wistful(after, when('sat', '09:01'))).toBe(false)
+    expect(wistful([...after, undo(sat, when('sat', '09:02'))], when('sat', '09:03'))).toBe(true)
+    // Another task's log doesn't lift it.
+    expect(wistful([...before, log(read, when('sat', '09:00'))], when('sat', '09:01'))).toBe(true)
+  })
+
+  it('a 7-day goal is wistful each morning until logged', () => {
+    const seven = withGoalOn({ taskId: 'gym', daysPerWeek: 7 })
+    expect(wistful([], when('mon', '08:00'), seven)).toBe(true)
+    const mon = gymWeek(['mon'], seven)
+    expect(wistful(mon, when('mon', '20:00'), seven)).toBe(false)
+    expect(wistful(mon, when('tue', '08:00'), seven)).toBe(true)
+  })
+
+  it('follows the 04:00 day boundary: a 03:59 log belongs to the day before', () => {
+    const late = [log(gym, when('fri', '03:59'))] // Thursday's log
+    expect(progress(late, when('fri', '03:59'))).toMatchObject({ loggedToday: true })
+    expect(wistful(late, when('fri', '03:59'))).toBe(false)
+    // From 04:00 it's Friday: one done, two needed in three days.
+    expect(wistful(late, when('fri', '04:00'))).toBe(true)
+    expect(wistful([...late, log(gym, when('fri', '04:00'))], when('fri', '04:01'))).toBe(false)
+  })
+
+  it('resets on Monday: a lost or tight week is never carried over', () => {
+    const tight = doneBefore('sun', 2)
+    expect(wistful(tight, when('nextMon', '03:59'))).toBe(true) // still Sunday
+    expect(wistful(tight, when('nextMon', '04:00'))).toBe(false)
+    expect(wistful([], when('nextMon', '09:00'))).toBe(false)
+  })
+
+  it('follows a target change at once: lowered eases it, raised past reach goes quiet', () => {
+    expect(wistful([], when('thu', '09:00'))).toBe(true)
+    expect(wistful([], when('thu', '09:00'), withGoalOn({ taskId: 'gym', daysPerWeek: 2 }))).toBe(false)
+    expect(wistful([], when('thu', '09:00'), withGoalOn({ taskId: 'gym', daysPerWeek: 5 }))).toBe(false)
+    expect(wistful([], when('thu', '09:00'), withGoalOn({ taskId: 'gym', daysPerWeek: 4 }))).toBe(true)
+  })
+
+  it('is never wistful with no goal, an archived goal task, or a buffer of 0 on a roomy week', () => {
+    expect(goalWistful(null, CONFIG)).toBe(false)
+    expect(wistful([], when('sat', '09:00'), DEFAULT_SETTINGS)).toBe(false)
+    expect(wistful([], when('thu', '09:00'), GYM3, TASKS.map((t) => (t.id === 'gym' ? { ...t, archived: true } : t)))).toBe(false)
+    expect(goalWistful(progress([], when('thu', '09:00')), { wistfulBuffer: 0 })).toBe(false)
+  })
+
+  it('the wake-up goal counts only days with a wake target, and today only while its window is open', () => {
+    const wake7 = withGoalOn({ taskId: 'wake', daysPerWeek: 7 }) // capped to 5: Monday to Friday
+    const wakeOn = (days: Day[]) => days.map((d) => log(wake, when(d, '06:35')))
+    expect(progress([], when('mon', '06:00'), wake7)).toMatchObject({ target: 5, daysLeft: 7, chancesLeft: 5 })
+    expect(wistful([], when('mon', '06:00'), wake7)).toBe(true)
+    // The window closes at 06:45 (06:30 plus grace): Monday's chance has gone, and so has the week.
+    expect(progress([], when('mon', '06:46'), wake7)).toMatchObject({ chancesLeft: 4 })
+    expect(wistful([], when('mon', '06:46'), wake7)).toBe(false)
+    // Four done by Friday morning: one needed, one chance.
+    expect(wistful(wakeOn(['mon', 'tue', 'wed', 'thu']), when('fri', '06:00'), wake7)).toBe(true)
+    // The weekend has no wake targets, so a week not met by Friday goes quiet.
+    expect(wistful(wakeOn(['mon', 'tue', 'wed', 'thu']), when('sat', '09:00'), wake7)).toBe(false)
+    // Three a week: one done by Thursday morning is tight; once Thursday's window closes it's out of reach.
+    const wake3 = withGoalOn({ taskId: 'wake', daysPerWeek: 3 })
+    expect(wistful(wakeOn(['mon']), when('thu', '06:00'), wake3)).toBe(true)
+    expect(wistful(wakeOn(['mon']), when('thu', '07:00'), wake3)).toBe(false)
   })
 })
 

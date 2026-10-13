@@ -2,10 +2,11 @@
 // Moods are overlays shown by CSS from the svg's data-mood:
 // happy glows, content is calm, sleepy wears a nightcap with a zzz,
 // and curled up is tucked into a little blanket, peeking out.
+// Wistful about the goal (data-goal) adds a small sigh puff beside it, whatever the mood.
 // Idle life (art.css): the whole egg wobbles now and then, and the inside of it
 // (.egg-inner) gives the odd little hop, as if something is stirring.
 
-import { headBoxRect, heart, zzz } from './parts'
+import { headBoxRect, heart, sighPuff, zzz } from './parts'
 
 export type CrackLevel = 0 | 1 | 2
 
@@ -58,6 +59,7 @@ export function eggSvg(crack: CrackLevel, uid: string): string {
     <circle class="egg-cap-band" cx="340" cy="24" r="15" />
   </g>
   ${zzz(352, 150)}
+  ${sighPuff(140, 128)}
   <g class="mood-part mood-grumpy">
     <ellipse class="hd-eye" cx="226" cy="238" rx="9" ry="11" />
     <ellipse class="hd-eye" cx="286" cy="238" rx="9" ry="11" />

@@ -20,7 +20,7 @@ import { evolutionLook, lookChange, type Evolution } from '../game/evolution'
 import { skyPeriod } from '../game/scene'
 import { createLogEvent, createUndoEvent, undoableLog } from '../game/log'
 import { foundItems, itemFor, rewardMilestone, treatBonus } from '../game/rewards'
-import { goalMaxDays, goalProgress, isGoalTreat, withGoal } from '../game/goal'
+import { goalMaxDays, goalProgress, goalWistful, isGoalTreat, withGoal } from '../game/goal'
 import { soundIsOn, withScheduleEdit } from '../game/settings'
 import {
   nextRefreshAt,
@@ -56,11 +56,13 @@ import {
   IMPORT_REFUSED,
   SETTINGS,
   GOAL_FLOAT,
+  GOAL_WISTFUL_LIFTED,
   TREAT_FLOAT,
   backupReminderLine,
   freezeUsedLine,
   goalChipCount,
   goalChipLabel,
+  goalWistfulLine,
   loggedToast,
   NOTICES,
   noticeFor,
@@ -79,7 +81,7 @@ import { outfitOf } from './outfit'
 import { watchScrollFade } from './scroll-fade'
 import { createSettingsScreen, type ReadyBackup, type SettingsOutcome } from './settings-screen'
 import { createSoundPlayer, logSounds } from './sound'
-import { placeSpeech } from './speech'
+import { clearAbove, placeSpeech } from './speech'
 import { createToast } from './toast'
 import { createUpdateGate } from './updates'
 import { createWelcome } from './welcome'
@@ -280,6 +282,7 @@ export function startApp(doc: Document): App {
     goalName: byId(doc, 'goal-chip-name'),
     goalCount: byId(doc, 'goal-chip-count'),
     goalLabel: byId(doc, 'goal-chip-label'),
+    toastRoot: byId(doc, 'toast'),
   }
   const dragonScreen = createDragonScreen(doc, el.dragonScreen, { stats: STATS, stages: STAGES })
   const collectionScreen = createCollectionScreen(doc, el.collectionScreen, { items: REWARDS.items, onWear: wear })
@@ -341,8 +344,10 @@ export function startApp(doc: Document): App {
     } else {
       bubble.textContent = text
     }
-    // Beside the dragon's head, clear of its face, headgear and zzz.
-    const area = bubble.parentElement?.getBoundingClientRect()
+    // Beside the dragon's head, clear of its face, headgear and zzz, and above the
+    // toast while one is showing (it rises over the bottom of the dragon's space).
+    const parent = bubble.parentElement?.getBoundingClientRect()
+    const area = parent && clearAbove(parent, toastTop())
     const avoid = speechAnchor(el.art)
     if (area && avoid) {
       const p = placeSpeech(
@@ -367,6 +372,15 @@ export function startApp(doc: Document): App {
     bubble.classList.add('is-showing')
     window.clearTimeout(speechTimer)
     speechTimer = window.setTimeout(hush, speechTap ? SPEECH_TAPPABLE_MS : SPEECH_MS)
+  }
+  /**
+   * Where a showing toast's top settles (its layout box, so a toast still sliding in
+   * counts where it will rest), or null with none showing.
+   */
+  function toastTop(): number | null {
+    const t = el.toastRoot
+    if (!t.classList.contains('is-showing') || !(t.offsetParent instanceof HTMLElement)) return null
+    return t.offsetParent.getBoundingClientRect().top + t.offsetTop
   }
   function hush() {
     window.clearTimeout(speechTimer)
@@ -394,8 +408,9 @@ export function startApp(doc: Document): App {
    * going), the dragon says so instead, once per frozen day. Only one bubble per
    * opening: the cosy line is the hello, so it also uses up a welcome that was due.
    *
-   * With neither to say, and a backup due, it suggests one (at most once per game
-   * day); tapping that bubble opens Settings. Not while read-only: nothing can be
+   * With neither to say, and the dragon wistful about the weekly goal, it says a
+   * hopeful goal line (at most once per game day). Otherwise, with a backup due, it
+   * suggests one (at most once per game day); tapping that bubble opens Settings. Not while read-only: nothing can be
    * remembered then, so it would repeat on every open, and the notice says enough.
    */
   function maybeWelcome(now = Date.now()) {
@@ -419,6 +434,11 @@ export function startApp(doc: Document): App {
       }
     }
     const today = dayKey(now)
+    if (!readOnly && isWistful(now) && welcome.shouldSayWistful(today)) {
+      welcome.markWistful(today)
+      say(goalWistfulLine(today))
+      return
+    }
     if (!readOnly && isBackupDue(now) && welcome.shouldRemindBackup(today)) {
       welcome.markBackupReminded(today)
       say(backupReminderLine(today), () => {
@@ -426,6 +446,11 @@ export function startApp(doc: Document): App {
         settingsScreen.revealBackup()
       })
     }
+  }
+
+  /** Whether the dragon's wistful about the weekly goal right now (see goalWistful). */
+  function isWistful(now: number, events: readonly GameEvent[] = data.events): boolean {
+    return goalWistful(goalProgress(events, tasksOf(data.settings), data.settings, now, GOAL), GOAL)
   }
 
   function isBackupDue(now: number): boolean {
@@ -474,7 +499,10 @@ export function startApp(doc: Document): App {
     const wearing = outfitOf(worn)
     el.mood.textContent = MOOD_LABELS[mood]
     el.mood.dataset.mood = mood
-    renderDragon(el.art, { stage: progress.stage.id, progress: progress.fraction, mood, look, wearing: homeOutfitHold ?? wearing })
+    // Wistful about the weekly goal is a touch on top of the mood, never a mood of its own.
+    const goal = goalProgress(data.events, tasks, data.settings, now, GOAL)
+    const wistful = goalWistful(goal, GOAL)
+    renderDragon(el.art, { stage: progress.stage.id, progress: progress.fraction, mood, look, wearing: homeOutfitHold ?? wearing, wistful })
     // The sky follows the London clock; render runs every minute and on coming back.
     renderScene(el.scene, el.sceneFloor, el.sceneFront, { sky: skyPeriod(now, SCENE), stage: progress.stage.id })
 
@@ -496,11 +524,11 @@ export function startApp(doc: Document): App {
     }
 
     // The weekly goal chip: quiet, just the count. Hidden with no goal, or while its
-    // task is archived. Never a warning.
-    const goal = goalProgress(data.events, tasks, data.settings, now, GOAL)
+    // task is archived. Never a warning: while wistful it just takes a softer tint.
     el.goalRow.hidden = goal === null
     if (goal) {
       el.goalChip.classList.toggle('is-met', goal.met)
+      el.goalChip.classList.toggle('is-wistful', wistful)
       el.goalName.textContent = goal.task.name
       el.goalCount.textContent = goalChipCount(goal.done, goal.target, goal.met)
       el.goalLabel.textContent = goalChipLabel(goal.task.name, goal.done, goal.target, goal.met)
@@ -717,6 +745,7 @@ export function startApp(doc: Document): App {
     if (!button || !task) return
     const now = Date.now()
     const before = data.events
+    const wasWistful = isWistful(now, before)
     // The outfit before this log, for any stage-up moment: a find stays a surprise until its card.
     const outfitBefore: WearLook = outfitOf(wornNow(before, data.settings.wearing))
     const event = createLogEvent(task, data.events, data.settings, now, newId(), rewardRoll(), { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS, goal: GOAL })
@@ -747,12 +776,23 @@ export function startApp(doc: Document): App {
     fresh?.classList.add('is-logged')
     floatXp(doc, rect, `+${event.xpAwarded} XP`)
     if (bonus > 0) floatXp(doc, rect, goalMet ? GOAL_FLOAT(bonus) : TREAT_FLOAT(bonus), true)
-    // Meeting the weekly goal: the chip gives a little cheer too.
-    if (goalMet) cheer(el.goalChip)
-    react(el.art, item ? 'perk' : bonus > 0 ? 'treat' : 'log')
+    // A stage-up or a first new look gets its own moment (worked out here, shown below).
+    const reached = stageUp(before, data.events, STAGES)
+    const lookBefore = evolution(before, tasks)
+    const lookAfter = evolution(data.events, tasks)
+    const newLook = lookChange(lookBefore, lookAfter)
+    // A log that lifts the wistful look gets a cheer and a happy line, unless a bigger
+    // moment (goal met, a find, a stage-up or new look) already has it: one at a time.
+    const lifted = wasWistful && !isWistful(now)
+    const cheerLift = lifted && !goalMet && !item && !reached && !newLook?.firstTime
+    // Meeting the weekly goal, or lifting the wistful look: the chip gives a little cheer too.
+    if (goalMet || lifted) cheer(el.goalChip)
     const earnedFreeze = logEarnsFreeze(before, event, STREAKS)
     const logged = loggedToast(event.xpAwarded, task.name, bonus, item !== null, earnedFreeze, goalMet)
     toast.show(logged, undoLast)
+    // After the toast, so the bubble sits clear above it; before the hop moves the art.
+    if (cheerLift) say(GOAL_WISTFUL_LIFTED)
+    react(el.art, item ? 'perk' : bonus > 0 || cheerLift ? 'treat' : 'log')
     // After a find's card the card has already celebrated it, so the toast is just the log.
     const afterCard = item ? loggedToast(event.xpAwarded, task.name, 0, false, earnedFreeze) : logged
 
@@ -799,10 +839,6 @@ export function startApp(doc: Document): App {
 
     // A stage-up gets the full moment. A look the dragon has never had gets a gentle
     // one; changing back to a look it has had before happens quietly (render did it).
-    const reached = stageUp(before, data.events, STAGES)
-    const lookBefore = evolution(before, tasks)
-    const lookAfter = evolution(data.events, tasks)
-    const newLook = lookChange(lookBefore, lookAfter)
     // One sound now, and any bigger ones in turn as their moments arrive (never piled up).
     const sounds = logSounds({ treat: bonus > 0, item: item !== null, stageUp: reached !== null, newLook: newLook?.firstTime === true, goal: goalMet })
     sound.play(sounds.now)

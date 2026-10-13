@@ -15,6 +15,11 @@ export interface GoalConfig {
   defaultDays: number
   /** The first day of a goal week, as for the weekly counts in History. */
   weekStart: Weekday
+  /**
+   * How tight the week must be before the dragon turns wistful about the goal: it's
+   * wistful while the days still needed are more than the days left less this.
+   */
+  wistfulBuffer: number
 }
 
 /** Starting value 2026-10-13 (M8 slice 1); balance-checker sizes it. */
@@ -22,6 +27,8 @@ export const GOAL_BONUS_XP = 30
 export const GOAL_MIN_DAYS = 1
 export const GOAL_MAX_DAYS = 7
 export const GOAL_DEFAULT_DAYS = 3
+/** Decided 2026-10-13 (M8 slice 2): gym 3 a week turns wistful from Thursday with none done. */
+export const GOAL_WISTFUL_BUFFER = 2
 
 export const GOAL: GoalConfig = {
   bonusXp: GOAL_BONUS_XP,
@@ -29,4 +36,5 @@ export const GOAL: GoalConfig = {
   maxDays: GOAL_MAX_DAYS,
   defaultDays: GOAL_DEFAULT_DAYS,
   weekStart: WEEK_START,
+  wistfulBuffer: GOAL_WISTFUL_BUFFER,
 }

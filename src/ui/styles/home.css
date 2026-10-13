@@ -288,6 +288,11 @@
 .goal-chip-count {
   flex-shrink: 0;
 }
+/* Wistful about the goal: a soft, warm tint. A hopeful nudge, never a warning colour. */
+.goal-chip.is-wistful {
+  background: var(--goal-wistful-bg);
+  color: var(--goal-wistful-text);
+}
 .goal-chip.is-met {
   background: var(--goal-met-bg);
   color: var(--goal-met-text);
@@ -314,6 +319,8 @@
   --goal-text: #74437f;
   --goal-met-bg: #e2f0d8;
   --goal-met-text: #3f6a2c;
+  --goal-wistful-bg: #fbe5d6;
+  --goal-wistful-text: #84502e;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -321,6 +328,8 @@
     --goal-text: #f0d6f6;
     --goal-met-bg: #34472b;
     --goal-met-text: #d4ecc4;
+    --goal-wistful-bg: #563a2c;
+    --goal-wistful-text: #f7dcc8;
   }
 }
 @media (prefers-reduced-motion: reduce) {

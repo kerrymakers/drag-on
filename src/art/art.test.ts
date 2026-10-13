@@ -99,6 +99,17 @@ describe('mood parts', () => {
     }
   })
 
+  it('every stage, egg included, carries the wistful sigh puff, hidden until data-goal says so, and riding with the head', () => {
+    for (const [id, svg] of Object.entries(drawings)) {
+      expect(svg, id).toContain('goal-part goal-sigh')
+      expect(svg, id).not.toContain('data-goal')
+      if (id !== 'egg') expect(svg, id).toMatch(/<g class="dg-head-move"><g class="goal-part goal-sigh"/)
+    }
+    // Shown by data-goal alone, never by a mood, so mood looks are unchanged.
+    expect(artCss).toMatch(/\[data-goal='wistful'\] \.goal-part \{\s*opacity/)
+    expect(artCss).not.toMatch(/\[data-mood=[^\]]+\][^{]*\.goal-/)
+  })
+
   it('the egg has its nightcap and glow', () => {
     expect(drawings.egg).toContain('egg-cap')
     expect(drawings.egg).toContain('egg-glow')

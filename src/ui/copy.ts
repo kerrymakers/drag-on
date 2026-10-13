@@ -52,6 +52,24 @@ export const FREEZE_USED: readonly string[] = [
 /** The freeze line for the frozen day `dayKey`: the same one every time for that day. */
 export const freezeUsedLine = (dayKey: string): string => lineFor(FREEZE_USED, dayKey) ?? FREEZE_USED[0]!
 
+/**
+ * What the dragon says, at most once a game day, while it's wistful about the weekly
+ * goal (see goalWistful). Hopeful and about the goal, never about you: it never names
+ * a miss, never counts what's left, never blames.
+ */
+export const GOAL_WISTFUL: readonly string[] = [
+  'Still hoping we make our goal this week!',
+  "I've a feeling today could be a goal day.",
+  "I'm saving a happy dance for our goal this week!",
+  "Ooh, I'm daydreaming about our goal this week.",
+]
+
+/** The wistful line for game day `dayKey`: the same one all day. */
+export const goalWistfulLine = (dayKey: string): string => lineFor(GOAL_WISTFUL, dayKey) ?? GOAL_WISTFUL[0]!
+
+/** When a log of the goal task lifts the wistful look: pure delight. */
+export const GOAL_WISTFUL_LIFTED = 'Yay! That one counts for our goal!'
+
 export interface StageUpCopy {
   message: string
   button: string

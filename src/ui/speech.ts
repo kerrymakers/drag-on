@@ -56,6 +56,16 @@ const TAIL_INSET = 18
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n))
 
 /**
+ * The part of `area` above a toast whose top is at `toastTop` (null: no toast showing),
+ * leaving a gap, so a bubble placed in it never sits under the toast. Every placement
+ * stays inside its area, so this is all it takes. Never shorter than nothing.
+ */
+export function clearAbove(area: Box, toastTop: number | null): Box {
+  if (toastTop === null || toastTop >= area.bottom) return { left: area.left, top: area.top, right: area.right, bottom: area.bottom }
+  return { left: area.left, top: area.top, right: area.right, bottom: Math.max(area.top, toastTop - GAP) }
+}
+
+/**
  * Tries, in order: above the head, to its left or right (roomier side first), below
  * it (or, given a `lowerPart`, in that part instead), below it but moved to one side
  * or a little lower (clear of anything worn), then beside it in a narrower bubble.

@@ -182,6 +182,33 @@ export function zzz(x: number, y: number): string {
 }
 
 /**
+ * A small sigh puff, three soft wisps drifting up and to the left from (x, y): the
+ * wistful-about-the-goal touch. It sits on top of whatever the mood is and shows only
+ * while the svg has data-goal="wistful" (art.css), so the mood itself never changes.
+ */
+export function sighPuff(x: number, y: number): string {
+  return `<g class="goal-part goal-sigh" aria-hidden="true">
+    <circle cx="${x}" cy="${y}" r="5" />
+    <circle cx="${x - 12}" cy="${y - 11}" r="7" />
+    <circle cx="${x - 28}" cy="${y - 19}" r="10" />
+  </g>`
+}
+
+/**
+ * The sigh puff for a dragon stage: just outside the left of the head, at cheek height,
+ * so it reads as a little breath rather than a mark on the face. Finds the head's skin
+ * ellipse in the drawing; without one, it sits beside the left eye.
+ */
+function sighPuffFor(body: string, { eyes: e }: Anchors): string {
+  const y = e.y + e.ry
+  const m = /<ellipse class="hd-skin" cx="([\d.]+)" cy="([\d.]+)" rx="([\d.]+)" ry="([\d.]+)"/.exec(headGroup(body))
+  if (!m) return sighPuff(r1(256 - e.dx - e.rx - 24), y)
+  const [cx, cy, rx, ry] = m.slice(1).map(Number) as [number, number, number, number]
+  const t = Math.min(1, Math.abs(y - cy) / ry)
+  return sighPuff(r1(cx - rx * Math.sqrt(1 - t * t) - 8), y)
+}
+
+/**
  * The mood overlays for a dragon stage. All are drawn; CSS shows the ones that match
  * the svg's data-mood, so a mood change fades smoothly rather than redrawing.
  * - happy: twinkles by the eyes (and a livelier idle with the odd hop, in CSS)
@@ -316,7 +343,7 @@ export function dragonSvg(
   const [wx, wy] = anchors.wingRoot
   // The points the head and wings move about, in drawing units, for art.css.
   const pivots = `--head-pivot: 256px ${anchors.neckY}px; --wing-l: ${wx}px ${wy}px; --wing-r: ${512 - wx}px ${wy}px`
-  const drawing = paint(`${body}${features?.under ?? ''}${neck}${held}${moodParts(anchors)}${features?.over ?? ''}${head ? onHead(head) : ''}`, uid)
+  const drawing = paint(`${body}${features?.under ?? ''}${neck}${held}${moodParts(anchors)}${onHead(sighPuffFor(body, anchors))}${features?.over ?? ''}${head ? onHead(head) : ''}`, uid)
   return `
 <svg class="dragon-svg dragon-${stage}" data-stage="${stage}" data-evolution="${evolution}" data-mood="content" viewBox="0 0 512 512" role="img" aria-label="${label}" style="${pivots}">
   ${paintDefs(uid, anchors.headTop - 20)}

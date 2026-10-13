@@ -7,7 +7,7 @@ import { COLLECTION, DRAGON_SCREEN, FREEZE_EARNED, ITEM_FOUND, milestoneFound, n
 import { ITEMS } from '../config/items'
 import { effortChoiceLabel, effortTimesHint, effortXp, legacyTimesHint, legacyXpHint, taskRowLabel } from './copy'
 import { IMPORT_CONFIRM, IMPORT_REFUSED, SETTINGS, importDropped, lastBackupLine } from './copy'
-import { GOAL_FLOAT, goalChip, goalChipCount, goalChipLabel, goalDays, goalWakeCap } from './copy'
+import { GOAL_FLOAT, GOAL_WISTFUL, GOAL_WISTFUL_LIFTED, goalWistfulLine, goalChip, goalChipCount, goalChipLabel, goalDays, goalWakeCap } from './copy'
 import { LOGGED, LOOK_CHANGE, TREAT_FLOAT, loggedToast, LOOK_NAMES, LOOK_REVEAL, STAGE_UP, STAGE_UP_FALLBACK, celebrationCopy, lookLabel, progressLabel } from './copy'
 
 const from = (id: string) => STAGES.find((s) => s.id === id)!.xpFrom
@@ -294,5 +294,18 @@ describe('weekly goal copy', () => {
   it('is warm, never blaming', () => {
     const all = [SETTINGS.goalTitle, SETTINGS.goalIntro, SETTINGS.goalArchived, SETTINGS.goalNone, SETTINGS.goalPick, goalChipLabel('Gym', 0, 3, false), goalWakeCap(3)]
     for (const text of all) expect(text, text).not.toMatch(/\b(missed|failed|behind|lost|only|should|must)\b/i)
+  })
+
+  it('the wistful lines are hopeful: about the goal, no blame, no misses, no counts, the same all day', () => {
+    expect(GOAL_WISTFUL.length).toBeGreaterThanOrEqual(3)
+    for (const text of [...GOAL_WISTFUL, GOAL_WISTFUL_LIFTED]) {
+      expect(text, text).not.toMatch(/\b(miss\w*|fail\w*|behind|lost|los\w+|only|should|must|need\w*|forgot\w*|why|again|late|sad|disappoint\w*|still not|yet to)\b/i)
+      expect(text, text).not.toMatch(/\d|\byou\b.*\b(didn|haven|aren)/i)
+      expect(text, text).toMatch(/goal/i)
+    }
+    expect(goalWistfulLine('2026-10-08')).toBe(goalWistfulLine('2026-10-08'))
+    const week = ['05', '06', '07', '08', '09', '10', '11'].map((d) => goalWistfulLine(`2026-10-${d}`))
+    for (const line of week) expect(GOAL_WISTFUL).toContain(line)
+    expect(new Set(week).size).toBeGreaterThan(1)
   })
 })

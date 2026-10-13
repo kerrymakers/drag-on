@@ -25,6 +25,7 @@
   --zzz: #8e78b8;
   --twinkle: #ffc04d;
   --heart: #f2899a;
+  --sigh: #c9c3dc;
 
   --item-line: #8a5a3c;
   --item-shine: #ffffff;
@@ -60,6 +61,7 @@
     --zzz: #c7b6ec;
     --twinkle: #ffd36b;
     --heart: #f59aaa;
+    --sigh: #b8b0d4;
 
     --item-line: #5a3a28;
     --item-shine: #fffaf2;
@@ -1374,6 +1376,50 @@
 }
 [data-evolution='heart'] .hd-cheek {
   opacity: 0.7;
+}
+
+/* Wistful about the weekly goal: a soft sigh puff now and then, layered on top of
+   whatever the mood is (data-goal is separate from data-mood). Gentle and brief, then
+   a long rest, so it reads as a hopeful little sigh rather than sadness. Under
+   reduced motion the puff just sits there, faint. */
+.goal-part {
+  opacity: 0;
+  transition: opacity 500ms ease;
+  pointer-events: none;
+}
+.goal-sigh circle {
+  fill: var(--sigh);
+  stroke: none;
+}
+[data-goal='wistful'] .goal-part {
+  opacity: 0.75;
+}
+[data-goal='wistful'] .goal-sigh circle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: goal-sigh 6s ease-out infinite;
+}
+[data-goal='wistful'] .goal-sigh circle:nth-child(2) {
+  animation-delay: 0.25s;
+}
+[data-goal='wistful'] .goal-sigh circle:nth-child(3) {
+  animation-delay: 0.5s;
+}
+@keyframes goal-sigh {
+  0%,
+  55%,
+  100% {
+    transform: translate(0, 0) scale(0.6);
+    opacity: 0;
+  }
+  12% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  45% {
+    transform: translate(-8px, -10px) scale(1.1);
+    opacity: 0;
+  }
 }
 
 /* Reduced motion: everything idle stands still. !important so no mood or stage rule
