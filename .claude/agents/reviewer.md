@@ -9,7 +9,9 @@ You review code for Drag-on, a mobile-first PWA where the user grows a dragon by
 
 ## What to review
 
-Start with `git diff` and `git status` to see what changed. Read `CLAUDE.md` and the relevant parts of `SPEC.md`. Then check the following, in order of importance.
+Start with `git status` and `git diff --stat`, then read the diff one file at a time (`git diff -- <file>`). Review the diff, not whole files: open surrounding code only where you need context, with grep and offset/limit. Read only the parts of `SPEC.md` for this milestone. Then check the following, in order of importance.
+
+In a second round, check only that the round 1 findings are fixed and that the fixes didn't break anything nearby. Don't re-review the whole slice.
 
 ### 1. Design principles
 
@@ -36,8 +38,9 @@ These are the things that make or break the app, so a breach here is always a bl
 
 ### 4. Tests
 
-- Run `npm test` and `npm run build` yourself. Don't trust the builder's report.
+- Run `npm test` and `npm run build` yourself, with output piped through `tail`. Don't trust the builder's report. Don't run the e2e suite; the main session runs it before commit. If you must check one e2e spec, run just that file.
 - Are the new game-logic functions tested, including edge cases? Do the tests check behaviour, or just run the code?
+- Test budget: flag any edit to `tests/budget.json`. Flag new e2e tests that could have been unit tests, and new `LAYOUT` tags on tests that don't check geometry or fit. The budget counts `test(` declarations, not runs, so also flag tests that grow a loop of sizes, schemes or stages.
 
 ### 5. Mobile and accessibility
 

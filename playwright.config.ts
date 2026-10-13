@@ -15,6 +15,9 @@ const OUT_DIR = 'dist-e2e'
 // one-off round checks are scratch files in tests/phone/ (gitignored, never committed)
 // and only run with E2E_FULL=1 (`npm run test:e2e:full`); with none there, it runs just tests/e2e/.
 const FULL = process.env.E2E_FULL === '1'
+// The phone sweep (`npm run phone:sweep`) runs tests/tools/phone-sweep.spec.ts and
+// nothing else; the other runs never pick up tests/tools/.
+const SWEEP = process.env.SWEEP === '1'
 
 // How long the whole local run (build included) should take: targetSeconds in
 // tests/budget.json, measured on the Mac. The global timeout is twice that, rounded up
@@ -28,7 +31,9 @@ const GLOBAL_TIMEOUT_MS = Math.ceil((2 * targetSeconds) / 60) * 60_000 * (BOTH_S
 
 export default defineConfig({
   testDir: 'tests',
-  testMatch: FULL ? ['e2e/**/*.spec.ts', 'phone/**/*.spec.ts'] : ['e2e/**/*.spec.ts'],
+  testMatch: SWEEP ? ['tools/**/*.spec.ts'] : FULL ? ['e2e/**/*.spec.ts', 'phone/**/*.spec.ts'] : ['e2e/**/*.spec.ts'],
+  // The sweep clears its last results first and writes tests/screenshots/sweep/summary.txt at the end.
+  ...(SWEEP ? { globalSetup: './tests/tools/sweep-global.ts' } : {}),
   // Each test gets its own browser context (and so its own storage) against one static
   // preview server, so tests don't share state and can run side by side. Two workers
   // everywhere (not one per core), so animation timing isn't starved of CPU and the Mac

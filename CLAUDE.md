@@ -48,12 +48,22 @@ Days run 04:00 to 03:59, Europe/London. Use one shared helper for "which day is 
 - Every function in `src/game/` has unit tests, including edge cases: logging around 04:00, the wake-up grace window, days with no wake-up target (skipped, not missed), streak freezes, undoing a log, and recalculating after a threshold change.
 - Run the tests before saying a milestone is done.
 
+### Test budget
+
+- Lasting e2e checks in `tests/e2e/` are user journeys and layout only. Anything that can be a unit test (game logic, copy, art class names) is one.
+- `npm test` also runs `scripts/check-tests.ts`, which enforces `tests/budget.json`: e2e test count, spec line cap, no `waitForTimeout` or `setTimeout` sleeps, nothing tracked in `tests/phone/`. Raising a budget is a deliberate edit that the reviewer flags; prefer merging or moving tests down to unit tests.
+- Only tests that check geometry or fit get the `@layout` tag (`LAYOUT` in `tests/e2e/fixtures.ts`); only those run again at 360px.
+- `tests/phone/` is gitignored scratch for the phone-tester's one-off checks.
+- At the end of each milestone, tidy: read the slow-test report from a full `npm run test:e2e`, have the reviewer suggest merges and deletions, and empty `tests/phone/`.
+
 ## Commands
 
 - Dev server: `npm run dev`
 - Tests: `npm test`
 - End-to-end phone tests (Playwright): `npm run test:e2e` (the lasting feature checks in `tests/e2e/`; add `SCREENSHOTS=1` to save screenshots)
-- Full end-to-end run, including phone-tester's one-off round checks in `tests/phone/`: `npm run test:e2e:full`
+- Just some specs: `nice -n 10 npx playwright test tests/e2e/<file>.spec.ts --reporter=dot`
+- Full end-to-end run, including phone-tester's scratch checks in `tests/phone/`: `npm run test:e2e:full`
+- Phone sweep (phone-tester): `npm run phone:sweep` (every screen at both sizes, light and dark; summary in `tests/screenshots/sweep/summary.txt`)
 - Balance sims (balance-checker): `npm run balance` (simulate.ts for keen/typical/patchy, then streak-sim.ts, 100 runs each, under `nice`; about 1.5 minutes)
 - Build: `npm run build` (type-checks, then builds to `dist/`)
 - Preview the production build: `npm run preview` (served under `/drag-on/`)
@@ -65,12 +75,22 @@ Days run 04:00 to 03:59, Europe/London. Use one shared helper for "which day is 
 The agents are in `.claude/agents/`. Subagents can't call each other, so the main session runs the loop:
 
 1. Plan the slice in plan mode and agree it with me.
-2. `builder` builds the slice.
+2. `builder` builds the slice. Its brief names the files involved and the related e2e specs.
 3. `reviewer` reviews it. If the UI changed, run `phone-tester` at the same time.
-4. If either reports problems, send the findings back to `builder`, then review again. Stop after two rounds and ask me.
-5. Once it's approved, commit.
+4. If either reports problems, send the findings back to `builder` (resume the same builder rather than starting a new one), then review again. Round 2 checks only the round 1 findings, and `phone-tester` only reruns if round 1 found UI problems. Stop after two rounds and ask me.
+5. Once it's approved, run `npm run test:e2e` once, then commit.
 
 Run `balance-checker` whenever anything in `src/config/` changes, when tasks or stages are added, or when I ask whether progress feels right.
+
+Models: `builder` runs on Opus; `reviewer`, `phone-tester` and `balance-checker` on Sonnet (set in each agent's frontmatter).
+
+### Keeping usage down
+
+- The main session coordinates; it doesn't read source files the agents will read anyway. Agent reports go back to the next agent summarised, not pasted whole.
+- Read big files (`src/ui/styles.css`, `src/art/art.css`, `src/ui/app.ts`, `src/ui/copy.ts`, long specs) with grep and offset/limit, never whole.
+- Pipe test output through `tail` or a failure filter; never print a whole test log or JSON report.
+- Agents run `npm test`, `npm run build` and only the related e2e specs. The full e2e run happens once per slice, before commit.
+- Start a fresh session (`/clear`) between slices; memory holds progress.
 
 ## Working with me
 

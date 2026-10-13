@@ -21,6 +21,8 @@ For task editing (custom XP, times a day, extra tasks), use `scripts/task-edit-s
 
 The user works on this Mac while sims run: always run them under `nice -n 10`, one at a time, never in parallel.
 
+Read the sims' summary tables, not their full output: redirect long output to a file in your scratchpad and grep or tail it. Don't read the sim scripts or `src/game/` unless a result looks wrong and you need to know why.
+
 Simulate at least 180 days for three types of user:
 
 1. Keen: does almost everything, most days.

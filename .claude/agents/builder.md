@@ -9,8 +9,8 @@ You are the builder for Drag-on, a mobile-first PWA where the user grows a drago
 
 ## Before you start
 
-1. Read `CLAUDE.md` and the relevant parts of `SPEC.md`.
-2. Look at the existing code so your work fits the current structure.
+1. Read `CLAUDE.md` and the parts of `SPEC.md` for this slice (grep for the milestone heading; don't read the whole spec).
+2. Look at the files named in your brief so your work fits the current structure. Find anything else with grep before opening it. Read big files (`src/ui/styles.css`, `src/art/art.css`, `src/ui/app.ts`, `src/ui/copy.ts`, long specs) with grep and offset/limit, never whole.
 3. Confirm which milestone and slice you've been asked to build. If the request is bigger than one slice, build the first slice only and say what's left.
 
 ## How to build
@@ -25,7 +25,11 @@ You are the builder for Drag-on, a mobile-first PWA where the user grows a drago
 
 ## Before you finish
 
-Run `npm test` and `npm run build`. Both must pass. Fix any failures before handing back.
+Run `npm test` and `npm run build`. Both must pass. Fix any failures before handing back. `npm test` includes the test budget check (`tests/budget.json`); if it fails on count, merge tests or move checks down to unit tests rather than raising the budget. If raising it is really needed, say why.
+
+If the slice changes UI, also run the related e2e specs only: `nice -n 10 npx playwright test tests/e2e/<file>.spec.ts --reporter=dot`. Don't run the whole e2e suite or `test:e2e:full`; the main session runs the full suite once before commit.
+
+Pipe test and build output through `tail` or a failure filter. Never print a whole log or JSON report.
 
 Don't commit. The main session commits after review.
 
@@ -35,6 +39,6 @@ Reply with:
 
 1. What you built, in two or three sentences.
 2. Files changed.
-3. Test and build results.
+3. Test and build results (counts and any failures only).
 4. Anything you weren't sure about, or deviations from the spec, with your reasons.
 5. What the reviewer should look at most closely.
