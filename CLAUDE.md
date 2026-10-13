@@ -4,14 +4,14 @@
 
 Drag-on: a personal, mobile-first PWA where I raise a dragon from an egg by logging habits I find hard (getting up on time, the gym, etc.). The full spec is in `SPEC.md`. Read it before starting any milestone, and follow its milestone order.
 
-There's one user (me), using it on my phone. No accounts, no backend for now.
+There's one user per phone (me, and friends who install it for their own dragon), and each phone keeps its own data. No accounts, no backend until Milestone 11.
 
 ## Design principles (non-negotiable)
 
 These matter more than features. If a request conflicts with one, flag it before building.
 
 - Logging a task takes two taps at most. Never add steps, confirmations or forms to the main logging path.
-- The dragon never dies, never loses XP and never goes down a stage. Bad states are gentle (sleepy, grumpy) and fully recoverable.
+- The dragon never dies, never loses XP and never goes down a stage. Bad states are gentle (sleepy, grumpy, wistful) and fully recoverable. The dragon can be wistful about the weekly goal I set, never about me: it's hopeful, never blaming, lifts as soon as I log the goal task and resets every Monday.
 - No guilt-tripping copy. The dragon is always pleased to see me.
 - Every log gets immediate, satisfying feedback.
 - Logging works offline.

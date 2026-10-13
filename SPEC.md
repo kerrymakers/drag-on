@@ -4,7 +4,9 @@
 
 A personal motivation app. I raise a cute dragon from an egg, and it grows and gets stronger when I do the things I don't want to do: getting up on time, going to the gym, and so on. The point is to make those tasks feel rewarding straight away, not to be a strict productivity tracker.
 
-There is one user (me). There are no accounts, no social features and no monetisation.
+There is one user per phone: me, and friends who install it to raise their own dragon. Each phone keeps its own data. There are no social features and no monetisation, and accounts only arrive as optional sync (Milestone 11).
+
+Decided 2026-10-13: the dragon is also an accountability buddy. I set one weekly goal, and the dragon cares about it (see Primary goal and Goal mood).
 
 ## Platform
 
@@ -112,6 +114,25 @@ Rebalanced 2026-10-05 after simulation: sleepy after one missed day felt like a 
 
 When I come back after a gap, the dragon gives a warm "welcome back" reaction. It doesn't guilt-trip me. There's no big bonus either, so lapsing isn't rewarded.
 
+### Primary goal
+
+I can set one weekly goal: a task and how many days a week I want to do it (for example, gym 3 days a week). Weeks run Monday to Sunday, as in History. Home shows a small goal chip ("Gym 1 of 3 this week"); logging stays exactly as it is. Meeting the goal gets a celebration and a small reward (sized in config by simulation). A goal edit applies from the current week on, so past weeks never change. The goal is optional.
+
+### Goal mood
+
+Decided 2026-10-13: for accountability, the dragon can be wistful about the goal. This sits alongside the mood above and never replaces its warmth.
+
+- Wistful shows only while the week's goal is behind pace: the days still needed are more than the days left, less a small buffer (config).
+- It's about the goal, never about me. Copy is hopeful ("Still hoping we make it to the gym this week"), never blaming, and never names a failure.
+- Logging the goal task lifts it straight away, with a visible cheer.
+- It resets every Monday. A missed week isn't carried over or mentioned.
+- A welcome-back always comes first: the dragon is always pleased to see me.
+- It never affects XP, stats, stage, streaks or rewards.
+
+### Secret mission
+
+Each day the dragon has a small secret wish (for example, log before 9, or log two different stats). It hints at it in its speech bubble, and tapping the bubble reveals it. The day's mission is worked out from the day and a seed saved in settings, so it doesn't change on reload. When a log completes it, the reward is decided at that moment and saved on the event, and the dragon is extra happy. Missions are listed in config.
+
 ## Rewards
 
 ### Variable rewards
@@ -207,12 +228,19 @@ Each milestone is usable on its own.
 6. Settings and backup: task editing, export/import, backup reminder.
 7. Polish: better art, sounds (off by default), more items.
 
+Added 2026-10-13. Everything that works without a server comes first.
+
+8. Accountability buddy: primary weekly goal, goal mood (wistful), daily secret mission.
+9. Make it yours: choose the dragon's colour, and a first-run setup (name, colour, tasks, wake-up times, optional goal) so friends can raise their own dragon. My existing dragon is unaffected.
+10. Walks and nature: logging a walk brings back a seasonal UK nature find, a spotting guide with no advice on picking or eating. Finds show in Collection.
+11. Optional sync: Supabase, magic-link sign-in, offline-first. The app keeps working fully without an account.
+12. Reminders: opt-in push notifications (goal pace, wake-up, mission hint), at most one a day, with quiet hours.
+
 ## Out of scope for now
 
-- Push notifications and reminders (possible later; Chrome on Android supports them for installed PWAs)
-- Accounts, sync and multiple devices
-- Automatic verification (step counts, gym check-ins). Honesty-based logging is fine.
-- Any social or sharing features
+- Automatic verification (step counts, gym check-ins). Honesty-based logging is fine. Garmin or Strava steps get a research spike after Milestone 11.
+- Social features (seeing friends' dragons), to decide after Milestone 11.
+- GPS walk tracking.
 
 ## Open questions
 
