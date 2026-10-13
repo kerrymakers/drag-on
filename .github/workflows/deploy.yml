@@ -42,6 +42,22 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      # The Pixel draws text in Roboto; Ubuntu's default sans (DejaVu) is much wider and
+      # breaks the text-fit checks at 360px. Make Roboto the default, as on the phone.
+      - name: Use Roboto as the default font
+        run: |
+          sudo apt-get install -y --no-install-recommends fonts-roboto
+          mkdir -p ~/.config/fontconfig
+          cat > ~/.config/fontconfig/fonts.conf <<'XML'
+          <?xml version="1.0"?>
+          <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+          <fontconfig>
+            <alias binding="strong"><family>sans-serif</family><prefer><family>Roboto</family></prefer></alias>
+            <alias binding="strong"><family>system-ui</family><prefer><family>Roboto</family></prefer></alias>
+          </fontconfig>
+          XML
+          fc-cache -f
+          fc-match system-ui
       - run: npm run test:e2e
       - if: failure()
         uses: actions/upload-artifact@v4
