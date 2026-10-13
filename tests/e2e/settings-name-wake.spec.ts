@@ -49,7 +49,7 @@ test('cards in order, tap targets, labels and no overflow, in light and dark', L
   const msgs = collectConsole(page)
   await open(page, FRI('10:00'), null, '#/settings')
   const titles = await page.locator('#settings-screen h2').allTextContents()
-  expect(titles).toEqual([SETTINGS.nameTitle, TASKS_COPY.title, SETTINGS.wakeTitle, SETTINGS.backupTitle])
+  expect(titles).toEqual([SETTINGS.nameTitle, TASKS_COPY.title, SETTINGS.wakeTitle, SETTINGS.soundTitle, SETTINGS.backupTitle])
 
   // Seven days, Monday first, weekdays on at 06:30 and the weekend off.
   await expect(page.locator('.ss-day')).toHaveCount(7)
