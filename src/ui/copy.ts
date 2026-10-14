@@ -96,6 +96,19 @@ const WISHES: Record<string, WishCopy> = {
   'three-logs': { wish: "I wish we'd log three things today!", granted: 'three logs today' },
   fresh: { wish: "I wish we'd do something new for this week!", granted: 'something new this week' },
 }
+/**
+ * The hint on opening, at most once a game day while the wish is open: the dragon has a
+ * secret, and tapping the bubble tells it. Excited to share, never a nudge.
+ */
+export const WISH_HINT: readonly string[] = [
+  "I've got a secret wish today… tap to see!",
+  "Psst! I've made a little wish today. Tap and I'll tell you!",
+  'Ooh, I have a secret wish! Tap to hear it.',
+]
+/** The hint for game day `dayKey`: the same one all day. */
+export const wishHintLine = (dayKey: string): string => lineFor(WISH_HINT, dayKey) ?? WISH_HINT[0]!
+/** The accessible name of the sparkle by the dragon that reveals the wish. */
+export const WISH_SPARKLE_LABEL = 'Secret wish'
 /** What the dragon says when a log grants its secret wish, revealed or not. */
 export const wishGrantedLine = (missionId: string): string => {
   const copy = wishCopy(missionId)

@@ -1,12 +1,14 @@
 // Milestone 4, Slice 1: treats. A treat roll adds a second float, a happy hop, a
 // longer buzz and a toast that mentions it. A normal log feels exactly as before.
-// Milestone 8, slice 3: granting the dragon's secret wish feels like a treat too.
+// Milestone 8, slice 3: granting the dragon's secret wish feels like a treat too, and
+// the dragon hints at it on opening, with a sparkle by it that tells the wish.
 import { test, expect, shot, LAYOUT, type Page } from './fixtures'
 import { MISSION } from '../../src/config/missions'
 import { REWARDS } from '../../src/config/rewards'
 import { TASKS } from '../../src/config/tasks'
 import { dayKey } from '../../src/game/day'
 import { missionFor } from '../../src/game/mission'
+import { wishCopy, wishHintLine } from '../../src/ui/copy'
 
 test.use({ timezoneId: 'Europe/London', locale: 'en-GB' })
 const NOW = new Date('2026-10-13T10:00:00+01:00')
@@ -94,7 +96,7 @@ test('a normal log is unchanged: one float, the usual wiggle, toast and buzz', a
   expect(fb.saved).not.toHaveProperty('reward')
 })
 
-test('a log that grants the secret wish: its float, a hop, a sparkle, a happy line, the bonus in the toast and saved; undo reopens it', async ({ page }) => {
+test('the secret wish: hinted on opening, told by the bubble and the sparkle (clear of the goal chip, toast and tasks), and granted with its float, hop, burst, line and bonus; the sparkle hides until undo reopens it', LAYOUT, async ({ page }) => {
   const msgs = collectConsole(page)
   // A seed whose wish today is something for Wisdom, found through the game's own pick.
   const tasks = TASKS
@@ -102,15 +104,37 @@ test('a log that grants the secret wish: its float, a hop, a sparkle, a happy li
   const seed = Array.from({ length: 200 }, (_, i) => `e2e-${i}`).find((s) => missionFor(day, s, tasks, [], MISSION)?.id === 'stat:wisdom')!
   await page.addInitScript((missionSeed) => {
     if (!sessionStorage.getItem('seeded')) {
-      localStorage.setItem('drag-on:v1', JSON.stringify({ schemaVersion: 1, events: [], settings: { missionSeed } }))
+      const settings = { missionSeed, goal: { taskId: 'gym', daysPerWeek: 3 } }
+      localStorage.setItem('drag-on:v1', JSON.stringify({ schemaVersion: 1, events: [], settings }))
       sessionStorage.setItem('seeded', '1')
     }
   }, seed)
   await setUp(page, null)
   const bonus = MISSION.bonusXp
-  // Not the wish: a normal log.
+  const wish = wishCopy('stat:wisdom')!.wish
+  const sparkle = page.locator('#wish-sparkle')
+  // Opening: the hint, and tapping it tells the wish. The sparkle tells it too.
+  await expect(page.locator('#speech')).toHaveText(wishHintLine(day))
+  await page.locator('#speech .speech-tap').click()
+  await expect(page.locator('#speech')).toHaveText(wish)
+  await expect(sparkle).toBeVisible()
+  await expect(sparkle).toHaveAccessibleName('Secret wish')
+  // Not the wish: a normal log. The sparkle stays, clear of the goal chip, the toast and the tasks.
   await page.locator('button.task[data-task-id="gym"]').click()
   expect((await feedback(page)).saved).not.toHaveProperty('mission')
+  await sparkle.click()
+  await expect(page.locator('#speech')).toHaveText(wish)
+  const boxes = await page.evaluate(() => {
+    const box = (sel: string) => document.querySelector(sel)!.getBoundingClientRect().toJSON() as DOMRect
+    return { sparkle: box('#wish-sparkle'), dragon: box('.dragon'), chip: box('#goal-chip'), toast: box('#toast'), task: box('#task-list .task'), speech: box('#speech') }
+  })
+  const apart = (a: DOMRect, b: DOMRect) => a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top
+  expect(boxes.sparkle.width).toBeGreaterThanOrEqual(44)
+  expect(boxes.sparkle.height).toBeGreaterThanOrEqual(44)
+  expect(boxes.sparkle.top).toBeGreaterThanOrEqual(boxes.dragon.top)
+  expect(boxes.sparkle.right).toBeLessThanOrEqual(boxes.dragon.right)
+  for (const other of [boxes.chip, boxes.toast, boxes.task, boxes.speech]) expect(apart(boxes.sparkle, other)).toBe(true)
+  await shot(page, `m8s3b-wish-sparkle-${test.info().project.name}`)
   await page.locator('button.task[data-task-id="read"]').click()
   const fb = await feedback(page)
   expect(fb.floats.slice(-2)).toEqual([
@@ -123,13 +147,16 @@ test('a log that grants the secret wish: its float, a hop, a sparkle, a happy li
   await expect(page.locator('#speech')).toHaveText(/^You granted my secret wish/)
   await expect(page.locator('#dragon-art .wish-burst .wish-spark')).toHaveCount(8)
   await shot(page, `m8s3-wish-${test.info().project.name}`, { delay: 350 })
+  await expect(sparkle).toBeHidden()
 
   // Undo takes the bonus back and reopens the wish: logging it again grants it again.
   await page.locator('#toast-undo').click()
   await expect(page.locator('#xp-total')).toHaveText(String(XP('gym')))
+  await expect(sparkle).toBeVisible()
   await page.locator('button.task[data-task-id="read"]').click()
   await expect(page.locator('#toast-text')).toHaveText(`Secret wish! +${XP('read') + bonus} XP · Read for 20 minutes`)
   await expect(page.locator('#xp-total')).toHaveText(String(XP('gym') + XP('read') + bonus))
+  await expect(sparkle).toBeHidden()
   expect(msgs).toEqual([])
 })
 

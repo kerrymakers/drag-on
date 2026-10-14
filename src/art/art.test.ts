@@ -5,7 +5,7 @@ import { STAGES } from '../config/stages'
 import { STATS } from '../config/stats'
 import { ADULT, ADULT_SCALE, ELDER, ELDER_SCALE, JUVENILE, JUVENILE_SCALE, WHELP, WHELP_SCALE, adultSvg, elderSvg, juvenileSvg, whelpSvg } from './grown'
 import { HATCHLING, HATCHLING_SCALE, hatchlingSvg } from './hatchling'
-import { CRACK_BIG_AT, CRACK_SMALL_AT, WISH_BURST_SPARKS, crackLevel, drawLook, hasLookArt, wishBurstHtml, type MoodLook } from './index'
+import { CRACK_BIG_AT, CRACK_SMALL_AT, WISH_BURST_SPARKS, crackLevel, drawLook, hasLookArt, wishBurstHtml, wishSparkleHtml, type MoodLook } from './index'
 import { eggSvg } from './egg'
 import { WEAR_PIN, hasItemArt, itemSvg, unknownItemSvg, wornItemBox, wornItemSvg } from './items'
 import { EVOLVED_LOOKS, knownLook, type EvolutionLook } from './looks'
@@ -725,5 +725,14 @@ describe('the secret-wish burst', () => {
     expect(new Set(html.match(/--a:\d+deg/g)).size).toBe(WISH_BURST_SPARKS)
     expect(artCss).toMatch(/\.wish-burst \{[^}]*pointer-events: none/)
     expect(artCss).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.wish-spark \{\s*animation: none/)
+  })
+
+  it('the sparkle button inside is a decorative golden twinkle in a bubble that keeps still under reduced motion', () => {
+    const html = wishSparkleHtml()
+    expect(html).toMatch(/^<span class="wish-sparkle-bubble" aria-hidden="true">/)
+    expect(html).toContain('class="wish-sparkle-big"')
+    expect(html).not.toMatch(/NaN|\d\.\d{3}/)
+    expect(artCss).toMatch(/\.wish-sparkle-bubble path \{[^}]*fill: var\(--twinkle\)/)
+    expect(artCss).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.wish-sparkle-big,\s*\.wish-sparkle-small \{\s*animation: none/)
   })
 })

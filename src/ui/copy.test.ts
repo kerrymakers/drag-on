@@ -8,7 +8,7 @@ import { ITEMS } from '../config/items'
 import { effortChoiceLabel, effortTimesHint, effortXp, legacyTimesHint, legacyXpHint, taskRowLabel } from './copy'
 import { IMPORT_CONFIRM, IMPORT_REFUSED, SETTINGS, importDropped, lastBackupLine } from './copy'
 import { GOAL_FLOAT, GOAL_WISTFUL, GOAL_WISTFUL_LIFTED, goalWistfulLine, goalChip, goalChipCount, goalChipLabel, goalDays, goalWakeCap } from './copy'
-import { bonusFloat, wishCopy, wishGrantedLine } from './copy'
+import { WISH_HINT, WISH_SPARKLE_LABEL, bonusFloat, wishCopy, wishGrantedLine, wishHintLine } from './copy'
 import { MISSIONS } from '../config/missions'
 import { LOGGED, LOOK_CHANGE, TREAT_FLOAT, loggedToast, LOOK_NAMES, LOOK_REVEAL, STAGE_UP, STAGE_UP_FALLBACK, celebrationCopy, lookLabel, progressLabel } from './copy'
 
@@ -318,6 +318,20 @@ describe('weekly goal copy', () => {
     expect(bonusFloat(0, false, 15)).toBe('+15 wish')
     expect(bonusFloat(13, false, 15)).toBe('+13 treat · +15 wish')
     expect(bonusFloat(30, true, 0)).toBe('+30 goal treat')
+  })
+
+  it('the wish hint is excited, invites a tap, gives nothing away, and is the same all day', () => {
+    expect(WISH_HINT.length).toBeGreaterThanOrEqual(2)
+    for (const text of WISH_HINT) {
+      expect(text, text).toMatch(/secret wish|little wish/i)
+      expect(text, text).toMatch(/\btap\b/i)
+      expect(text, text).not.toMatch(/\b(miss\w*|fail\w*|behind|lost|only|should|must|need\w*|forgot\w*|late|sad|hurry|before)\b/i)
+    }
+    expect(wishHintLine('2026-10-14')).toBe(wishHintLine('2026-10-14'))
+    const week = ['12', '13', '14', '15', '16', '17', '18'].map((d) => wishHintLine(`2026-10-${d}`))
+    for (const line of week) expect(WISH_HINT).toContain(line)
+    expect(new Set(week).size).toBeGreaterThan(1)
+    expect(WISH_SPARKLE_LABEL).toBe('Secret wish')
   })
 
   it('the wistful lines are hopeful: about the goal, no blame, no misses, no counts, the same all day', () => {

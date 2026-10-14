@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { KeyValueStore } from '../storage'
 import { BACKUP_REMINDER, FREEZE_USED, MOOD_LABELS, WELCOME_BACK, backupReminderLine, freezeUsedLine, welcomeLine } from './copy'
-import { UI_KEY, createWelcome } from './welcome'
+import { OPENING_ORDER, UI_KEY, createWelcome, openingLine } from './welcome'
 
 class FakeStore implements KeyValueStore {
   map = new Map<string, string>()
@@ -230,5 +230,35 @@ describe('wistful goal line', () => {
     expect(w.shouldSayWistful('2026-10-09')).toBe(true)
     expect(JSON.parse(store.map.get(UI_KEY) as string)).toEqual({ backupReminderDay: '2026-10-08', wistfulDay: '2026-10-08' })
     expect(createWelcome(() => store).shouldSayWistful('2026-10-08')).toBe(false)
+  })
+})
+
+describe('secret-wish hint and the opening order', () => {
+  it('hints at most once per game day, remembered across reloads beside the other fields', () => {
+    const store = new FakeStore()
+    const w = createWelcome(() => store)
+    expect(w.shouldHintWish('2026-10-14')).toBe(true)
+    w.markWistful('2026-10-13')
+    w.markWishHinted('2026-10-14')
+    expect(w.shouldHintWish('2026-10-14')).toBe(false)
+    expect(w.shouldHintWish('2026-10-13')).toBe(false)
+    expect(w.shouldHintWish('2026-10-15')).toBe(true)
+    expect(JSON.parse(store.map.get(UI_KEY) as string)).toEqual({ wistfulDay: '2026-10-13', wishHintDay: '2026-10-14' })
+    expect(createWelcome(() => store).shouldHintWish('2026-10-14')).toBe(false)
+    // Read-only: memory only.
+    const mem = createWelcome(() => undefined)
+    mem.markWishHinted('2026-10-14')
+    expect(mem.shouldHintWish('2026-10-14')).toBe(false)
+  })
+
+  it('says one bubble per opening: cosy, welcome back, wistful, the wish hint, then the backup reminder', () => {
+    expect(OPENING_ORDER).toEqual(['cosy', 'welcome', 'wistful', 'wish', 'backup'])
+    expect(openingLine({})).toBeNull()
+    expect(openingLine({ cosy: false, welcome: false, wistful: false, wish: false, backup: false })).toBeNull()
+    expect(openingLine({ cosy: true, welcome: true, wistful: true, wish: true, backup: true })).toBe('cosy')
+    expect(openingLine({ welcome: true, wistful: true, wish: true, backup: true })).toBe('welcome')
+    expect(openingLine({ wistful: true, wish: true, backup: true })).toBe('wistful')
+    expect(openingLine({ wish: true, backup: true })).toBe('wish')
+    expect(openingLine({ backup: true })).toBe('backup')
   })
 })

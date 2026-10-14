@@ -3,7 +3,8 @@
 // up. A new log starts a new gap. Also "kept our streak cosy": said once per day a
 // streak freeze covered, and "shall we save a backup?" at most once per game day
 // while a backup is due, and "still hoping we make our goal" at most once per game day
-// while the dragon is wistful about the weekly goal. State lives under its own UI key, never in the game data,
+// while the dragon is wistful about the weekly goal, and "I've got a secret wish today"
+// at most once per game day while the day's wish is open. State lives under its own UI key, never in the game data,
 // and falls back to memory if storage isn't available.
 
 import type { MoodId } from '../game/types'
@@ -40,6 +41,23 @@ export interface Welcome {
   shouldSayWistful(today: string): boolean
   /** Remember that the wistful goal line has been said on `today`. */
   markWistful(today: string): void
+  /** True if the secret-wish hint hasn't been said on game day `today` (or a later one). */
+  shouldHintWish(today: string): boolean
+  /** Remember that the secret-wish hint has been said on `today`. */
+  markWishHinted(today: string): void
+}
+
+/** The bubbles the dragon can open with, most important first. */
+export const OPENING_ORDER = ['cosy', 'welcome', 'wistful', 'wish', 'backup'] as const
+export type OpeningLine = (typeof OPENING_ORDER)[number]
+
+/**
+ * Which bubble to say on opening, given which ones are due: only one per opening, in
+ * OPENING_ORDER (a streak freeze's cosy line, welcome back, the wistful goal line, the
+ * secret-wish hint, the backup reminder). Null with none due.
+ */
+export function openingLine(due: Partial<Record<OpeningLine, boolean>>): OpeningLine | null {
+  return OPENING_ORDER.find((line) => due[line] === true) ?? null
 }
 
 const isMood = (v: unknown): v is MoodId =>
@@ -73,6 +91,8 @@ export function createWelcome(getStore: () => KeyValueStore | undefined): Welcom
   let backupDay: string | null = typeof saved.backupReminderDay === 'string' ? saved.backupReminderDay : null
   /** The game day the wistful goal line was last said. */
   let wistfulDay: string | null = typeof saved.wistfulDay === 'string' ? saved.wistfulDay : null
+  /** The game day the secret-wish hint was last said. */
+  let wishHintDay: string | null = typeof saved.wishHintDay === 'string' ? saved.wishHintDay : null
 
   /** Merge `fields` into the UI key, keeping anything else there. */
   function write(fields: Record<string, unknown>) {
@@ -121,6 +141,13 @@ export function createWelcome(getStore: () => KeyValueStore | undefined): Welcom
     markWistful(today) {
       wistfulDay = today
       write({ wistfulDay: today })
+    },
+    shouldHintWish(today) {
+      return wishHintDay === null || today > wishHintDay
+    },
+    markWishHinted(today) {
+      wishHintDay = today
+      write({ wishHintDay: today })
     },
   }
 }

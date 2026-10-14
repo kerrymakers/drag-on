@@ -1,7 +1,7 @@
 // The app shell: wires game logic, storage and art to the Home, Dragon, Collection, History and Settings screens.
 // This is the only layer that reads the clock (Date.now), generates ids and rolls dice.
 
-import { react, renderDragon, renderScene, speechAnchor, speechKeepClear, speechLowerPart, wishBurst, type WearLook } from '../art'
+import { react, renderDragon, renderScene, speechAnchor, speechKeepClear, speechLowerPart, wishBurst, wishSparkleHtml, type WearLook } from '../art'
 import { BACKUP_REMINDER_DAYS } from '../config/backup'
 import { EVOLVES_AT_STAGE, LOOK_CHANGE_MARGIN } from '../config/evolution'
 import { GOAL } from '../config/goal'
@@ -33,6 +33,7 @@ import {
   totalXp,
   wakeDeadline,
 } from '../game/state'
+import { missionFor, missionStatus } from '../game/mission'
 import { latestFrozenDay, logEarnsFreeze, overallStreak } from '../game/streaks'
 import {
   addTask,
@@ -71,7 +72,10 @@ import {
   streakChipLabel,
   undoneToast,
   welcomeLine,
+  WISH_SPARKLE_LABEL,
+  wishCopy,
   wishGrantedLine,
+  wishHintLine,
 } from './copy'
 import { createDragonScreen } from './dragon-screen'
 import { createHistoryScreen } from './history-screen'
@@ -85,7 +89,7 @@ import { createSoundPlayer, logSounds } from './sound'
 import { clearAbove, placeSpeech } from './speech'
 import { createToast } from './toast'
 import { createUpdateGate } from './updates'
-import { createWelcome } from './welcome'
+import { createWelcome, openingLine } from './welcome'
 
 const SPEECH_MS = 4000
 /** The backup line stays a little longer, so there's time to tap it. */
@@ -293,7 +297,10 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed }: AppOption
     goalCount: byId(doc, 'goal-chip-count'),
     goalLabel: byId(doc, 'goal-chip-label'),
     toastRoot: byId(doc, 'toast'),
+    wishSparkle: byId<HTMLButtonElement>(doc, 'wish-sparkle'),
   }
+  el.wishSparkle.innerHTML = wishSparkleHtml()
+  el.wishSparkle.setAttribute('aria-label', WISH_SPARKLE_LABEL)
   const dragonScreen = createDragonScreen(doc, el.dragonScreen, { stats: STATS, stages: STAGES })
   const collectionScreen = createCollectionScreen(doc, el.collectionScreen, { items: REWARDS.items, onWear: wear })
   const historyScreen = createHistoryScreen(doc, el.historyScreen, { items: REWARDS.items, streaks: STREAKS })
@@ -359,6 +366,8 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed }: AppOption
     const parent = bubble.parentElement?.getBoundingClientRect()
     const area = parent && clearAbove(parent, toastTop())
     const avoid = speechAnchor(el.art)
+    // Clear of the secret-wish sparkle too, while it's showing.
+    const sparkle = el.wishSparkle.hidden ? [] : [el.wishSparkle.getBoundingClientRect()]
     if (area && avoid) {
       const p = placeSpeech(
         area,
@@ -368,7 +377,7 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed }: AppOption
           bubble.classList.toggle('is-compact', compact)
           return { width: bubble.offsetWidth, height: bubble.offsetHeight }
         },
-        speechKeepClear(el.art),
+        [...speechKeepClear(el.art), ...sparkle],
         speechLowerPart(el.art) ?? undefined,
       )
       bubble.style.maxWidth = `${p.maxWidth}px`
@@ -419,43 +428,58 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed }: AppOption
    * opening: the cosy line is the hello, so it also uses up a welcome that was due.
    *
    * With neither to say, and the dragon wistful about the weekly goal, it says a
-   * hopeful goal line (at most once per game day). Otherwise, with a backup due, it
+   * hopeful goal line (at most once per game day). Otherwise, while today's secret wish
+   * is open, it hints at it (at most once per game day); tapping that bubble tells the
+   * wish. Otherwise, with a backup due, it
    * suggests one (at most once per game day); tapping that bubble opens Settings. Not while read-only: nothing can be
    * remembered then, so it would repeat on every open, and the notice says enough.
    */
   function maybeWelcome(now = Date.now()) {
     if (doc.visibilityState !== 'visible' || route !== 'home') return
     const { mood, lastLogDay } = moodFor(data.events, now, MOODS)
+    const today = dayKey(now)
     const frozen = latestFrozenDay(data.events, now, STREAKS)
-    if (frozen !== null && welcome.shouldSayCosy(frozen)) {
+    const hello = welcome.shouldWelcome(mood, lastLogDay) ? welcomeLine(mood, today) : null
+    const wish = readOnly ? null : openWish(now)
+    const line = openingLine({
+      cosy: frozen !== null && welcome.shouldSayCosy(frozen),
+      welcome: hello !== null,
+      wistful: !readOnly && welcome.shouldSayWistful(today) && isWistful(now),
+      wish: wish !== null && welcome.shouldHintWish(today),
+      backup: !readOnly && welcome.shouldRemindBackup(today) && isBackupDue(now),
+    })
+    if (line === 'cosy' && frozen !== null) {
       welcome.markCosy(frozen)
-      if (welcome.shouldWelcome(mood, lastLogDay)) welcome.markWelcomed(mood, lastLogDay)
+      if (hello !== null) welcome.markWelcomed(mood, lastLogDay)
       say(freezeUsedLine(frozen))
       react(el.art, 'perk')
-      return
-    }
-    if (welcome.shouldWelcome(mood, lastLogDay)) {
-      const line = welcomeLine(mood, dayKey(now))
-      if (line) {
-        welcome.markWelcomed(mood, lastLogDay)
-        say(line) // place it first, before the perk-up moves the art
-        react(el.art, 'perk')
-        return
-      }
-    }
-    const today = dayKey(now)
-    if (!readOnly && isWistful(now) && welcome.shouldSayWistful(today)) {
+    } else if (line === 'welcome' && hello !== null) {
+      welcome.markWelcomed(mood, lastLogDay)
+      say(hello) // place it first, before the perk-up moves the art
+      react(el.art, 'perk')
+    } else if (line === 'wistful') {
       welcome.markWistful(today)
       say(goalWistfulLine(today))
-      return
-    }
-    if (!readOnly && isBackupDue(now) && welcome.shouldRemindBackup(today)) {
+    } else if (line === 'wish' && wish !== null) {
+      welcome.markWishHinted(today)
+      say(wishHintLine(today), () => say(wish))
+    } else if (line === 'backup') {
       welcome.markBackupReminded(today)
       say(backupReminderLine(today), () => {
         nav.go('settings')
         settingsScreen.revealBackup()
       })
     }
+  }
+
+  /**
+   * What the dragon wishes for today ("I wish we'd…"), while today's secret wish is
+   * open; null once it's granted or out of reach (never mentioned), or with no wish.
+   */
+  function openWish(now: number): string | null {
+    const mission = missionFor(dayKey(now), data.settings.missionSeed, tasksOf(data.settings), data.events, MISSION)
+    if (!mission || missionStatus(mission, data.events, now, MISSION) !== 'open') return null
+    return wishCopy(mission.id)?.wish ?? null
   }
 
   /** Whether the dragon's wistful about the weekly goal right now (see goalWistful). */
@@ -558,6 +582,9 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed }: AppOption
       el.goalCount.textContent = goalChipCount(goal.done, goal.target, goal.met)
       el.goalLabel.textContent = goalChipLabel(goal.task.name, goal.done, goal.target, goal.met)
     }
+
+    // The secret-wish sparkle: only while today's wish is open. Display only.
+    el.wishSparkle.hidden = openWish(now) === null
 
     // Only rebuild the buttons when something about them changed, so a tick never
     // swaps a button out from under a finger or drops keyboard focus.
@@ -903,6 +930,12 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed }: AppOption
   })
 
   el.undo.addEventListener('click', undoLast)
+
+  // The sparkle by the dragon tells today's wish in its bubble. Never logs anything.
+  el.wishSparkle.addEventListener('click', () => {
+    const wish = openWish(Date.now())
+    if (wish) say(wish)
+  })
 
   // The streak chip opens History, the same way its tab would.
   el.streakChip.addEventListener('click', () => nav.go('history'))

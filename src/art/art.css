@@ -1500,3 +1500,54 @@
     animation: none;
   }
 }
+
+/* The secret-wish button's look (placed on Home by home.css): a soft round thought
+   bubble with a golden twinkle that gently twinkles now and then. Still under
+   reduced motion. Works on light and dark through --surface and --twinkle. */
+.wish-sparkle-bubble {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.wish-sparkle-bubble svg {
+  display: block;
+  width: 24px;
+  height: 24px;
+  overflow: visible;
+}
+.wish-sparkle-bubble path {
+  fill: var(--twinkle);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.wish-sparkle-big {
+  animation: wish-twinkle 2.8s ease-in-out infinite;
+}
+.wish-sparkle-small {
+  animation: wish-twinkle 2.8s ease-in-out 1.4s infinite;
+}
+@keyframes wish-twinkle {
+  0%,
+  70%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  80% {
+    transform: scale(1.25) rotate(12deg);
+    opacity: 0.85;
+  }
+  90% {
+    transform: scale(0.9);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wish-sparkle-big,
+  .wish-sparkle-small {
+    animation: none;
+  }
+}

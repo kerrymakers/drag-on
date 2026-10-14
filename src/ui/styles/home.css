@@ -1,4 +1,4 @@
-/* Home: notice, header, speech bubble, dragon, growth bar, weekly goal chip, tasks, toast, XP floats. (Home streak chip .streak-chip: collection.css.) */
+/* Home: notice, header, speech bubble, dragon, secret-wish sparkle, growth bar, weekly goal chip, tasks, toast, XP floats. (Home streak chip .streak-chip: collection.css.) */
 /* Notice */
 .notice {
   grid-area: notice;
@@ -226,6 +226,33 @@
   z-index: 1;
 }
 
+/* The secret-wish sparkle (its look: .wish-sparkle-bubble in art.css): a 44px button at
+   the top right of the dragon's space, over the drawing and under the speech bubble.
+   The goal chip and toast sit at the bottom of this space, the tasks below it. */
+.wish-sparkle {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.wish-sparkle[hidden] {
+  display: none;
+}
+.wish-sparkle:active .wish-sparkle-bubble {
+  transform: scale(0.92);
+}
+
 /* Growth bar */
 .growth {
   position: relative;
@@ -443,7 +470,8 @@
 .undo:focus-visible,
 .toast-undo:focus-visible,
 .notice-close:focus-visible,
-.overlay-button:focus-visible {
+.overlay-button:focus-visible,
+.wish-sparkle:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }

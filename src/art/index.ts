@@ -209,9 +209,15 @@ export const WISH_BURST_SPARKS = 8
  * The secret-wish sparkle burst: little twinkles flying out from the middle of the
  * drawing, each at its own angle (--a) and a slightly different size. Decorative.
  */
+/** A four-pointed twinkle path of radius `r`, centred on (cx, cy). */
+function twinklePath(r: number, cx = 0, cy = 0): string {
+  const k = r * 0.18
+  const n = (v: number) => Math.round(v * 100) / 100
+  return `M${n(cx)} ${n(cy - r)} Q${n(cx + k)} ${n(cy - k)} ${n(cx + r)} ${n(cy)} Q${n(cx + k)} ${n(cy + k)} ${n(cx)} ${n(cy + r)} Q${n(cx - k)} ${n(cy + k)} ${n(cx - r)} ${n(cy)} Q${n(cx - k)} ${n(cy - k)} ${n(cx)} ${n(cy - r)} Z`
+}
+
 export function wishBurstHtml(): string {
-  const r = 10
-  const twinkle = `<svg viewBox="-10 -10 20 20"><path d="M0 ${-r} Q${r * 0.18} ${-r * 0.18} ${r} 0 Q${r * 0.18} ${r * 0.18} 0 ${r} Q${-r * 0.18} ${r * 0.18} ${-r} 0 Q${-r * 0.18} ${-r * 0.18} 0 ${-r} Z" /></svg>`
+  const twinkle = `<svg viewBox="-10 -10 20 20"><path d="${twinklePath(10)}" /></svg>`
   const sparks = Array.from({ length: WISH_BURST_SPARKS }, (_, i) => {
     const angle = Math.round((360 / WISH_BURST_SPARKS) * i + (i % 2 ? 12 : 0))
     const size = i % 3 === 0 ? 18 : i % 3 === 1 ? 13 : 10
@@ -232,4 +238,18 @@ export function wishBurst(container: HTMLElement): void {
   container.insertAdjacentHTML('beforeend', wishBurstHtml())
   const burst = container.lastElementChild
   view?.setTimeout(() => burst?.remove(), 1200)
+}
+
+/**
+ * The inside of the secret-wish button by the dragon on Home: a soft round thought
+ * bubble with a golden twinkle and a tiny one beside it. Decorative (the button has
+ * its own label). Under reduced motion it stays still (art.css).
+ */
+export function wishSparkleHtml(): string {
+  return (
+    '<span class="wish-sparkle-bubble" aria-hidden="true">' +
+    `<svg viewBox="0 0 24 24" focusable="false"><path class="wish-sparkle-big" d="${twinklePath(8, 11, 13)}" />` +
+    `<path class="wish-sparkle-small" d="${twinklePath(3.5, 19, 5)}" /></svg>` +
+    '</span>'
+  )
 }
