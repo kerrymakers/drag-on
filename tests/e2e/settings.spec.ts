@@ -1,9 +1,9 @@
 // Settings, export, import and the backup reminder, on the phone (from M6 slice 1).
 // Screenshots (with SCREENSHOTS=1): tests/screenshots/m6s1-*
 import { readFile } from 'node:fs/promises'
-import { test, expect, settle, shot, LAYOUT, type Page } from './fixtures'
+import { test, expect, settle, seedStore, shot, LAYOUT, type Page } from './fixtures'
 import { TASKS } from '../../src/config/tasks'
-import { BACKUP_REMINDER, GOAL_WISTFUL, GOAL_WISTFUL_LIFTED, IMPORT_REFUSED, SETTINGS, WELCOME_BACK } from '../../src/ui/copy'
+import { BACKUP_REMINDER, GOAL_WISTFUL_LIFTED, IMPORT_REFUSED, SETTINGS, WELCOME_BACK } from '../../src/ui/copy'
 
 test.use({ timezoneId: 'Europe/London', locale: 'en-GB' })
 // Friday 9 October 2026, 10:00 BST.
@@ -29,15 +29,7 @@ function collectConsole(page: Page) {
 
 /** Seeds the saved data (a string is stored as-is) once, then opens the app at `hash`. */
 async function open(page: Page, data: object | string | null, hash = '') {
-  if (data !== null) {
-    await page.addInitScript((d) => {
-      if (!sessionStorage.getItem('seeded')) {
-        localStorage.clear()
-        localStorage.setItem('drag-on:v1', d)
-        sessionStorage.setItem('seeded', '1')
-      }
-    }, typeof data === 'string' ? data : JSON.stringify(data))
-  }
+  if (data !== null) await seedStore(page, data)
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.clock.install({ time: NOW })
   await page.goto(`./${hash}`)
@@ -337,10 +329,15 @@ test('backup reminder: a welcome back takes the open and the reminder waits; non
   await reopen({ schemaVersion: 1, events: logs(['2026-09-01', ...RECENT]), settings: { lastBackupAt: at('2026-09-25', '12:00') } })
 })
 
-test('weekly goal: set it in Settings, the Home chip counts, the log that meets it celebrates, and a tight week turns wistful until logged', LAYOUT, async ({ page }, info) => {
+test('weekly goal: set it in Settings, the Home chip counts and fits (a long name shortens), the log that meets it celebrates, and a tight week turns wistful until logged', LAYOUT, async ({ page }, info) => {
+  // The rules (counting, when it's wistful, the goal treat, undo) are unit tests in
+  // src/game/goal.test.ts and the lines in src/ui/copy.test.ts; here it's the wiring and fit.
   const msgs = collectConsole(page)
   // Hatched already (no stage-up in the way); gym on Wed and Thu this week (Mon 5 to Sun 11 Oct).
-  await open(page, { schemaVersion: 1, events: logs(['2026-09-01', '2026-09-02', '2026-09-03', ...RECENT]), settings: { lastBackupAt: at('2026-10-08', '12:00') } })
+  // Gym has a very long name, so the chip has to shorten it with "…".
+  const long = 'Gym / workout at the very far end of the road with friends'
+  const tasks = TASKS.map((t) => (t.id === 'gym' ? { ...t, name: long } : t))
+  await open(page, { schemaVersion: 1, events: logs(['2026-09-01', '2026-09-02', '2026-09-03', ...RECENT]), settings: { lastBackupAt: at('2026-10-08', '12:00'), tasks } })
   const gymButton = page.locator('button.task[data-task-id="gym"]')
   const tasksTop = (await gymButton.boundingBox())!.y
   await expect(page.locator('#goal-row')).toBeHidden()
@@ -365,37 +362,34 @@ test('weekly goal: set it in Settings, the Home chip counts, the log that meets 
   await page.locator('.ss-goal').scrollIntoViewIfNeeded()
   await shot(page, `m8s1-goal-card-${info.project.name}`, { settled: true })
 
-  // Home: the chip says where the week is, fits, and never moves the task buttons.
+  // Home: the chip says where the week is, fits with the long name cut short, and never moves the task buttons.
   await page.locator('.tabbar a.tab[data-route="home"]').tap()
   const chip = page.locator('#goal-chip')
-  await expect(page.locator('#goal-chip-name')).toHaveText(TASKS.find((t) => t.id === 'gym')!.name)
+  await expect(page.locator('#goal-chip-name')).toHaveText(long)
   await expect(page.locator('#goal-chip-count')).toHaveText('2 of 3 this week')
   await expect(page.locator('#goal-chip-label')).toHaveText(/^Weekly goal: .+, 2 of 3 days this week$/)
   expect((await gymButton.boundingBox())!.y).toBeCloseTo(tasksTop, 0)
+  await settle(page)
   const fit = await page.evaluate(() => {
     const r = (s: string) => document.querySelector(s)!.getBoundingClientRect()
-    return { chip: r('#goal-chip'), row: r('.growth-row'), vw: innerWidth, doc: document.documentElement.scrollWidth }
+    const name = document.querySelector('#goal-chip-name')!
+    return { chip: r('#goal-chip'), row: r('.growth-row'), task: r('button.task[data-task-id="gym"]').right, xp: r('.growth-total').right, vw: innerWidth, doc: document.documentElement.scrollWidth, cut: name.scrollWidth > name.clientWidth }
   })
-  expect(fit.chip.right).toBeLessThanOrEqual(fit.vw)
+  expect(fit.cut).toBe(true)
+  expect(Math.max(fit.chip.right, fit.task, fit.xp)).toBeLessThanOrEqual(fit.vw)
   expect(fit.chip.bottom).toBeLessThanOrEqual(fit.row.top + 0.5)
   expect(fit.doc).toBeLessThanOrEqual(fit.vw)
-  await shot(page, `m8s1-goal-chip-${info.project.name}`, { settled: true })
+  await shot(page, `m8s1-goal-chip-long-${info.project.name}`)
 
-  // The third gym day meets it: a goal treat on the log, the toast and float say so, the chip ticks.
+  // The third gym day meets it: the toast and float say so, the chip ticks; undo takes it back.
   await gymButton.tap()
-  await expect(page.locator('#toast-text')).toHaveText(/^Goal met! \+70 XP · /)
+  await expect(page.locator('#toast-text')).toHaveText(/^Goal met! /)
   await expect(page.locator('.float-xp.float-treat')).toHaveText('+30 goal treat')
   await expect(chip).toHaveClass(/is-met/)
   await expect(page.locator('#goal-chip-count')).toHaveText('3 of 3 this week ✓')
-  const events = (await stored(page)).events
-  expect(events[events.length - 1].reward).toEqual({ kind: 'treat', bonusXp: 30, goal: true })
-
-  // Undo takes it back, and the chip with it.
   await page.locator('#toast-undo').tap()
   await expect(page.locator('#goal-chip-count')).toHaveText('2 of 3 this week')
   await expect(chip).not.toHaveClass(/is-met/)
-  await expect(chip).not.toHaveClass(/is-wistful/)
-  await expect(page.locator('#dragon-art .dragon-svg')).not.toHaveAttribute('data-goal', 'wistful')
 
   // Four a week, two done, Friday not logged yet: tight, so the dragon turns wistful.
   // Back on Home it says a hopeful line once, the chip softens, and a puff shows.
@@ -406,40 +400,14 @@ test('weekly goal: set it in Settings, the Home chip counts, the log that meets 
   await expect(chip).toHaveClass(/is-wistful/)
   await expect(page.locator('#dragon-art .dragon-svg')).toHaveAttribute('data-goal', 'wistful')
   await expect(page.locator('#speech')).toHaveClass(/is-showing/)
-  expect(GOAL_WISTFUL).toContain(await page.locator('#speech').textContent())
   await shot(page, `m8s2-goal-wistful-${info.project.name}`, { settled: true })
-  // Logging the goal task lifts it at once, with a happy line.
+  // Logging the goal task lifts it at once, with a happy line that sits clear above the toast.
   await gymButton.tap()
   await expect(page.locator('#speech')).toHaveText(GOAL_WISTFUL_LIFTED)
-  // The happy line sits clear above the log's toast, never under it.
   await expect(page.locator('#toast')).toHaveClass(/is-showing/)
   const lift = await page.evaluate(() => ({ speech: document.querySelector('#speech')!.getBoundingClientRect().bottom, toast: document.querySelector('#toast')!.getBoundingClientRect().top }))
   expect(lift.speech).toBeLessThanOrEqual(lift.toast)
   await expect(chip).not.toHaveClass(/is-wistful/)
   await expect(page.locator('#dragon-art .dragon-svg')).not.toHaveAttribute('data-goal', 'wistful')
-  await expect(page.locator('#goal-chip-count')).toHaveText('3 of 4 this week')
-
-  // A very long task name shortens with "…"; nothing on Home goes wider than the screen.
-  const long = 'Gym / workout at the very far end of the road with friends'
-  await page.evaluate(
-    ({ name, tasks }) => {
-      const d = JSON.parse(localStorage.getItem('drag-on:v1')!)
-      d.settings.tasks = tasks.map((t: { id: string }) => (t.id === 'gym' ? { ...t, name } : t))
-      localStorage.setItem('drag-on:v1', JSON.stringify(d))
-    },
-    { name: long, tasks: TASKS },
-  )
-  await page.reload()
-  await expect(page.locator('#goal-chip-name')).toHaveText(long)
-  await settle(page)
-  const longFit = await page.evaluate(() => {
-    const name = document.querySelector('#goal-chip-name')!
-    const right = (s: string) => document.querySelector(s)!.getBoundingClientRect().right
-    return { chip: right('#goal-chip'), task: right('button.task[data-task-id="gym"]'), xp: right('.growth-total'), vw: innerWidth, doc: document.documentElement.scrollWidth, cut: name.scrollWidth > name.clientWidth }
-  })
-  expect(longFit.cut).toBe(true)
-  expect(Math.max(longFit.chip, longFit.task, longFit.xp)).toBeLessThanOrEqual(longFit.vw)
-  expect(longFit.doc).toBeLessThanOrEqual(longFit.vw)
-  await shot(page, `m8s1-goal-chip-long-${info.project.name}`)
   expect(msgs).toEqual([])
 })

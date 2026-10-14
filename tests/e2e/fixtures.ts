@@ -10,6 +10,9 @@
 // page init scripts doesn't matter; the Math.random pin stays on the page, where a
 // spec's own pin is sure to run after it.)
 import { test as base, expect, type BrowserContext, type Locator, type Page } from '@playwright/test'
+import { MISSION } from '../../src/config/missions'
+import { TASKS } from '../../src/config/tasks'
+import { missionFor } from '../../src/game/mission'
 
 export * from '@playwright/test'
 
@@ -75,6 +78,34 @@ export async function closePastGuard(overlay: Locator, close: () => Promise<unkn
     expect((await classes()).every((c) => /\bis-closing\b/.test(c))).toBe(true)
   }).toPass({ intervals: [100], timeout: 5000 })
   await expect(overlay).toHaveCount(0)
+}
+
+/**
+ * Seeds the saved data (an object, or a string stored as-is) before the app loads, once
+ * per tab: a sessionStorage guard stops a reload from putting it back, so a test can
+ * reload to see what the app saved. Call before `page.goto`.
+ */
+export async function seedStore(page: Page, data: object | string) {
+  await page.addInitScript((d) => {
+    if (!sessionStorage.getItem('seeded')) {
+      localStorage.clear()
+      localStorage.setItem('drag-on:v1', d)
+      sessionStorage.setItem('seeded', '1')
+    }
+  }, typeof data === 'string' ? data : JSON.stringify(data))
+}
+
+/**
+ * A missionSeed whose secret wish on `day` (a dayKey) is `id`, with the default tasks
+ * and nothing logged, found through the game's own pick. Save it in the seeded
+ * settings to get that wish.
+ */
+export function seedForMission(day: string, id: string): string {
+  for (let i = 0; i < 500; i++) {
+    const seed = `e2e-${i}`
+    if (missionFor(day, seed, TASKS, [], MISSION)?.id === id) return seed
+  }
+  throw new Error(`No seed in 500 gives the wish ${id} on ${day}`)
 }
 
 const SHOT_DIR = 'tests/screenshots'

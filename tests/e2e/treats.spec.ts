@@ -2,12 +2,13 @@
 // longer buzz and a toast that mentions it. A normal log feels exactly as before.
 // Milestone 8, slice 3: granting the dragon's secret wish feels like a treat too, and
 // the dragon hints at it on opening, with a sparkle by it that tells the wish.
-import { test, expect, shot, LAYOUT, type Page } from './fixtures'
+// The wish's rules (the bonus saved on the log, undo reopening it) are unit tests in
+// src/game/mission.test.ts; here it's the journey and the sparkle's geometry.
+import { test, expect, shot, seedForMission, seedStore, LAYOUT, type Page } from './fixtures'
 import { MISSION } from '../../src/config/missions'
 import { REWARDS } from '../../src/config/rewards'
 import { TASKS } from '../../src/config/tasks'
 import { dayKey } from '../../src/game/day'
-import { missionFor } from '../../src/game/mission'
 import { wishCopy, wishHintLine } from '../../src/ui/copy'
 
 test.use({ timezoneId: 'Europe/London', locale: 'en-GB' })
@@ -96,21 +97,12 @@ test('a normal log is unchanged: one float, the usual wiggle, toast and buzz', a
   expect(fb.saved).not.toHaveProperty('reward')
 })
 
-test('the secret wish: hinted on opening, told by the bubble and the sparkle (clear of the goal chip, toast and tasks), and granted with its float, hop, burst, line and bonus; the sparkle hides until undo reopens it', LAYOUT, async ({ page }) => {
+test('the secret wish: hinted on opening, told by the bubble and the sparkle (clear of the goal chip, toast and tasks), and granted with its float, hop, burst and line; the sparkle hides, and undo brings it back', LAYOUT, async ({ page }) => {
   const msgs = collectConsole(page)
-  // A seed whose wish today is something for Wisdom, found through the game's own pick.
-  const tasks = TASKS
   const day = dayKey(NOW.getTime())
-  const seed = Array.from({ length: 200 }, (_, i) => `e2e-${i}`).find((s) => missionFor(day, s, tasks, [], MISSION)?.id === 'stat:wisdom')!
-  await page.addInitScript((missionSeed) => {
-    if (!sessionStorage.getItem('seeded')) {
-      const settings = { missionSeed, goal: { taskId: 'gym', daysPerWeek: 3 } }
-      localStorage.setItem('drag-on:v1', JSON.stringify({ schemaVersion: 1, events: [], settings }))
-      sessionStorage.setItem('seeded', '1')
-    }
-  }, seed)
+  const missionSeed = seedForMission(day, 'stat:wisdom')
+  await seedStore(page, { schemaVersion: 1, events: [], settings: { missionSeed, goal: { taskId: 'gym', daysPerWeek: 3 } } })
   await setUp(page, null)
-  const bonus = MISSION.bonusXp
   const wish = wishCopy('stat:wisdom')!.wish
   const sparkle = page.locator('#wish-sparkle')
   // Opening: the hint, and tapping it tells the wish. The sparkle tells it too.
@@ -121,7 +113,6 @@ test('the secret wish: hinted on opening, told by the bubble and the sparkle (cl
   await expect(sparkle).toHaveAccessibleName('Secret wish')
   // Not the wish: a normal log. The sparkle stays, clear of the goal chip, the toast and the tasks.
   await page.locator('button.task[data-task-id="gym"]').click()
-  expect((await feedback(page)).saved).not.toHaveProperty('mission')
   await sparkle.click()
   await expect(page.locator('#speech')).toHaveText(wish)
   const boxes = await page.evaluate(() => {
@@ -135,28 +126,22 @@ test('the secret wish: hinted on opening, told by the bubble and the sparkle (cl
   expect(boxes.sparkle.right).toBeLessThanOrEqual(boxes.dragon.right)
   for (const other of [boxes.chip, boxes.toast, boxes.task, boxes.speech]) expect(apart(boxes.sparkle, other)).toBe(true)
   await shot(page, `m8s3b-wish-sparkle-${test.info().project.name}`)
+  // The wish: a second float, the hop, the toast, the burst and the happy line.
   await page.locator('button.task[data-task-id="read"]').click()
   const fb = await feedback(page)
   expect(fb.floats.slice(-2)).toEqual([
     { text: `+${XP('read')} XP`, treat: false },
-    { text: `+${bonus} wish`, treat: true },
+    { text: `+${MISSION.bonusXp} wish`, treat: true },
   ])
-  expect(fb.toast).toBe(`Secret wish! +${XP('read') + bonus} XP · Read for 20 minutes`)
-  expect(fb).toMatchObject({ treat: true, xp: XP('gym') + XP('read') + bonus })
-  expect(fb.saved).toMatchObject({ taskId: 'read', xpAwarded: XP('read'), mission: { id: 'stat:wisdom', bonusXp: bonus } })
+  expect(fb.toast).toBe(`Secret wish! +${XP('read') + MISSION.bonusXp} XP · Read for 20 minutes`)
+  expect(fb.treat).toBe(true)
+  expect(fb.saved).toHaveProperty('mission')
   await expect(page.locator('#speech')).toHaveText(/^You granted my secret wish/)
   await expect(page.locator('#dragon-art .wish-burst .wish-spark')).toHaveCount(8)
   await shot(page, `m8s3-wish-${test.info().project.name}`, { delay: 350 })
   await expect(sparkle).toBeHidden()
-
-  // Undo takes the bonus back and reopens the wish: logging it again grants it again.
   await page.locator('#toast-undo').click()
-  await expect(page.locator('#xp-total')).toHaveText(String(XP('gym')))
   await expect(sparkle).toBeVisible()
-  await page.locator('button.task[data-task-id="read"]').click()
-  await expect(page.locator('#toast-text')).toHaveText(`Secret wish! +${XP('read') + bonus} XP · Read for 20 minutes`)
-  await expect(page.locator('#xp-total')).toHaveText(String(XP('gym') + XP('read') + bonus))
-  await expect(sparkle).toBeHidden()
   expect(msgs).toEqual([])
 })
 
@@ -185,14 +170,8 @@ test('reduced motion and dark mode: no hop, the floats and toast still say it, t
 
 test('a treat that also hatches the egg is acknowledged again when the overlay closes', async ({ page }) => {
   const msgs = collectConsole(page)
-  await page.addInitScript(() => {
-    if (!sessionStorage.getItem('seeded')) {
-      const t = Date.parse('2026-10-12T09:00:00+01:00')
-      const events = [{ id: 'a', type: 'log', taskId: 'read', timestamp: t, xpAwarded: 90 }]
-      localStorage.setItem('drag-on:v1', JSON.stringify({ schemaVersion: 1, events }))
-      sessionStorage.setItem('seeded', '1')
-    }
-  })
+  const t = Date.parse('2026-10-12T09:00:00+01:00')
+  await seedStore(page, { schemaVersion: 1, events: [{ id: 'a', type: 'log', taskId: 'read', timestamp: t, xpAwarded: 90 }] })
   await setUp(page, TREAT_ROLL, { install: true })
   await page.locator('button.task[data-task-id="gym"]').click()
   await expect(page.locator('.overlay')).toBeVisible()
