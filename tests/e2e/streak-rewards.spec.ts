@@ -116,8 +116,8 @@ test('the 7th day in a row brings a milestone find, a freeze note, and comes bac
   await closeCard(page)
 
   // A second log the same day is just a log.
-  await task(page, 'walk').click()
-  await expect(page.locator('#toast-text')).toContainText(`+${XP('walk')} XP`)
+  await task(page, 'avoided').click()
+  await expect(page.locator('#toast-text')).toContainText(`+${XP('avoided')} XP`)
   await expect(page.locator('.toast-note')).toHaveCount(0)
   await expect(card(page)).toHaveCount(0)
 

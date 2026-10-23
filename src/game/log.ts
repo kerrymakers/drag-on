@@ -7,15 +7,17 @@ import type { StreakConfig } from '../config/streaks'
 import { dayKey } from './day'
 import { goalRewardFor } from './goal'
 import { missionFor, missionGrantFor } from './mission'
+import { rollNatureFind } from './nature'
 import { milestoneReward, rollReward } from './rewards'
 import { activeLogs, dragonStage, heldStage, stageFor, taskAvailability } from './state'
 import { streakMilestoneReached } from './streaks'
 import { taskXp } from './tasks'
-import type { EffortLevel, GameEvent, LogEvent, RewardRoll, Settings, Stage, Task, UndoEvent } from './types'
+import type { EffortLevel, GameEvent, LogEvent, NatureFind, RewardRoll, Settings, Stage, Task, UndoEvent } from './types'
 
 /**
  * The config a new log is judged by: stage thresholds, reward odds, streak rules, the
- * effort levels that set a task's XP and the weekly goal's treat.
+ * effort levels that set a task's XP and the weekly goal's treat, and (optionally)
+ * the nature finds and the one task whose logs bring them.
  */
 export interface LogRules {
   stages: readonly Stage[]
@@ -23,6 +25,7 @@ export interface LogRules {
   streaks: StreakConfig
   effortLevels: readonly EffortLevel[]
   goal: GoalConfig
+  nature?: { taskId: string; finds: readonly NatureFind[] }
 }
 
 /**
@@ -53,6 +56,10 @@ export interface LogRules {
  * grant as `mission`. It's separate from the reward above and stacks with it, and it's
  * attached before the stage is worked out too. Without `wish`, or with no seed, there's
  * no wish.
+ *
+ * With `nature`, a log of `nature.taskId` (only that task, matched by id) brings a
+ * nature find picked by `roll.nature` (see rollNatureFind), saved as `nature`. It's
+ * worth no XP and stacks with everything above. No `roll.nature`, no find.
  */
 export function createLogEvent(
   task: Task,
@@ -61,7 +68,7 @@ export function createLogEvent(
   now: number,
   id: string,
   roll: RewardRoll,
-  { stages, rewards, streaks, effortLevels, goal }: LogRules,
+  { stages, rewards, streaks, effortLevels, goal, nature }: LogRules,
   wish?: { tasks: readonly Task[]; missions: MissionConfig },
 ): LogEvent | null {
   if (!taskAvailability(task, events, settings, now).canLog) return null
@@ -77,6 +84,10 @@ export function createLogEvent(
     const mission = missionFor(dayKey(now), settings.missionSeed, wish.tasks, events, wish.missions)
     const grant = missionGrantFor(mission, events, event, wish.tasks, wish.missions)
     if (grant) event.mission = grant
+  }
+  if (nature && task.id === nature.taskId && roll.nature !== undefined) {
+    const id = rollNatureFind(events, nature.finds, now, roll.nature)
+    if (id !== null) event.nature = { id }
   }
   const after = dragonStage([...events, event], stages)
   // With nothing recorded yet, the first stage needs no record.

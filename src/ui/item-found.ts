@@ -1,10 +1,12 @@
 // The "found something" card after a log brings a rare item. It appears after the log
 // is already saved, so it's never part of the logging path. Tap anywhere to close,
 // with the same double-tap guard and focus return as the stage-up overlay (overlay.ts).
+// A walk's new nature find gets the same kind of card (showNatureFound), which can also
+// be reopened from Collection.
 
-import { itemSvg } from '../art'
-import type { Item } from '../game/types'
-import { ITEM_FOUND, itemFoundLine, itemFoundSaved, milestoneFound } from './copy'
+import { itemSvg, natureSvg } from '../art'
+import type { Item, NatureFind } from '../game/types'
+import { ITEM_FOUND, NATURE_FOUND, itemFoundLine, itemFoundSaved, milestoneFound } from './copy'
 import { openOverlay } from './overlay'
 
 /** When the words and button arrive, after the item pops in. */
@@ -22,7 +24,7 @@ export interface ItemFoundOptions {
   /** Made inert while the card is open, so focus and taps can't reach it. */
   background?: HTMLElement | null
   /** Where focus goes when the card closes. */
-  returnFocus?: () => HTMLElement | null
+  returnFocus?: (() => HTMLElement | null) | undefined
   onClose?: () => void
 }
 
@@ -78,6 +80,84 @@ export function showItemFound(
   button.textContent = ITEM_FOUND.button
 
   card.append(heading, art, name, line, saved, button)
+  overlay.append(card)
+
+  let revealTimer: number | undefined
+  openOverlay(doc, overlay, {
+    reducedMotion,
+    background,
+    returnFocus,
+    onClosing: () => window.clearTimeout(revealTimer),
+    onClose,
+  })
+  revealTimer = window.setTimeout(() => overlay.classList.add('is-revealed'), reducedMotion ? 0 : REVEAL_MS)
+}
+
+export interface NatureFoundOptions {
+  find: NatureFind
+  /** True when reopened from Collection: a calmer heading, and no "added" line. */
+  reopened?: boolean
+  reducedMotion: boolean
+  background?: HTMLElement | null
+  returnFocus?: (() => HTMLElement | null) | undefined
+  onClose?: () => void
+}
+
+/**
+ * The card for a nature find: a heading, the find's picture and name, and its "look
+ * for" line. Only looking and listening, never picking or touching (config wording).
+ */
+export function showNatureFound(
+  doc: Document,
+  { find, reopened = false, reducedMotion, background, returnFocus, onClose }: NatureFoundOptions,
+): void {
+  const n = ++cardCount
+  const nameId = `nature-found-name-${n}`
+  const lineId = `nature-found-line-${n}`
+
+  const overlay = doc.createElement('div')
+  overlay.className = 'overlay nature-found'
+  overlay.tabIndex = -1
+  overlay.setAttribute('role', 'dialog')
+  overlay.setAttribute('aria-modal', 'true')
+  overlay.setAttribute('aria-labelledby', nameId)
+  overlay.setAttribute('aria-describedby', lineId)
+  overlay.dataset.nature = find.id
+
+  const card = doc.createElement('div')
+  card.className = 'item-card nature-card'
+
+  const heading = doc.createElement('p')
+  heading.className = 'item-found-heading'
+  heading.textContent = reopened ? NATURE_FOUND.reopenHeading : NATURE_FOUND.heading
+
+  const art = doc.createElement('div')
+  art.className = 'item-found-art nature-found-art'
+  art.innerHTML = natureSvg(find.id, find.picture)
+
+  const name = doc.createElement('h2')
+  name.className = 'item-found-name'
+  name.id = nameId
+  name.textContent = find.name
+
+  const line = doc.createElement('p')
+  line.className = 'overlay-sub item-found-line nature-look-for'
+  line.id = lineId
+  line.textContent = find.lookFor
+
+  const button = doc.createElement('button')
+  button.type = 'button'
+  button.className = 'overlay-button'
+  button.textContent = reopened ? NATURE_FOUND.reopenButton : NATURE_FOUND.button
+
+  card.append(heading, art, name, line)
+  if (!reopened) {
+    const saved = doc.createElement('p')
+    saved.className = 'item-found-saved'
+    saved.textContent = NATURE_FOUND.saved
+    card.append(saved)
+  }
+  card.append(button)
   overlay.append(card)
 
   let revealTimer: number | undefined

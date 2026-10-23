@@ -6,6 +6,7 @@ import { BACKUP_REMINDER_DAYS } from '../config/backup'
 import { EVOLVES_AT_STAGE, LOOK_CHANGE_MARGIN } from '../config/evolution'
 import { GOAL } from '../config/goal'
 import { MISSION } from '../config/missions'
+import { NATURE, NATURE_TASK_ID } from '../config/nature'
 import { REWARDS } from '../config/rewards'
 import { DRAGON_NAME_MAX } from '../config/settings'
 import { DEFAULT_WAKE_TIME } from '../config/time'
@@ -35,6 +36,7 @@ import {
   wakeDeadline,
 } from '../game/state'
 import { missionFor, missionStatus } from '../game/mission'
+import { foundNature, natureFor } from '../game/nature'
 import { latestFrozenDay, logEarnsFreeze, overallStreak } from '../game/streaks'
 import {
   addTask,
@@ -48,7 +50,7 @@ import {
   type NewTask,
   type TaskChanges,
 } from '../game/tasks'
-import type { GameEvent, Goal, Item, RewardRoll, Settings, Task, TaskAvailability, WakeSchedule, Wearing } from '../game/types'
+import type { GameEvent, Goal, Item, NatureFind, RewardRoll, Settings, Task, TaskAvailability, WakeSchedule, Wearing } from '../game/types'
 import { isWorn, toggleWear, wearOnFind, wornItems, type WornItems } from '../game/wearing'
 import { STORAGE_KEY, load, requestPersistence, save } from '../storage'
 import { backupFileName, exportContents, importBackup, type ListableStore } from '../storage/backup'
@@ -82,7 +84,7 @@ import {
 import { createDragonScreen } from './dragon-screen'
 import { createHistoryScreen } from './history-screen'
 import { newId, newMissionSeed } from './ids'
-import { showItemFound } from './item-found'
+import { showItemFound, showNatureFound } from './item-found'
 import { createNav, type Route } from './nav'
 import { outfitOf } from './outfit'
 import { watchScrollFade } from './scroll-fade'
@@ -227,8 +229,11 @@ function download(doc: Document, text: string, fileName: string) {
 
 /** The dice for a log's variable reward. Math.random is plenty for a pet dragon. */
 function rewardRoll(): RewardRoll {
-  return { chance: Math.random(), pick: Math.random() }
+  return { chance: Math.random(), pick: Math.random(), nature: Math.random() }
 }
+
+/** The nature finds and the one task whose logs bring them (see createLogEvent). */
+const NATURE_RULES = { taskId: NATURE_TASK_ID, finds: NATURE }
 
 /**
  * "+40 XP" rising from the button that was tapped. A treat float ("+20 treat")
@@ -315,7 +320,7 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed, firstRunSet
   el.wishSparkle.innerHTML = wishSparkleHtml()
   el.wishSparkle.setAttribute('aria-label', WISH_SPARKLE_LABEL)
   const dragonScreen = createDragonScreen(doc, el.dragonScreen, { stats: STATS, stages: STAGES })
-  const collectionScreen = createCollectionScreen(doc, el.collectionScreen, { items: REWARDS.items, onWear: wear })
+  const collectionScreen = createCollectionScreen(doc, el.collectionScreen, { items: REWARDS.items, onWear: wear, nature: NATURE, onNature: reopenNature })
   const historyScreen = createHistoryScreen(doc, el.historyScreen, { items: REWARDS.items, streaks: STREAKS })
   const settingsScreen = createSettingsScreen(doc, el.settingsScreen, {
     stages: STAGES,
@@ -798,6 +803,17 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed, firstRunSet
     return { ok: true, message: SETTINGS.imported }
   }
 
+  /** A found nature tile in Collection was tapped: show its card again. Changes nothing. */
+  function reopenNature(find: NatureFind, tile: HTMLElement) {
+    showNatureFound(doc, {
+      find,
+      reopened: true,
+      reducedMotion: prefersReducedMotion(),
+      background: doc.getElementById('app'),
+      returnFocus: () => (tile.isConnected ? tile : null),
+    })
+  }
+
   /** A found tile in Collection was tapped: put it on, or take it off. */
   function wear(item: Item): boolean {
     setWearing(toggleWear(data.settings.wearing, item))
@@ -810,8 +826,11 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed, firstRunSet
     const target = undoableLog(data.events, now)
     const event = createUndoEvent(data.events, now, newId())
     if (event) {
+      const spottedBefore = foundNature(data.events, NATURE).length
       commit(event)
-      toast.show(undoneToast(target !== null && itemFor(target, REWARDS.items) !== null))
+      // A walk's find leaves the collection only if this was the walk that first spotted it.
+      const natureGone = foundNature(data.events, NATURE).length < spottedBefore
+      toast.show(undoneToast(target !== null && itemFor(target, REWARDS.items) !== null, natureGone))
     }
     render(now)
   }
@@ -826,7 +845,7 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed, firstRunSet
     const wasWistful = isWistful(now, before)
     // The outfit before this log, for any stage-up moment: a find stays a surprise until its card.
     const outfitBefore: WearLook = outfitOf(wornNow(before, data.settings.wearing))
-    const event = createLogEvent(task, data.events, data.settings, now, newId(), rewardRoll(), { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS, goal: GOAL }, { tasks, missions: MISSION })
+    const event = createLogEvent(task, data.events, data.settings, now, newId(), rewardRoll(), { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS, goal: GOAL, nature: NATURE_RULES }, { tasks, missions: MISSION })
     if (!event) {
       render(now) // the screen was stale (e.g. the wake window just closed)
       return
@@ -842,6 +861,10 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed, firstRunSet
     const wish = missionOf(event)
     const wishBonus = wish?.bonusXp ?? 0
     const item = itemFor(event, REWARDS.items)
+    // A walk's nature find: a new one gets its own card, one seen before a line in the toast.
+    const natureFind = natureFor(event, NATURE)
+    const natureNew = natureFind !== null && !foundNature(before, NATURE).some((f) => f.find.id === natureFind.id)
+    const spottedAgain = natureFind !== null && !natureNew ? natureFind.name : ''
     // After the save: a find goes straight on if its spot is free. Never replaces a choice.
     if (item) {
       const next = wearOnFind(data.settings.wearing, item, foundItems(data.events, REWARDS.items), REWARDS.items)
@@ -850,7 +873,7 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed, firstRunSet
     const wearingFind = item !== null && isWorn(wornNow(data.events, data.settings.wearing), item)
     if (item) homeOutfitHold = outfitBefore
     hush()
-    haptic(item ? HAPTIC_ITEM : bonus > 0 || wish ? HAPTIC_TREAT : HAPTIC_LOG)
+    haptic(item || natureNew ? HAPTIC_ITEM : bonus > 0 || wish ? HAPTIC_TREAT : HAPTIC_LOG)
     render(now)
 
     const fresh = el.list.querySelector<HTMLElement>(`button.task[data-task-id="${task.id}"]`)
@@ -872,7 +895,7 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed, firstRunSet
     // Meeting the weekly goal, or lifting the wistful look: the chip gives a little cheer too.
     if (goalMet || lifted) cheer(el.goalChip)
     const earnedFreeze = logEarnsFreeze(before, event, STREAKS)
-    const logged = loggedToast(event.xpAwarded, task.name, bonus, item !== null, earnedFreeze, goalMet, wishBonus)
+    const logged = loggedToast(event.xpAwarded, task.name, bonus, item !== null, earnedFreeze, goalMet, wishBonus, spottedAgain)
     toast.show(logged, undoLast)
     // After the toast, so the bubble sits clear above it; before the hop moves the art.
     if (wishMoment) say(wishGrantedLine(wish.id))
@@ -881,7 +904,7 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed, firstRunSet
     if (wishMoment) wishBurst(el.art)
     // After a find's card the card has already celebrated it, so the toast is just the
     // log (and any wish bonus, which the card doesn't mention).
-    const afterCard = item ? loggedToast(event.xpAwarded, task.name, 0, false, earnedFreeze, false, wishBonus) : logged
+    const afterCard = item ? loggedToast(event.xpAwarded, task.name, 0, false, earnedFreeze, false, wishBonus, spottedAgain) : logged
 
     // The tapped button if it can still take focus (a once-a-day task is now done
     // and disabled), else the next task to log, else the dragon.
@@ -903,14 +926,26 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed, firstRunSet
       // The overlay hid the treat's floats (or the find) and outlasted its toast: say it
       // again, with Undo while this log is still the one Undo would take back. After a
       // find it drops "Found something!", which the card has just said.
-      if (bonus > 0 || wishBonus > 0 || item) {
+      if (bonus > 0 || wishBonus > 0 || item || natureNew) {
         const stillLatest = undoableLog(data.events, Date.now())?.id === event.id
         toast.show(afterCard, stillLatest ? undoLast : undefined)
       }
     }
+    // A walk's new nature find gets its card last, after any other moment.
+    const showNature = (afterAnother: boolean) => {
+      if (!natureFind || !natureNew) return done()
+      if (afterAnother) sound.play('item')
+      showNatureFound(doc, {
+        find: natureFind,
+        reducedMotion: prefersReducedMotion(),
+        background,
+        returnFocus,
+        onClose: done,
+      })
+    }
     // A find gets its own little card, after any stage-up or new-look moment.
     const showFind = () => {
-      if (!item) return done()
+      if (!item) return showNature(reached !== null || newLook?.firstTime === true)
       if (sounds.card) sound.play(sounds.card)
       showItemFound(doc, {
         item,
@@ -919,8 +954,9 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed, firstRunSet
         milestone: rewardMilestone(event),
         reducedMotion: prefersReducedMotion(),
         background,
-        returnFocus,
-        onClose: done,
+        // With a nature card to show next, focus goes straight to it instead.
+        returnFocus: natureNew ? undefined : returnFocus,
+        onClose: () => showNature(true),
       })
     }
 
@@ -928,7 +964,8 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed, firstRunSet
     // one; changing back to a look it has had before happens quietly (render did it).
     // One sound now, and any bigger ones in turn as their moments arrive (never piled up).
     const sounds = logSounds({ treat: bonus > 0, item: item !== null, stageUp: reached !== null, newLook: newLook?.firstTime === true, goal: goalMet, wish: wish !== null })
-    sound.play(sounds.now)
+    // A new nature find with nothing bigger before it: its card is the moment now.
+    sound.play(natureNew && !item && !reached && !newLook?.firstTime ? 'item' : sounds.now)
     if (reached || newLook?.firstTime) {
       const from = dragonStage(before, STAGES)
       updates.setBusy(true)
@@ -943,13 +980,13 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed, firstRunSet
         reducedMotion: prefersReducedMotion(),
         background,
         // With a find to show next, focus goes straight to its card instead.
-        returnFocus: item ? undefined : returnFocus,
+        returnFocus: item || natureNew ? undefined : returnFocus,
         onClose: showFind,
         onReveal: () => {
           if (sounds.reveal) sound.play(sounds.reveal)
         },
       })
-    } else if (item) {
+    } else if (item || natureNew) {
       updates.setBusy(true)
       showFind()
     }

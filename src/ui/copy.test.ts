@@ -3,7 +3,7 @@ import { STAGES } from '../config/stages'
 import { STATS } from '../config/stats'
 import { dragonProgress } from '../game/state'
 import type { GameEvent, Stage } from '../game/types'
-import { COLLECTION, DRAGON_SCREEN, FREEZE_EARNED, ITEM_FOUND, milestoneFound, nextSurprise, UNDONE, UNDONE_ITEM, collectionCount, collectionLine, foundTileLabel, friendlyDay, itemFoundLine, itemFoundSaved, undoneToast, wearToast } from './copy'
+import { COLLECTION, DRAGON_SCREEN, FREEZE_EARNED, ITEM_FOUND, NATURE_FOUND, UNDONE_BOTH, UNDONE_NATURE, natureTileLabel, spottedAgainLine, milestoneFound, nextSurprise, UNDONE, UNDONE_ITEM, collectionCount, collectionLine, foundTileLabel, friendlyDay, itemFoundLine, itemFoundSaved, undoneToast, wearToast } from './copy'
 import { ITEMS } from '../config/items'
 import { effortChoiceLabel, effortTimesHint, effortXp, legacyTimesHint, legacyXpHint, taskRowLabel } from './copy'
 import { IMPORT_CONFIRM, IMPORT_REFUSED, SETTINGS, importDropped, lastBackupLine } from './copy'
@@ -119,6 +119,21 @@ describe('item copy', () => {
     expect(UNDONE_ITEM.startsWith('Undone')).toBe(true)
   })
 
+  it('undoing a walk that first spotted something says so, alone or with an item', () => {
+    expect(undoneToast(false, true)).toBe(UNDONE_NATURE)
+    expect(undoneToast(true, true)).toBe(UNDONE_BOTH)
+    expect(undoneToast(true, false)).toBe(UNDONE_ITEM)
+    for (const t of [UNDONE_NATURE, UNDONE_BOTH]) expect(t.startsWith('Undone')).toBe(true)
+  })
+
+  it('a repeat nature find adds "Spotted … again" under the toast, after any freeze note', () => {
+    expect(spottedAgainLine('Fly agaric')).toBe('Spotted fly agaric again')
+    expect(loggedToast(15, 'Went for a walk', 0, false, false, false, 0, 'Conkers')).toEqual({ lead: '+15 XP · ', name: 'Went for a walk', note: 'Spotted conkers again' })
+    expect(loggedToast(15, 'Walk', 0, false, true, false, 0, 'Conkers').note).toBe(`${FREEZE_EARNED} Spotted conkers again`)
+    expect(natureTileLabel('Conkers', 'Today')).toBe('Conkers, spotted today')
+    expect(natureTileLabel('Conkers', '5 Oct')).toBe('Conkers, spotted 5 Oct')
+  })
+
   it('gives every item a warm line from the list, the same every time', () => {
     for (const item of ITEMS) {
       const line = itemFoundLine(item.id)
@@ -136,6 +151,11 @@ describe('item copy', () => {
       ITEM_FOUND.button,
       ITEM_FOUND.saved,
       UNDONE_ITEM,
+      UNDONE_NATURE,
+      UNDONE_BOTH,
+      ...Object.values(NATURE_FOUND),
+      COLLECTION.natureEmpty,
+      COLLECTION.natureHint,
       COLLECTION.empty,
       COLLECTION.some,
       COLLECTION.all,

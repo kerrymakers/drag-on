@@ -56,6 +56,11 @@ export function dayKey(timestamp: number): string {
   return shiftDate(c.year, c.month, c.day, c.hour < DAY_START_HOUR ? -1 : 0)
 }
 
+/** The calendar month (1-12) of the game day a timestamp falls in: 02:00 on 1 Nov is still October. */
+export function gameMonth(timestamp: number): number {
+  return Number(dayKey(timestamp).slice(5, 7))
+}
+
 /**
  * Whole wall-clock minutes since the day started at 04:00 (0 to 1439).
  * Seconds are dropped, so 06:45:59 is the same minute as 06:45:00.

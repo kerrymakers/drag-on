@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { GOAL } from '../config/goal'
 import { REWARDS } from '../config/rewards'
 import { STREAKS } from '../config/streaks'
+import { NATURE_TASK_ID } from '../config/nature'
 import { DEFAULT_SETTINGS } from '../config/settings'
 import { STAGES } from '../config/stages'
 import { EFFORT_LEVELS, TASKS } from '../config/tasks'
@@ -358,5 +359,44 @@ describe('createLogEvent streak milestones', () => {
 
   it('uses the real config: STREAKS milestones are 7, 30, 60 and 100', () => {
     expect(STREAKS.milestones).toEqual([7, 30, 60, 100])
+  })
+})
+
+describe('createLogEvent nature finds', () => {
+  const OCT = at('2026-10-13T10:00:00+01:00')
+  const FINDS = [
+    { id: 'oct-a', name: 'A', months: [10], lookFor: '', picture: 'leaf' },
+    { id: 'oct-b', name: 'B', months: [10], lookFor: '', picture: 'leaf' },
+  ]
+  const BASE = { stages: STAGES, rewards: REWARDS, streaks: STREAKS, effortLevels: EFFORT_LEVELS, goal: GOAL }
+  const RULES = { ...BASE, nature: { taskId: NATURE_TASK_ID, finds: FINDS } }
+  const TREAT_ROLL: RewardRoll = { chance: REWARDS.rareChance + REWARDS.treatChance / 2, pick: 0 }
+
+  it('saves a find on a walk, leaving its XP and reward exactly as without one', () => {
+    for (const roll of [NO_REWARD, TREAT_ROLL]) {
+      const plain = createLogEvent(walk, [], settings, OCT, 'w', roll, BASE)!
+      const withFind = createLogEvent(walk, [], settings, OCT, 'w', { ...roll, nature: 0.6 }, RULES)!
+      expect(withFind.nature).toEqual({ id: 'oct-b' })
+      if (roll === TREAT_ROLL) expect(withFind.reward).toMatchObject({ kind: 'treat' })
+      const { nature: _n, ...rest } = withFind
+      expect(rest).toEqual(plain)
+    }
+  })
+
+  it('saves none for any other task, even renamed to look like a walk, and none without a nature pick', () => {
+    expect(createLogEvent(gym, [], settings, OCT, 'g', { ...NO_REWARD, nature: 0 }, RULES)).not.toHaveProperty('nature')
+    expect(createLogEvent({ ...read, name: 'Went for a walk' }, [], settings, OCT, 'r', { ...NO_REWARD, nature: 0 }, RULES)).not.toHaveProperty('nature')
+    expect(createLogEvent(walk, [], settings, OCT, 'w', NO_REWARD, RULES)).not.toHaveProperty('nature')
+    expect(createLogEvent(walk, [], settings, OCT, 'w', { ...NO_REWARD, nature: 0 }, BASE)).not.toHaveProperty('nature')
+    // The walk task renamed still brings finds: it's matched by id.
+    expect(createLogEvent({ ...walk, name: 'Stroll' }, [], settings, OCT, 'w', { ...NO_REWARD, nature: 0 }, RULES)?.nature).toEqual({ id: 'oct-a' })
+  })
+
+  it('takes the next unfound find after an earlier walk, and the same one again once that walk is undone', () => {
+    const roll = { ...NO_REWARD, nature: 0 }
+    const first = createLogEvent(walk, [], settings, OCT - 86_400_000, 'w1', roll, RULES)!
+    expect(createLogEvent(walk, [first], settings, OCT, 'w2', roll, RULES)?.nature).toEqual({ id: 'oct-b' })
+    const undone: GameEvent[] = [first, { id: 'u', type: 'undo', targetEventId: 'w1', timestamp: OCT - 1 }]
+    expect(createLogEvent(walk, undone, settings, OCT, 'w3', roll, RULES)?.nature).toEqual({ id: 'oct-a' })
   })
 })

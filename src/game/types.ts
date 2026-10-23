@@ -183,6 +183,26 @@ export interface RewardRoll {
   chance: number
   /** Picks which item, for a rare roll. */
   pick: number
+  /** Picks which nature find, for a log of the walk task (see rollNatureFind). None: no find. */
+  nature?: number
+}
+
+/**
+ * A seasonal UK nature find a walk can bring back (config/nature.ts). Ids are stable:
+ * saved logs refer to them. `months` are London calendar months (1-12); `picture` is
+ * a key for the art and means nothing to game logic.
+ */
+export interface NatureFind {
+  id: string
+  name: string
+  months: readonly number[]
+  lookFor: string
+  picture: string
+}
+
+/** The nature find a walk log brought, saved on the log. */
+export interface NatureGrant {
+  id: string
 }
 
 /** A logged task. `xpAwarded` is fixed at log time, so later XP edits don't rewrite history. */
@@ -211,6 +231,12 @@ export interface LogEvent {
    * know; game logic checks it at run time (see missionBonus).
    */
   mission?: MissionGrant | { readonly id?: unknown }
+  /**
+   * The nature find a walk brought back, decided at log time. Separate from `reward`
+   * and worth no XP. Saved data may hold a shape this version doesn't know; game logic
+   * checks it at run time (see natureOf). Logs from before Milestone 10 have none.
+   */
+  nature?: NatureGrant | { readonly id?: unknown }
   note?: string
 }
 

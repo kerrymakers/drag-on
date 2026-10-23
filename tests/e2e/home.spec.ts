@@ -163,6 +163,8 @@ test('one tap logs with instant feedback; toast Undo; done states; avoided up to
   for (const id of ['walk', 'read']) {
     await task(page, id).click()
     await expect(task(page, id)).toBeDisabled()
+    // A first walk spots something in nature: its card closes like any other.
+    if (id === 'walk') await closePastGuard(page.locator('.overlay.nature-found'), () => page.keyboard.press('Escape'))
   }
   const base = XP('gym') + XP('walk') + XP('read')
   expect(await xp(page)).toBe(base)
@@ -202,7 +204,7 @@ test('one tap logs with instant feedback; toast Undo; done states; avoided up to
 test('reaching the Hatchling threshold shows Hatchling', async ({ page }, info) => {
   await open(page, TUE_0600)
   let total = 0
-  for (const id of ['wake', 'gym', 'walk', 'read']) {
+  for (const id of ['wake', 'gym', 'selfcare', 'read']) {
     await task(page, id).click()
     total += XP(id)
     expect(await xp(page)).toBe(total)
@@ -263,13 +265,13 @@ test('wake logged at 06:40 stays visible as done', async ({ page }) => {
 test('undo reverts and expires at 04:00', async ({ page }) => {
   await open(page, at('2026-10-06T20:00:00+01:00'))
   await task(page, 'gym').click()
-  await task(page, 'walk').click()
-  expect(await xp(page)).toBe(XP('gym') + XP('walk'))
+  await task(page, 'avoided').click()
+  expect(await xp(page)).toBe(XP('gym') + XP('avoided'))
   await expect(page.locator('#undo')).toBeVisible()
   await page.locator('#undo').click()
   expect(await xp(page)).toBe(XP('gym'))
   await expect(page.locator('#toast-text')).toHaveText('Undone')
-  await expect(task(page, 'walk')).toBeEnabled()
+  await expect(task(page, 'avoided')).toBeEnabled()
   await expect(task(page, 'gym')).toBeDisabled()
   await page.locator('#undo').click()
   expect(await xp(page)).toBe(0)
@@ -317,7 +319,7 @@ test('reduced motion: no wobble, bounce, float or squish; the bar jumps; the hat
   // With motion: the egg wobbles and the XP floats up.
   await page.emulateMedia({ reducedMotion: 'no-preference' })
   expect(await page.evaluate(() => getComputedStyle(document.querySelector('.egg')!).animationName)).toBe('egg-wobble')
-  await task(page, 'walk').click()
+  await task(page, 'avoided').click()
   expect(await page.locator('.float-xp').evaluate((e) => getComputedStyle(e).animationName)).toBe('float-xp')
   await page.clock.runFor(1000) // let the float finish
 
@@ -352,9 +354,9 @@ test('reduced motion: no wobble, bounce, float or squish; the bar jumps; the hat
   // The hatch: the overlay crossfades with no pop.
   await page.evaluate((xp) => {
     localStorage.setItem('drag-on:v1', JSON.stringify({ schemaVersion: 1, events: [{ id: 'seed1', type: 'log', taskId: 'gym', timestamp: Date.parse('2026-10-01T12:00:00+01:00'), xpAwarded: xp }] }))
-  }, HATCH_AT - XP('walk'))
+  }, HATCH_AT - XP('avoided'))
   await page.reload()
-  await task(page, 'walk').click() // hatches
+  await task(page, 'avoided').click() // hatches
   const h = await page.evaluate(() => ({
     overlayCalm: document.querySelector('.overlay')?.classList.contains('is-calm'),
     fromAnim: getComputedStyle(document.querySelector('.overlay-layer.is-from .dragon-react')!).animationName,
@@ -437,9 +439,9 @@ test('offline: load, go offline, log, reload, log persists', async ({ page, cont
   await expect(page.locator('#dragon-art svg')).toBeVisible()
   const radius = await page.locator('.task').first().evaluate((e) => getComputedStyle(e).borderRadius)
   expect(radius).toBe('20px')
-  await task(page, 'walk').click()
+  await task(page, 'avoided').click()
   await page.reload()
-  expect(await xp(page)).toBe(XP('gym') + XP('walk'))
+  expect(await xp(page)).toBe(XP('gym') + XP('avoided'))
   await shot(page, `home-${info.project.name}-offline`)
   await page.goto('./some/deep/link')
   await expect(page.locator('#task-list button.task').first()).toBeVisible()
@@ -623,8 +625,8 @@ test('newer-version data shows a calm notice and is never written', LAYOUT, asyn
     await shot(page, `s3-${info.project.name}-notice-newer-${scheme}`)
   }
   await task(page, 'gym').click()
-  await task(page, 'walk').click()
-  expect(await xp(page)).toBe(40 + XP('gym') + XP('walk'))
+  await task(page, 'avoided').click()
+  expect(await xp(page)).toBe(40 + XP('gym') + XP('avoided'))
   await page.locator('#undo').click()
   const after = await page.evaluate(() => ({
     raw: localStorage.getItem('drag-on:v1'),
@@ -655,6 +657,6 @@ test('a failed save shows a gentle notice and keeps the tap', LAYOUT, async ({ p
   await checkLayout(page)
   await shot(page, `s3-${info.project.name}-notice-savefail-light`)
   await page.locator('#notice-close').click()
-  await task(page, 'walk').click()
+  await task(page, 'avoided').click()
   await expect(page.locator('#notice')).toBeHidden() // stays dismissed this session
 })

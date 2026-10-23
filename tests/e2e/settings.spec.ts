@@ -288,7 +288,7 @@ test('backup reminder: once a day on Home, tap it to open Settings; welcome back
   await expect(page).toHaveURL(/#\/settings$/)
   await page.locator('.tabbar a.tab[data-route="home"]').tap()
   // A log today keeps the dragon content tomorrow, so nothing to welcome.
-  await page.locator('#task-list button.task[data-task-id="walk"]').tap()
+  await page.locator('#task-list button.task[data-task-id="read"]').tap()
 
   // The day after, it's said again.
   await page.clock.setFixedTime(new Date('2026-10-11T10:00:00+01:00'))

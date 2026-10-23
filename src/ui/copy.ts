@@ -213,7 +213,10 @@ export const loggedToast = (
   earnedFreeze = false,
   goalMet = false,
   wishBonus = 0,
-): LoggedToast => ({
+  spottedAgain = '',
+): LoggedToast => {
+  const notes = [earnedFreeze ? FREEZE_EARNED : '', spottedAgain ? spottedAgainLine(spottedAgain) : ''].filter(Boolean)
+  return {
   lead: foundItem
     ? `Found something! +${xp + wishBonus} XP · `
     : goalMet
@@ -224,8 +227,11 @@ export const loggedToast = (
           ? `Treat! +${xp + treatBonus} XP · `
           : `+${xp} XP · `,
   name: taskName,
-  ...(earnedFreeze ? { note: FREEZE_EARNED } : {}),
-})
+  ...(notes.length > 0 ? { note: notes.join(' ') } : {}),
+  }
+}
+/** Under the log toast when a walk spots a nature find seen before, e.g. "Spotted conkers again". */
+export const spottedAgainLine = (name: string): string => `Spotted ${midSentence(name)} again`
 /** The whole toast as one string. */
 export const LOGGED = (
   xp: number,
@@ -235,8 +241,9 @@ export const LOGGED = (
   earnedFreeze = false,
   goalMet = false,
   wishBonus = 0,
+  spottedAgain = '',
 ): string => {
-  const { lead, name, note } = loggedToast(xp, taskName, treatBonus, foundItem, earnedFreeze, goalMet, wishBonus)
+  const { lead, name, note } = loggedToast(xp, taskName, treatBonus, foundItem, earnedFreeze, goalMet, wishBonus, spottedAgain)
   return note ? `${lead}${name} ${note}` : lead + name
 }
 /** The second float on a treat, e.g. "+13 treat". */
@@ -251,7 +258,13 @@ export const bonusFloat = (treat: number, goal: boolean, wish: number): string =
 export const UNDONE = 'Undone'
 /** Undoing a log that found something: the find goes back, gently. */
 export const UNDONE_ITEM = 'Undone. That find is hiding again for now.'
-export const undoneToast = (hadItem: boolean): string => (hadItem ? UNDONE_ITEM : UNDONE)
+/** Undoing a walk that spotted something new: it goes back to being out there. */
+export const UNDONE_NATURE = "Undone. We'll spot that one again another day."
+/** Undoing a log that brought both an item and a new nature find. */
+export const UNDONE_BOTH = 'Undone. Those finds are hiding again for now.'
+/** The toast after Undo: says so when a find left the collection with it. */
+export const undoneToast = (hadItem: boolean, hadNature = false): string =>
+  hadItem && hadNature ? UNDONE_BOTH : hadItem ? UNDONE_ITEM : hadNature ? UNDONE_NATURE : UNDONE
 
 /** "3 days a week", "1 day a week": the weekly goal's stepper. */
 export const goalDays = (n: number): string => `${n} ${n === 1 ? 'day' : 'days'} a week`
@@ -295,6 +308,25 @@ export function milestoneFound(days: number): { heading: string; line: string } 
   return { heading: `${dayCount(days)} together!`, line: 'I found you something to celebrate.' }
 }
 
+/**
+ * The card for a new nature find after a walk: a heading, the find's name and picture,
+ * its "look for" line from config, and where it went.
+ */
+export const NATURE_FOUND = {
+  heading: 'Spotted on our walk!',
+  saved: 'Added to your nature finds',
+  button: 'Lovely!',
+  /** The heading when the card is reopened from Collection. */
+  reopenHeading: 'One of our nature finds',
+  reopenButton: 'Close',
+} as const
+
+/** A found nature tile's accessible name, e.g. "Conkers, spotted 5 Oct". */
+export function natureTileLabel(name: string, friendly: string): string {
+  const when = friendly === 'Today' || friendly === 'Yesterday' ? friendly.toLowerCase() : friendly
+  return `${name}, spotted ${when}`
+}
+
 /** Words on the Collection screen. Unfound items are a plain "?", never named. */
 export const COLLECTION = {
   title: 'Collection',
@@ -314,6 +346,13 @@ export const COLLECTION = {
   eggLine: 'Your dragon will wear these once it hatches.',
   /** After taking something off. */
   takenOff: 'Taken off',
+  /** The two sections. */
+  itemsHeading: 'Items',
+  natureHeading: 'Nature',
+  /** Under Nature before anything's been spotted. Never says what or when. */
+  natureEmpty: 'Walks bring back little things to spot.',
+  /** Under Nature once something's been spotted. */
+  natureHint: 'Tap one to read about it again.',
 } as const
 
 /** "ribbon bow" from "Ribbon bow", to sit mid-sentence. */

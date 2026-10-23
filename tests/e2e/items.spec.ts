@@ -2,6 +2,7 @@
 // a roll in the rare band, so every log finds the first item not found yet.
 import { test, expect, closePastGuard, settle, shot, LAYOUT, type Page } from './fixtures'
 import { ITEMS } from '../../src/config/items'
+import { NATURE } from '../../src/config/nature'
 import { REWARDS } from '../../src/config/rewards'
 import { TASKS } from '../../src/config/tasks'
 
@@ -12,6 +13,8 @@ const XP = (id: string) => TASKS.find((t) => t.id === id)!.xp
 const RARE_ROLL = REWARDS.rareChance / 3
 const FIRST = ITEMS[0]!
 const SECOND = ITEMS[1]!
+// The pinned roll also picks the first find in season (October) for a walk.
+const OCTOBER_FIRST = NATURE.find((f) => f.months.includes(10))!
 
 function collectConsole(page: Page) {
   const msgs: string[] = []
@@ -53,6 +56,8 @@ const card = (page: Page) => page.locator('.overlay.item-found')
 const saved = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getItem('drag-on:v1')!).events.at(-1))
 
 const closeCard = (page: Page) => closePastGuard(card(page), () => card(page).click())
+const natureCard = (page: Page) => page.locator('.overlay.nature-found')
+const closeNature = (page: Page) => closePastGuard(natureCard(page), () => natureCard(page).click())
 
 test('a rare roll finds an item: card, toast, Collection, and undo takes it back', async ({ page }) => {
   const msgs = collectConsole(page)
@@ -130,18 +135,41 @@ test('a quick double-tap on the task does not dismiss the card unseen', async ({
   expect(events).toBe(1)
 })
 
-test('the next find is a different item, and the toast Undo takes the find back', async ({ page }) => {
+test('the next find is a different item; a walk also spots something new: its card, the Nature tile, and Undo takes both back', async ({ page }) => {
   await setUp(page, RARE_ROLL)
   await page.locator('button.task[data-task-id="gym"]').click()
   await closeCard(page)
   await page.locator('button.task[data-task-id="walk"]').click()
+  expect(await saved(page)).toMatchObject({ taskId: 'walk', xpAwarded: XP('walk'), nature: { id: OCTOBER_FIRST.id } })
   await expect(card(page).locator('.item-found-name')).toHaveText(SECOND.name)
   await closeCard(page)
-  await page.locator('#toast-undo').click()
-  await expect(page.locator('#toast-text')).toHaveText('Undone. That find is hiding again for now.')
+  // The nature card follows the item card: name, picture and what to look for.
+  await expect(natureCard(page)).toBeVisible()
+  await expect(natureCard(page).locator('.item-found-name')).toHaveText(OCTOBER_FIRST.name)
+  await expect(natureCard(page).locator('.nature-look-for')).toHaveText(OCTOBER_FIRST.lookFor)
+  await expect(natureCard(page).locator(`svg[data-nature="${OCTOBER_FIRST.id}"]`)).toHaveCount(1)
+  await shot(page, `m10s1-nature-card-${test.info().project.name}`, { settled: true })
+  await closeNature(page)
+  await expect(page.locator('#toast-text')).toHaveText(`+${XP('walk')} XP · Went for a walk`)
+
+  // Collection's Nature section: one found tile, the rest a plain "?". Tapping it reopens its card.
+  await page.getByRole('link', { name: 'Collection' }).click()
+  const nature = page.locator('#collection-screen .cs-nature')
+  await expect(nature.locator('.cs-nature-count')).toHaveText(`1 of ${NATURE.length} found`)
+  await expect(nature.locator('.nature-tile.is-unknown')).toHaveCount(NATURE.length - 1)
+  await nature.locator('.nature-tile.is-found').click()
+  await expect(natureCard(page).locator('.item-found-name')).toHaveText(OCTOBER_FIRST.name)
+  await closeNature(page)
+  expect(await page.evaluate(() => document.activeElement?.matches('.nature-tile'))).toBe(true)
+
+  await page.getByRole('link', { name: 'Home' }).click()
+  await page.locator('#undo').click()
+  await expect(page.locator('#toast-text')).toHaveText('Undone. Those finds are hiding again for now.')
   await page.getByRole('link', { name: 'Collection' }).click()
   await expect(page.locator('.cs-count')).toHaveText(`1 of ${ITEMS.length} found`)
   await expect(page.locator('.item-tile.is-found .item-tile-name')).toHaveText(FIRST.name)
+  await expect(nature.locator('.cs-nature-count')).toHaveText(`0 of ${NATURE.length} found`)
+  await expect(nature.locator('.nature-tile.is-found')).toHaveCount(0)
 })
 
 test('a find that also hatches the egg: stage-up first, then the card, then the toast', async ({ page }) => {
@@ -184,7 +212,7 @@ test('Collection with nothing found: friendly empty state and "?" tiles', async 
 })
 
 for (const scheme of ['light', 'dark'] as const) {
-  test(`Collection with every item found (${scheme}): own drawings, 3 columns, big tiles, names fit, no sideways scroll`, LAYOUT, async ({ page }) => {
+  test(`Collection with every item and nature find (${scheme}): own drawings, 3 columns, big tiles, names fit, no sideways scroll`, LAYOUT, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme })
     const t = Date.parse('2026-10-05T09:00:00+01:00')
     const events = ITEMS.map((item, k) => ({
@@ -195,23 +223,29 @@ for (const scheme of ['light', 'dark'] as const) {
       xpAwarded: 15,
       reward: { kind: 'item', itemId: item.id },
     }))
-    await seed(page, events)
+    // Every nature find too, one walk a day (the longest names must fit as well).
+    const walks = NATURE.map((f, k) => ({ id: `n${k}`, type: 'log', taskId: 'walk', timestamp: t - (k + 1) * 86_400_000, xpAwarded: 15, nature: { id: f.id } }))
+    await seed(page, [...walks, ...events])
     await setUp(page, null)
     await page.getByRole('link', { name: 'Collection' }).click()
     const screen = page.locator('#collection-screen')
     await expect(screen.locator('.cs-count')).toHaveText(`${ITEMS.length} of ${ITEMS.length} found`)
+    await expect(screen.locator('.cs-nature-count')).toHaveText(`${NATURE.length} of ${NATURE.length} found`)
+    await expect(screen.locator('.nature-tile.is-found')).toHaveCount(NATURE.length)
     await expect(screen.locator('.cs-line')).toHaveText('Every one found! Your dragon is delighted.')
     await expect(screen.locator('.item-tile.is-unknown')).toHaveCount(0)
     await expect(screen.locator('.item-tile.is-found')).toHaveCount(ITEMS.length)
     await expect(screen.locator('.item-tile.is-found .item-tile-date').first()).toHaveText('5 Oct')
     for (const item of ITEMS) await expect(screen.locator(`.item-tile.is-found svg[data-item="${item.id}"]`), item.id).toHaveCount(1)
     const g = await page.evaluate(() => {
-      const tiles = [...document.querySelectorAll('#collection-screen .item-tile')].map((e) => e.getBoundingClientRect())
+      const tiles = [...document.querySelectorAll('#collection-screen .item-tile, #collection-screen .nature-tile')].map((e) => e.getBoundingClientRect())
       const firstRowTop = tiles[0]!.top
+      const natureTop = document.querySelector('#collection-screen .nature-tile')!.getBoundingClientRect().top
       return {
         docW: document.documentElement.scrollWidth,
         vw: window.innerWidth,
         perRow: tiles.filter((r) => Math.abs(r.top - firstRowTop) < 1).length,
+        naturePerRow: tiles.filter((r) => Math.abs(r.top - natureTop) < 1).length,
         minW: Math.min(...tiles.map((r) => r.width)),
         minH: Math.min(...tiles.map((r) => r.height)),
         right: Math.max(...tiles.map((r) => r.right)),
@@ -219,12 +253,15 @@ for (const scheme of ['light', 'dark'] as const) {
       }
     })
     expect(g.perRow).toBe(3)
+    expect(g.naturePerRow).toBe(3)
     expect(g.minW).toBeGreaterThanOrEqual(44)
     expect(g.minH).toBeGreaterThanOrEqual(44)
     expect(g.right).toBeLessThanOrEqual(g.vw)
     expect(g.docW).toBeLessThanOrEqual(g.vw)
     expect(g.nameOverflow).toEqual([])
     await shot(page, `m7s3-collection-all-${scheme}-${test.info().project.name}`, { settled: true })
+    await screen.locator('.cs-nature').scrollIntoViewIfNeeded()
+    await shot(page, `m10s1-collection-nature-${scheme}-${test.info().project.name}`, { settled: true })
   })
 }
 
@@ -339,8 +376,8 @@ test('bad-luck protection: after enough logs with no item, the next log finds on
   }))
   await seed(page, events)
   await setUp(page, null) // a roll that brings nothing
-  await page.locator('button.task[data-task-id="walk"]').click()
-  expect(await saved(page)).toMatchObject({ taskId: 'walk', reward: { kind: 'item', itemId: ITEMS.at(-1)!.id } })
+  await page.locator('button.task[data-task-id="read"]').click()
+  expect(await saved(page)).toMatchObject({ taskId: 'read', reward: { kind: 'item', itemId: ITEMS.at(-1)!.id } })
   await expect(card(page)).toBeVisible()
   await closeCard(page)
   // The next log is back to the usual odds.

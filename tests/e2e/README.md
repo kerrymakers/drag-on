@@ -12,7 +12,7 @@ The whole suite runs in GitHub Actions on every push, and deploy waits for it. R
 | --- | --- |
 | `home.spec.ts` | Home: one-tap logging, feedback, done states, task limits, the wake-up window, hatching |
 | `treats.spec.ts` | Treat rolls: the extra float, the hop, the buzz, the toast, reduced motion and dark mode; the secret wish (opening hint, the sparkle, granting it) |
-| `items.spec.ts` | Rare item finds: the card, the toast, Collection, undo |
+| `items.spec.ts` | Rare item finds: the card, the toast, Collection, undo; walk nature finds: the card, Collection's Nature section, undo |
 | `wearing.spec.ts` | Wearing found items from Collection, on Home and the Dragon screen |
 | `stages.spec.ts` | Stage-ups: the reveal dialog, undo, held stages, older save data |
 | `evolution.spec.ts` | Evolution looks: when they appear, celebration, undo, drawing at every stage |

@@ -171,10 +171,10 @@ test('the wake-up task has no times-a-day choice and keeps its rules; picking a 
 test('rename a task and change how hard it is: Home shows it, the next log uses it, the past keeps its XP', async ({ page }) => {
   const msgs = collectConsole(page)
   await open(page, FRI('10:00'))
-  // A walk before the edit.
-  await homeTask(page, 'walk').tap()
-  await expect(homeTask(page, 'walk')).toContainText('Done')
-  await expect(page.locator('#xp-total')).toHaveText(String(XP('walk')))
+  // A read before the edit.
+  await homeTask(page, 'read').tap()
+  await expect(homeTask(page, 'read')).toContainText('Done')
+  await expect(page.locator('#xp-total')).toHaveText(String(XP('read')))
 
   await tab(page, 'settings').tap()
   await row(page, 'gym').tap()
@@ -202,10 +202,10 @@ test('rename a task and change how hard it is: Home shows it, the next log uses 
   await expect(homeTask(page, 'gym')).toContainText(`+${newXp} XP`)
   await homeTask(page, 'gym').tap()
   await expect(page.locator('.toast-name')).toHaveText('Lifting')
-  await expect(page.locator('#xp-total')).toHaveText(String(XP('walk') + newXp))
+  await expect(page.locator('#xp-total')).toHaveText(String(XP('read') + newXp))
   const data = await stored(page)
   expect(data.events.map((e: { taskId: string; xpAwarded: number }) => [e.taskId, e.xpAwarded])).toEqual([
-    ['walk', XP('walk')],
+    ['read', XP('read')],
     ['gym', newXp],
   ])
   // The first edit stores the whole list; the stat never changes.
@@ -217,7 +217,7 @@ test('rename a task and change how hard it is: Home shows it, the next log uses 
   await page.reload()
   await expect(page.locator('#tabbar a').first()).toBeVisible()
   await expect(homeTask(page, 'gym')).toContainText('Lifting')
-  await expect(page.locator('#xp-total')).toHaveText(String(XP('walk') + newXp))
+  await expect(page.locator('#xp-total')).toHaveText(String(XP('read') + newXp))
   await tab(page, 'history').tap()
   await expect(page.locator('.hs-day')).toContainText('Lifting')
   expect(msgs).toEqual([])

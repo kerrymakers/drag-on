@@ -1,6 +1,7 @@
-/* Collection: found card, Collection screen. Also for other screens: worn chips .wear-list (Dragon screen), Home streak chip .streak-chip (its reduced-motion rule is in history.css). */
+/* Collection: found card (items and nature), Collection screen. Also for other screens: worn chips .wear-list (Dragon screen), Home streak chip .streak-chip (its reduced-motion rule is in history.css). */
 /* "Found something!": a small card over a soft, see-through scrim. */
-.overlay.item-found {
+.overlay.item-found,
+.overlay.nature-found {
   background: color-mix(in srgb, var(--scrim) 84%, transparent);
 }
 
@@ -44,7 +45,8 @@
   text-wrap: balance;
 }
 
-.overlay.item-found .item-found-line {
+.overlay.item-found .item-found-line,
+.overlay.nature-found .item-found-line {
   margin: 0;
 }
 
@@ -57,7 +59,8 @@
   text-wrap: balance;
 }
 
-.overlay.item-found .overlay-button {
+.overlay.item-found .overlay-button,
+.overlay.nature-found .overlay-button {
   min-width: 180px;
 }
 
@@ -106,7 +109,7 @@
 }
 
 .cs-hint {
-  margin: 4px 0 0;
+  margin: -4px 0 0;
   color: var(--text-soft);
   font-size: 0.9rem;
   font-weight: 600;
@@ -149,7 +152,8 @@
   font-weight: 800;
 }
 
-.cs-count {
+.cs-count,
+.cs-nature-count {
   display: inline-block;
   margin: 0;
   padding: 4px 14px;
@@ -160,10 +164,45 @@
 }
 
 .cs-line {
-  margin: 10px 0 0;
+  margin: -4px 0 0;
   color: var(--text-soft);
   font-weight: 600;
   text-wrap: balance;
+}
+
+/* The two sections, Items and Nature, each with its own heading and count. */
+.cs-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cs-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cs-section-title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+.cs-section-line {
+  margin: -4px 0 0;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-wrap: balance;
+}
+.cs-section-line[hidden] {
+  display: none;
+}
+/* The "look for" line on a nature card reads as a little guide, so it's a touch smaller. */
+.overlay.nature-found .nature-look-for {
+  font-size: 0.98rem;
+  line-height: 1.4;
+  text-wrap: pretty;
 }
 
 /* Three across at 410px and still at 360px (each tile ~100px). */
@@ -180,7 +219,8 @@
   display: flex;
 }
 
-.item-tile {
+.item-tile,
+.nature-tile {
   position: relative;
   flex: 1 1 auto;
   width: 100%;
@@ -198,7 +238,8 @@
 }
 
 /* A found tile is a button: tap to wear, tap again to take off. */
-button.item-tile {
+button.item-tile,
+button.nature-tile {
   margin: 0;
   border: 0;
   color: inherit;
@@ -211,11 +252,13 @@ button.item-tile {
     transform 160ms var(--bounce),
     box-shadow 160ms ease;
 }
-button.item-tile:active {
+button.item-tile:active,
+button.nature-tile:active {
   transform: scale(0.96);
   box-shadow: var(--shadow-pressed);
 }
-button.item-tile:focus-visible {
+button.item-tile:focus-visible,
+button.nature-tile:focus-visible {
   outline: 3px solid var(--accent-strong);
   outline-offset: 2px;
 }
@@ -271,14 +314,16 @@ button.item-tile:focus-visible {
   font-weight: 600;
 }
 
-.item-tile.is-unknown {
+.item-tile.is-unknown,
+.nature-tile.is-unknown {
   justify-content: center;
   background: transparent;
   box-shadow: none;
   border: 2px dashed var(--track);
 }
 
-.item-tile.is-unknown .item-tile-art {
+.item-tile.is-unknown .item-tile-art,
+.nature-tile.is-unknown .item-tile-art {
   background: var(--track);
   color: var(--text-soft);
   font-size: 1.8rem;
@@ -301,27 +346,32 @@ button.item-tile:focus-visible {
     --worn-ring: #f3b98f;
     --worn-text: #3a2418;
   }
-  .cs-count {
+  .cs-count,
+  .cs-nature-count {
     background: #5a3a24;
     color: #ffd2a8;
   }
 }
 
 /* Reduced motion (.is-calm, like the stage-up): the card fades in, nothing bounces. */
-.overlay.item-found.is-calm .item-card {
+.overlay.item-found.is-calm .item-card,
+.overlay.nature-found.is-calm .item-card {
   animation: overlay-in 200ms ease-out both;
 }
-.overlay.item-found.is-calm .item-found-art {
+.overlay.item-found.is-calm .item-found-art,
+.overlay.nature-found.is-calm .item-found-art {
   animation: none;
 }
 
 /* Reduced motion: wearing still shows straight away, nothing bounces. */
 @media (prefers-reduced-motion: reduce) {
   button.item-tile,
+  button.nature-tile,
   .item-tile-badge {
     transition: none;
   }
-  button.item-tile:active {
+  button.item-tile:active,
+  button.nature-tile:active {
     transform: none;
   }
 }

@@ -164,6 +164,8 @@ Added 2026-10-07 after simulation: at 3% with 12 items most users went 6 to 7 we
 
 Added 2026-10-09 (Milestone 7, slice 3): the pool grew from 18 to 24 items, 8 for each spot. New items are only ever appended, so saved finds and the relative order of earlier items don't change. The odds are unchanged. Balance check 2026-10-09 (24 items, 30-log rule kept): with the built-in tasks a typical user completes the collection around day 259 (Elder ~day 164), so the last items keep arriving after Elder; a keen user ~day 96, a patchy one ~day 333 (about half finish within a year). With heavy logging (8 nudge tasks, 3 times a day) the collection completes ~day 150 against Elder ~day 167, so the empty stretch before Elder fell from about 8 weeks to about 2.5. The longest stretch with nothing new for a typical user is still about 3 weeks; that's set by the 30-log rule, not the pool size, and a days-based rule is a possible later change. A rule of 20, 25 or 40 logs was tried and was worse overall.
 
+Walks and nature (decided 2026-10-23, Milestone 10): every log of the built-in walk task (id `walk`, whatever it's renamed to) brings back one seasonal UK nature find; no other task does. Finds in season in the month of the game day (days run 04:00 to 03:59, so a walk at 02:00 on 1 Nov counts as October) that haven't been found yet come first; once they're all found, a walk brings one in season again. The pick is made once at log time and saved on the log (`nature`), so undoing the walk undoes the find, and walks logged before Milestone 10 have none. Finds are worth no XP and don't touch the item odds. A new find gets its own card (name, picture and what to look or listen for); one found before adds "Spotted ⟨name⟩ again" to the log toast. Collection has an Items section and a Nature section, each with its own count; a nature find not found yet is a plain "?" with no name or season, and tapping a found one shows its card again (nature finds aren't worn). The finds live in `config/nature.ts` with stable, append-only ids and at least 3 in season every month. It's a spotting guide only: the words are about looking and listening, never picking, eating or touching (fungi say "look, don't touch").
+
 ### Streaks
 
 - Show an overall "days with at least one log" streak, plus the best one ever.
@@ -197,7 +199,7 @@ Store an append-only log of events. Work out everything else from it.
 
 ```
 Task      { id, name, stat, xp, rules, archived, effort? }
-Event     { id, taskId, timestamp, xpAwarded, reward?, mission?, note? }
+Event     { id, taskId, timestamp, xpAwarded, reward?, mission?, nature?, note? }
 Settings  { wakeSchedule: { mon: "06:30", ..., sat: null, sun: null }, wakeScheduleHistory?: [{ from: "YYYY-MM-DD", schedule }], dragonName, dragonColour?, lastBackupAt?, ... }
 ```
 

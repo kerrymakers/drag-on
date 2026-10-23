@@ -5,6 +5,7 @@ import {
   londonClock,
   isClockTime,
   dayKey,
+  gameMonth,
   dayMinutesToClock,
   daysBetween,
   instantInDay,
@@ -293,5 +294,15 @@ describe('clockMinutes', () => {
   })
   it('rejects anything else', () => {
     for (const v of ['24:00', '7:30', '07:60', 'noon', '']) expect(clockMinutes(v), v).toBeNull()
+  })
+})
+
+describe('gameMonth', () => {
+  it("is the game day's month: before 04:00 on the 1st it's still last month (GMT and BST)", () => {
+    expect(gameMonth(at('2026-11-01T03:59:00Z'))).toBe(10)
+    expect(gameMonth(at('2026-11-01T04:00:00Z'))).toBe(11)
+    expect(gameMonth(at('2026-05-01T02:59:00Z'))).toBe(4)
+    expect(gameMonth(at('2026-05-01T03:00:00Z'))).toBe(5)
+    expect(gameMonth(at('2027-01-01T03:00:00Z'))).toBe(12)
   })
 })

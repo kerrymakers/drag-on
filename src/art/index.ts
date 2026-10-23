@@ -13,6 +13,7 @@ import type { WearLook, WearSlot } from './parts'
 export { DRAGON_COLOURS, isDragonColour, type ColourId } from './colours'
 export { EVOLVED_LOOKS, type EvolutionLook } from './looks'
 export { hasItemArt, itemSvg, unknownItemSvg } from './items'
+export { NATURE_PICTURES, natureSvg } from './nature'
 export type { WearLook, WearSlot } from './parts'
 export { renderScene, SKY_LOOKS, type SceneLook, type SkyLook } from './scene'
 
