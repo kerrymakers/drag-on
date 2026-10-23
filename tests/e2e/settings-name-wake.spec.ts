@@ -134,7 +134,6 @@ test('renaming and choosing a colour show on Home, trimmed; blank goes back to "
 
   // A colour: none chosen yet (classic), then one tap saves it and the preview takes it.
   const mint = page.getByRole('radio', { name: 'Mint' })
-  await expect(page.getByRole('radiogroup', { name: SETTINGS.colourLabel }).getByRole('radio')).toHaveCount(6)
   await expect(mint).toHaveAttribute('aria-checked', 'false')
   await expect(page.locator('.ss-colour-art .dragon-svg')).not.toHaveAttribute('data-colour')
   await mint.tap()

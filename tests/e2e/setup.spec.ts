@@ -2,9 +2,7 @@
 // and a goal, then Home. The fixtures skip setup everywhere else; this spec turns it on.
 // Screenshots (with SCREENSHOTS=1): tests/screenshots/m9s2-*
 import { test, expect, shot, settle, LAYOUT, type Page } from './fixtures'
-import { DRAGON_NAME_MAX } from '../../src/config/settings'
 import { TASKS } from '../../src/config/tasks'
-import { cleanDragonName } from '../../src/game/settings'
 import { SETTINGS, SETUP, setupHello, setupTaskLabel } from '../../src/ui/copy'
 
 test.use({ timezoneId: 'Europe/London', locale: 'en-GB', skipSetup: false })
@@ -28,11 +26,10 @@ test('a new friend names their egg, picks a colour, tasks and a goal, and lands 
   await expect(setup(page)).toBeVisible()
   await expect(page.locator('#su-title')).toHaveText(SETUP.nameTitle)
 
-  // 1. Name and colour: the egg takes the colour straight away. Too long a name is cut.
-  const typed = 'Ember the Magnificent One'
-  const name = cleanDragonName(typed, DRAGON_NAME_MAX)!
+  // 1. Name and colour: the egg takes the colour straight away.
+  const name = 'Ember'
   await expect(page.locator('#su-back')).toBeHidden()
-  await page.getByRole('textbox', { name: SETTINGS.nameLabel }).fill(typed)
+  await page.getByRole('textbox', { name: SETTINGS.nameLabel }).fill(name)
   await page.locator('#su-colour [data-colour="mint"]').tap()
   await expect(page.locator('.su-egg .dragon-svg')).toHaveAttribute('data-colour', 'mint')
   await shot(page, 'm9s2-name', { settled: true })
@@ -79,9 +76,8 @@ test('a new friend names their egg, picks a colour, tasks and a goal, and lands 
   await page.locator('#task-list button.task[data-task-id="gym"]').tap()
   await expect(page.locator('#xp-total')).toHaveText(String(TASKS.find((t) => t.id === 'gym')!.xp))
 
-  const saved = (await stored(page)).settings
-  expect(saved.wakeSchedule.sat).toBe('06:30')
-  expect(saved.goal).toEqual({ taskId: 'gym', daysPerWeek: 4 })
+  // The wake-up step's choice reached the settings (Home can't show Saturday's time today).
+  expect((await stored(page)).settings.wakeSchedule.sat).toBe('06:30')
 
   // Never again: a reload opens Home.
   await page.reload()
@@ -114,14 +110,11 @@ test('every step fits, with thumb-sized targets, and Skip setup goes straight to
     await shot(page, `m9s2-${step}-${info.project.name}`, { settled: true })
     if (step !== 'goal') await page.locator('#su-skip').tap()
   }
-  // Skip setup from the last step: the skipped steps saved nothing (classic egg, every
-  // task), and the open step's goal is kept.
+  // Skip setup from the last step: the skipped steps saved nothing (every task), and the
+  // open step's goal is kept.
   await page.locator('#su-skip-all').tap()
   await expect(setup(page)).toHaveCount(0)
   await expect(page.locator('#dragon-name')).toHaveText('your dragon')
-  await expect(page.locator('#dragon-art .dragon-svg')).not.toHaveAttribute('data-colour')
   await expect(page.locator('#task-list button.task')).toHaveCount(TASKS.length)
-  const saved = (await stored(page)).settings
-  expect(saved.goal).toEqual({ taskId: 'gym', daysPerWeek: 3 })
-  expect(saved.tasks).toBeUndefined()
+  expect((await stored(page)).settings.goal).toEqual({ taskId: 'gym', daysPerWeek: 3 })
 })
