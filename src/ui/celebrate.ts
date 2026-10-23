@@ -36,6 +36,8 @@ export interface CelebrateOptions {
   newLook?: StatId | null
   /** What the dragon is wearing, on both layers (the egg layer draws nothing worn). */
   wearing?: WearLook | undefined
+  /** The dragon's chosen colour, on both layers (undefined for classic). */
+  colour?: string | undefined
   reducedMotion: boolean
   /** Made inert while the dialog is open, so focus and taps can't reach it. */
   background?: HTMLElement | null
@@ -50,7 +52,7 @@ let overlayCount = 0
 
 export function celebrate(
   doc: Document,
-  { from, to, fromLook, toLook, newLook = null, wearing, reducedMotion, background, returnFocus, onClose, onReveal }: CelebrateOptions,
+  { from, to, fromLook, toLook, newLook = null, wearing, colour, reducedMotion, background, returnFocus, onClose, onReveal }: CelebrateOptions,
 ): void {
   const lookOnly = from.id === to.id
   const copy = celebrationCopy(lookOnly ? null : to.id, newLook)
@@ -113,8 +115,8 @@ export function celebrate(
   overlay.append(card)
 
   // Growing up is a happy moment, whatever the mood was before.
-  renderDragon(fromLayer, { stage: from.id, progress: 1, mood: 'happy', look: fromLook, wearing })
-  renderDragon(toLayer, { stage: to.id, progress: 0, mood: 'happy', look: toLook, wearing })
+  renderDragon(fromLayer, { stage: from.id, progress: 1, mood: 'happy', look: fromLook, wearing, colour })
+  renderDragon(toLayer, { stage: to.id, progress: 0, mood: 'happy', look: toLook, wearing, colour })
 
   const timers: number[] = []
   openOverlay(doc, overlay, {

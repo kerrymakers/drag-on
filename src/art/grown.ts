@@ -23,9 +23,9 @@ export const WHELP: Anchors = {
 export const WHELP_SCALE = 0.9
 
 /** `uid` makes the drawing's gradient ids unique: use a fresh one for each drawing on screen. */
-export function whelpSvg(uid: string, wearing?: WearLook): string {
+export function whelpSvg(uid: string, wearing?: WearLook, colour?: string): string {
   return dragonSvg(
-    { stage: 'whelp', label: 'A young dragon with growing wings', scale: WHELP_SCALE, anchors: WHELP, wearing, uid },
+    { stage: 'whelp', label: 'A young dragon with growing wings', scale: WHELP_SCALE, anchors: WHELP, wearing, colour, uid },
     `
     ${wingPair('M182 296 C136 206 54 214 42 292 C72 282 92 294 100 318 C114 302 134 302 148 314 C154 298 168 292 182 302 Z')}
     <g class="dragon-tail">
@@ -78,9 +78,9 @@ const JUVENILE_LOOK: LookAnchors = { snoutTop: 180, forehead: 112, flower: [212,
 
 export const JUVENILE_SCALE = 0.95
 
-export function juvenileSvg(uid: string, look: EvolutionLook = 'neutral', wearing?: WearLook): string {
+export function juvenileSvg(uid: string, look: EvolutionLook = 'neutral', wearing?: WearLook, colour?: string): string {
   return dragonSvg(
-    { evolution: look, features: lookFeatures(look, JUVENILE, JUVENILE_LOOK), stage: 'juvenile', label: 'A confident young dragon with strong wings', scale: JUVENILE_SCALE, anchors: JUVENILE, wearing, uid },
+    { evolution: look, features: lookFeatures(look, JUVENILE, JUVENILE_LOOK), stage: 'juvenile', label: 'A confident young dragon with strong wings', scale: JUVENILE_SCALE, anchors: JUVENILE, wearing, colour, uid },
     `
     ${wingPair('M192 286 C152 172 62 150 22 212 C52 216 68 232 72 256 C90 242 112 246 122 264 C136 252 158 256 168 274 Z', 'M190 284 C154 196 92 170 30 206')}
     <g class="dragon-tail">
@@ -137,9 +137,9 @@ const ADULT_LOOK: LookAnchors = { snoutTop: 148, forehead: 84, flower: [218, 84]
 
 export const ADULT_SCALE = 1
 
-export function adultSvg(uid: string, look: EvolutionLook = 'neutral', wearing?: WearLook): string {
+export function adultSvg(uid: string, look: EvolutionLook = 'neutral', wearing?: WearLook, colour?: string): string {
   return dragonSvg(
-    { evolution: look, features: lookFeatures(look, ADULT, ADULT_LOOK), stage: 'adult', label: 'A strong, proud dragon with wide wings', scale: ADULT_SCALE, anchors: ADULT, wearing, uid },
+    { evolution: look, features: lookFeatures(look, ADULT, ADULT_LOOK), stage: 'adult', label: 'A strong, proud dragon with wide wings', scale: ADULT_SCALE, anchors: ADULT, wearing, colour, uid },
     `
     ${wingPair('M198 270 C152 118 44 76 8 148 C32 154 46 170 48 196 C68 180 94 186 104 206 C120 194 144 198 152 218 C166 210 186 216 192 238 Z', 'M196 268 C160 150 90 110 14 150 M190 250 C150 186 104 176 54 194 M186 236 C160 206 130 200 104 206')}
     <g class="dragon-tail">
@@ -199,9 +199,9 @@ const ELDER_LOOK: LookAnchors = { snoutTop: 146, forehead: 88, flower: [216, 80]
 
 export const ELDER_SCALE = 1
 
-export function elderSvg(uid: string, look: EvolutionLook = 'neutral', wearing?: WearLook): string {
+export function elderSvg(uid: string, look: EvolutionLook = 'neutral', wearing?: WearLook, colour?: string): string {
   return dragonSvg(
-    { evolution: look, features: lookFeatures(look, ELDER, ELDER_LOOK), stage: 'elder', label: 'A wise, gentle old dragon', scale: ELDER_SCALE, anchors: ELDER, wearing, uid },
+    { evolution: look, features: lookFeatures(look, ELDER, ELDER_LOOK), stage: 'elder', label: 'A wise, gentle old dragon', scale: ELDER_SCALE, anchors: ELDER, wearing, colour, uid },
     `
     ${wingPair('M200 264 C150 104 40 54 2 128 C28 134 42 152 44 178 C64 162 92 166 102 188 C118 174 144 178 152 200 C168 192 188 200 194 224 Z', 'M198 262 C160 136 86 90 8 128 M192 246 C150 176 102 162 50 176 M188 232 C160 196 128 188 102 190')}
     <g class="dragon-tail">

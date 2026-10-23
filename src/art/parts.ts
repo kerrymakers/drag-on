@@ -2,6 +2,7 @@
 // (see art.css), and each svg carries data-stage and data-evolution, so an evolution
 // look can recolour a stage and add features (looks.ts) without redrawing it.
 
+import { colourAttr } from './colours'
 import { wornItemBox, wornItemSvg } from './items'
 import { MOOD_MOTION, MOTION_MOODS, headReach, shapeBoxes, type Box } from './motion'
 
@@ -257,6 +258,8 @@ export interface StageSvgOptions {
   features?: { under: string; over: string }
   /** The items being worn, by spot. */
   wearing?: WearLook | undefined
+  /** The chosen colour id (colours.ts), for data-colour. None, or one the art doesn't know, draws classic. */
+  colour?: string | undefined
   /**
    * Makes the gradient ids unique to this drawing, so two dragons on screen at once
    * (Home and the Dragon screen, say) never share or clash over a gradient.
@@ -329,7 +332,7 @@ function paintDefs(uid: string, top: number): string {
  * box grows to cover a head item, so bubbles stay clear of hats.
  */
 export function dragonSvg(
-  { stage, label, scale, anchors, bodyClass, evolution = 'neutral', features, wearing, uid }: StageSvgOptions,
+  { stage, label, scale, anchors, bodyClass, evolution = 'neutral', features, wearing, colour, uid }: StageSvgOptions,
   body: string,
 ): string {
   const neck = wornItemSvg(wearing?.neck, 'neck', anchors.wear.neck)
@@ -345,7 +348,7 @@ export function dragonSvg(
   const pivots = `--head-pivot: 256px ${anchors.neckY}px; --wing-l: ${wx}px ${wy}px; --wing-r: ${512 - wx}px ${wy}px`
   const drawing = paint(`${body}${features?.under ?? ''}${neck}${held}${moodParts(anchors)}${onHead(sighPuffFor(body, anchors))}${features?.over ?? ''}${head ? onHead(head) : ''}`, uid)
   return `
-<svg class="dragon-svg dragon-${stage}" data-stage="${stage}" data-evolution="${evolution}" data-mood="content" viewBox="0 0 512 512" role="img" aria-label="${label}" style="${pivots}">
+<svg class="dragon-svg dragon-${stage}" data-stage="${stage}" data-evolution="${evolution}"${colourAttr(colour)} data-mood="content" viewBox="0 0 512 512" role="img" aria-label="${label}" style="${pivots}">
   ${paintDefs(uid, anchors.headTop - 20)}
   <g transform="translate(256 492) scale(${scale}) translate(-256 -492)">
     ${headBoxRect(reach.content ?? worn, true, reach)}

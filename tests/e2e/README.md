@@ -24,7 +24,7 @@ The whole suite runs in GitHub Actions on every push, and deploy waits for it. R
 | `dragon-screen.spec.ts` | Shared layout and the tab bar, the Dragon screen, scrolling on short screens |
 | `short-viewport.spec.ts` | Toasts, the hatch overlay and notices on short screens |
 | `settings.spec.ts` | The Settings tab, the sound switch, export, import, the backup reminder, the weekly goal (Home chip, goal met, wistful goal mood) |
-| `settings-name-wake.spec.ts` | Settings: the dragon's name and wake-up times |
+| `settings-name-wake.spec.ts` | Settings: the dragon's name, colour and wake-up times |
 | `settings-tasks.spec.ts` | Settings: editing tasks and the effort picker |
 
 `fixtures.ts` holds the shared helpers (`settle`, `shot`, seeding, `LAYOUT`). A change there can touch every spec, so run the whole suite.

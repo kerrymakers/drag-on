@@ -2,6 +2,7 @@
 // src/game/ or src/config/ imports this module, so the art can be replaced wholesale.
 
 import './art.css'
+import { isDragonColour, type ColourId } from './colours'
 import { eggSvg, type CrackLevel } from './egg'
 import { adultSvg, elderSvg, juvenileSvg, whelpSvg } from './grown'
 import { hatchlingSvg } from './hatchling'
@@ -9,6 +10,7 @@ import { hasItemArt } from './items'
 import { knownLook, type EvolutionLook } from './looks'
 import type { WearLook, WearSlot } from './parts'
 
+export { DRAGON_COLOURS, isDragonColour, type ColourId } from './colours'
 export { EVOLVED_LOOKS, type EvolutionLook } from './looks'
 export { hasItemArt, itemSvg, unknownItemSvg } from './items'
 export type { WearLook, WearSlot } from './parts'
@@ -42,6 +44,12 @@ export interface DragonLook {
    * (data-goal="wistful" on the drawing). The mood and its look don't change.
    */
   wistful?: boolean
+  /**
+   * The chosen colour id (DRAGON_COLOURS). None, or an id the art doesn't know, draws
+   * classic: peach, with each evolution look recolouring the body. With a colour, the
+   * body keeps it at every stage and a look adds only its features and accents.
+   */
+  colour?: string | undefined
 }
 
 export type MoodLook = 'happy' | 'content' | 'sleepy' | 'grumpy'
@@ -62,9 +70,11 @@ let uidCounter = 0
  */
 export function drawLook(look: DragonLook): { key: string; svg: string } {
   const uid = String(++uidCounter)
+  const colour = isDragonColour(look.colour) ? look.colour : undefined
+  const colourKey = colour ? `~${colour}` : ''
   if (look.stage === 'egg') {
     const crack = crackLevel(look.progress)
-    return { key: `egg-${crack}`, svg: eggSvg(crack, uid) }
+    return { key: `egg-${crack}${colourKey}`, svg: eggSvg(crack, uid, colour) }
   }
   const known = STAGE_ART[look.stage]
   const stage = known ? look.stage : 'elder' // an id the art doesn't know (a stage added later): the most grown-up look
@@ -73,7 +83,7 @@ export function drawLook(look: DragonLook): { key: string; svg: string } {
   const wearing = drawnWearing(look.wearing)
   const base = evolved === 'neutral' ? stage : `${stage}-${evolved}`
   const worn = WEAR_ORDER.map((slot) => wearing[slot] ?? '').join(',')
-  return { key: worn === ',,' ? base : `${base}+${worn}`, svg: draw(evolved, wearing, uid) }
+  return { key: `${worn === ',,' ? base : `${base}+${worn}`}${colourKey}`, svg: draw(evolved, wearing, uid, colour) }
 }
 
 const WEAR_ORDER: readonly WearSlot[] = ['head', 'neck', 'held']
@@ -92,12 +102,12 @@ function drawnWearing(wearing: WearLook | undefined): WearLook {
  * Each stage's drawing, and whether it has art for the evolution looks. Which stage
  * the dragon first evolves at is game config (EVOLVES_AT_STAGE), not decided here.
  */
-const STAGE_ART: Record<string, { draw: (look: EvolutionLook, wearing: WearLook, uid: string) => string; looks: boolean }> = {
-  hatchling: { draw: (_look, wearing, uid) => hatchlingSvg(uid, wearing), looks: false },
-  whelp: { draw: (_look, wearing, uid) => whelpSvg(uid, wearing), looks: false },
-  juvenile: { draw: (look, wearing, uid) => juvenileSvg(uid, look, wearing), looks: true },
-  adult: { draw: (look, wearing, uid) => adultSvg(uid, look, wearing), looks: true },
-  elder: { draw: (look, wearing, uid) => elderSvg(uid, look, wearing), looks: true },
+const STAGE_ART: Record<string, { draw: (look: EvolutionLook, wearing: WearLook, uid: string, colour: ColourId | undefined) => string; looks: boolean }> = {
+  hatchling: { draw: (_look, wearing, uid, colour) => hatchlingSvg(uid, wearing, colour), looks: false },
+  whelp: { draw: (_look, wearing, uid, colour) => whelpSvg(uid, wearing, colour), looks: false },
+  juvenile: { draw: (look, wearing, uid, colour) => juvenileSvg(uid, look, wearing, colour), looks: true },
+  adult: { draw: (look, wearing, uid, colour) => adultSvg(uid, look, wearing, colour), looks: true },
+  elder: { draw: (look, wearing, uid, colour) => elderSvg(uid, look, wearing, colour), looks: true },
 }
 
 /** True if a stage id has art for the evolution looks (unknown ids draw as the most grown-up stage). */
@@ -107,7 +117,7 @@ export function hasLookArt(stage: string): boolean {
 
 /**
  * Draws the dragon into `container`. Calling it again with a look that draws the
- * same picture (same stage, look and outfit) keeps the drawing, so idle animations
+ * same picture (same stage, look, outfit and colour) keeps the drawing, so idle animations
  * don't restart on every render.
  * A mood change only updates data-mood, and wistful only data-goal. CSS fades the mood overlays, eases the
  * posture, and eases how much each idle motion moves without restarting it. Only

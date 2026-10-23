@@ -1,14 +1,15 @@
-// The Settings screen: the dragon's name, the tasks, the weekly goal, the wake-up
+// The Settings screen: the dragon's name and colour, the tasks, the weekly goal, the wake-up
 // times, sounds and Backup
 // (export and import), each a card in one scrolling column. The Tasks card and its
 // edit sheet live in tasks-card.ts.
 //
-// The name and the wake-up times save as soon as they change, with a small "Saved"
+// The name, the colour and the wake-up times save as soon as they change, with a small "Saved"
 // beside the card's title. There's no save button and nothing to confirm.
 //
 // Import asks first, in a sheet that says what's in the file. That's fine here: it's
 // nowhere near the logging path, and it replaces everything on the phone.
 
+import { DRAGON_COLOURS, renderDragon, type DragonLook } from '../art'
 import type { GoalConfig } from '../config/goal'
 import { activeLogs } from '../game/active'
 import { dayKey, isClockTime } from '../game/day'
@@ -39,6 +40,10 @@ export type ReadyBackup = Extract<BackupCheck, { ok: true }>
 
 export interface SettingsScreenState {
   dragonName: string | null
+  /** The chosen colour id, or undefined for none ("classic"). */
+  dragonColour: string | undefined
+  /** The dragon as it looks now (stage, look, mood, outfit, colour), for the colour preview. */
+  dragon: DragonLook
   /** The wake schedule in force today. */
   wakeSchedule: WakeSchedule
   /** Every task, archived ones too (see effectiveTasks). */
@@ -65,6 +70,8 @@ export interface SettingsScreenConfig {
   defaultWakeTime: string
   /** Save a new name (already tidied; null for none). */
   onRename(name: string | null): void
+  /** Save the dragon's colour (an id from DRAGON_COLOURS). */
+  onColour(id: string): void
   /** Save a new wake schedule, from today on. */
   onSchedule(schedule: WakeSchedule): void
   stats: readonly Stat[]
@@ -192,6 +199,32 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
   nameInput.setAttribute('aria-label', SETTINGS.nameLabel)
   nameCard.append(nameHead, nameInput)
 
+  // Colour: a preview of the dragon as it is now, and a round swatch per colour.
+  const colourCard = el(doc, 'section', 'ds-card ss-colour')
+  colourCard.setAttribute('aria-labelledby', 'ss-colour-title')
+  const colourHead = el(doc, 'div', 'ss-card-head')
+  const colourTitle = el(doc, 'h2', 'ds-card-title', SETTINGS.colourTitle)
+  colourTitle.id = 'ss-colour-title'
+  const colourSaved = savedNote()
+  colourHead.append(colourTitle, colourSaved.el)
+  const colourIntro = el(doc, 'p', 'ss-text', SETTINGS.colourIntro)
+  const colourArt = el(doc, 'div', 'ss-colour-art')
+  colourArt.setAttribute('aria-hidden', 'true')
+  const swatchGroup = el(doc, 'div', 'ss-swatches')
+  swatchGroup.id = 'ss-colour'
+  swatchGroup.setAttribute('role', 'radiogroup')
+  swatchGroup.setAttribute('aria-label', SETTINGS.colourLabel)
+  const swatches = DRAGON_COLOURS.map(({ id, label }) => {
+    const swatch = button(doc, 'ss-swatch colour-swatch', '')
+    swatch.dataset.colour = id
+    swatch.setAttribute('role', 'radio')
+    swatch.setAttribute('aria-checked', 'false')
+    swatch.setAttribute('aria-label', label)
+    swatchGroup.append(swatch)
+    return swatch
+  })
+  colourCard.append(colourHead, colourIntro, colourArt, swatchGroup)
+
   // Wake-up times: a row per day, Monday first.
   const wakeCard = el(doc, 'section', 'ds-card ss-wake')
   wakeCard.setAttribute('aria-labelledby', 'ss-wake-title')
@@ -278,7 +311,7 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
   soundCard.append(soundHead, soundRow)
 
   // While nothing can be saved, each card says so rather than pretending to save.
-  const editsPaused = [nameCard, goalCard, wakeCard, soundCard].map((card) => {
+  const editsPaused = [nameCard, colourCard, goalCard, wakeCard, soundCard].map((card) => {
     const note = el(doc, 'p', 'ss-note', SETTINGS.editsPaused)
     note.hidden = true
     card.append(note)
@@ -303,7 +336,7 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
   })
   tasksCard.head.append(tasksSaved.el)
 
-  scroller.append(title, nameCard, tasksCard.el, goalCard, wakeCard, soundCard, backup)
+  scroller.append(title, nameCard, colourCard, tasksCard.el, goalCard, wakeCard, soundCard, backup)
 
   // A short, warm toast above the tab bar.
   const dock = el(doc, 'div', 'ss-toast-dock')
@@ -393,6 +426,40 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
     e.preventDefault()
     saveName()
     nameInput.blur()
+  })
+
+  // A tap on a swatch saves it straight away. Arrow keys move along the swatches and
+  // choose as they go, like any radio group; only the chosen one (or the first, with
+  // none chosen) is in the tab order.
+  let shownColour: string | undefined
+  function showColour(colour: string | undefined, readOnly: boolean) {
+    shownColour = colour
+    const tabbable = swatches.find((s) => s.dataset.colour === colour) ?? swatches[0]
+    for (const swatch of swatches) {
+      swatch.setAttribute('aria-checked', String(swatch.dataset.colour === colour))
+      swatch.tabIndex = swatch === tabbable ? 0 : -1
+      swatch.disabled = readOnly
+    }
+  }
+  function chooseColour(swatch: HTMLButtonElement) {
+    const id = swatch.dataset.colour
+    if (!id || swatch.disabled || id === shownColour) return
+    showColour(id, false)
+    config.onColour(id)
+    colourSaved.show()
+  }
+  swatchGroup.addEventListener('click', (e) => {
+    const swatch = (e.target as Element).closest<HTMLButtonElement>('.ss-swatch')
+    if (swatch) chooseColour(swatch)
+  })
+  swatchGroup.addEventListener('keydown', (e) => {
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key]
+    const at = swatches.indexOf(e.target as HTMLButtonElement)
+    if (step === undefined || at < 0) return
+    e.preventDefault()
+    const next = swatches[(at + step + swatches.length) % swatches.length]!
+    next.focus()
+    chooseColour(next)
   })
 
   // The whole row is the switch's tap area: the label taps it too.
@@ -604,13 +671,15 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
   }
 
   return {
-    render({ dragonName, wakeSchedule, tasks, lastBackupAt, soundOn, goal, readOnly, now }) {
+    render({ dragonName, dragonColour, dragon, wakeSchedule, tasks, lastBackupAt, soundOn, goal, readOnly, now }) {
       // Never rewrite the name while it's being typed.
       shownName = dragonName
       if (doc.activeElement !== nameInput) nameInput.value = dragonName ?? ''
       shownSchedule = { ...wakeSchedule }
       showSchedule(shownSchedule)
       nameInput.disabled = readOnly
+      showColour(dragonColour, readOnly)
+      renderDragon(colourArt, dragon)
       for (const row of rows.values()) {
         row.time.disabled = readOnly
         row.toggle.disabled = readOnly

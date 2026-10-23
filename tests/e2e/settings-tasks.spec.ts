@@ -81,7 +81,7 @@ test('the Tasks card sits after Name, with a row per task, and its sheets fit, i
   const msgs = collectConsole(page)
   await open(page, FRI('10:00'), null, '#/settings')
   const titles = await page.locator('#settings-screen h2').allTextContents()
-  expect(titles).toEqual([SETTINGS.nameTitle, TASKS_COPY.title, SETTINGS.goalTitle, SETTINGS.wakeTitle, SETTINGS.soundTitle, SETTINGS.backupTitle])
+  expect(titles).toEqual([SETTINGS.nameTitle, SETTINGS.colourTitle, TASKS_COPY.title, SETTINGS.goalTitle, SETTINGS.wakeTitle, SETTINGS.soundTitle, SETTINGS.backupTitle])
   await expect(page.locator('.ss-task-row')).toHaveCount(TASKS.length)
   await expect(row(page, 'gym')).toContainText(NAME('gym'))
   await expect(row(page, 'gym')).toContainText('Strength')

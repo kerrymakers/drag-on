@@ -1205,8 +1205,9 @@
 }
 
 /* ---------- Evolution looks ----------
-   From Juvenile on, the top stat recolours the dragon. Every drawn part, mood lids
-   and tail included, reads these tokens, so each look works with every mood. */
+   From Juvenile on, the top stat recolours the dragon (unless a colour is chosen:
+   see the colour blocks below). Every drawn part, mood lids and tail included,
+   reads these tokens, so each look works with every mood. */
 .dragon-svg[data-evolution='strength'] {
   --dragon-skin: #e9806b;
   --dragon-belly: #ffe4d6;
@@ -1286,6 +1287,149 @@
     --dragon-wing: #f4b1c2;
     --dragon-outline: #b44a6b;
     --dragon-plate: #f6c2cf;
+  }
+}
+
+/* ---------- Chosen colours (colours.ts) ----------
+   With a colour chosen (data-colour), the body keeps it at every stage. These come
+   after the looks with the same specificity, so they win over a look's body colours;
+   the look still brings its features, its --look-* accents and its cheeks. The egg
+   takes the colour in its spots and glow. Peach repeats the :root tokens. Without
+   data-colour ("classic"), none of this applies and the looks recolour as before.
+   .colour-swatch is the colour picker in Settings, so its swatches read the same tokens. */
+.dragon-svg[data-colour='peach'],
+.colour-swatch[data-colour='peach'] {
+  --dragon-skin: #f4a46a;
+  --dragon-belly: #ffe6c7;
+  --dragon-wing: #f7c48f;
+  --dragon-horn: #fff1dc;
+  --dragon-outline: #c9733f;
+  --dragon-plate: #f2c79b;
+  --egg-spot: #f6b98a;
+  --egg-glow: #ffd9a6;
+}
+.dragon-svg[data-colour='mint'],
+.colour-swatch[data-colour='mint'] {
+  --dragon-skin: #7fcca3;
+  --dragon-belly: #e6f7ea;
+  --dragon-wing: #addfc1;
+  --dragon-horn: #fff4dc;
+  --dragon-outline: #3e8c67;
+  --dragon-plate: #c0e8d0;
+  --egg-spot: #9edab6;
+  --egg-glow: #c9f0d6;
+}
+.dragon-svg[data-colour='sky'],
+.colour-swatch[data-colour='sky'] {
+  --dragon-skin: #8bb7ea;
+  --dragon-belly: #eaf3ff;
+  --dragon-wing: #b6d2f4;
+  --dragon-horn: #fff4e0;
+  --dragon-outline: #4a74b0;
+  --dragon-plate: #cadef6;
+  --egg-spot: #a6c7ef;
+  --egg-glow: #cfe2fb;
+}
+.dragon-svg[data-colour='lilac'],
+.colour-swatch[data-colour='lilac'] {
+  --dragon-skin: #b69de0;
+  --dragon-belly: #f3edff;
+  --dragon-wing: #d3c3f2;
+  --dragon-horn: #fff4e3;
+  --dragon-outline: #7357ae;
+  --dragon-plate: #ddd1f6;
+  --egg-spot: #c8b4ec;
+  --egg-glow: #e4d9fa;
+}
+.dragon-svg[data-colour='rose'],
+.colour-swatch[data-colour='rose'] {
+  --dragon-skin: #f29bb1;
+  --dragon-belly: #ffe9ef;
+  --dragon-wing: #f8c2d0;
+  --dragon-horn: #fff4e8;
+  --dragon-outline: #c05878;
+  --dragon-plate: #f9d1dc;
+  --egg-spot: #f4afc1;
+  --egg-glow: #fdd6e0;
+}
+.dragon-svg[data-colour='butter'],
+.colour-swatch[data-colour='butter'] {
+  --dragon-skin: #f1cb62;
+  --dragon-belly: #fff6d8;
+  --dragon-wing: #f6dc92;
+  --dragon-horn: #fffaf0;
+  --dragon-outline: #b0832a;
+  --dragon-plate: #f5e1a6;
+  --egg-spot: #e8bc4e;
+  --egg-glow: #ffecb0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .dragon-svg[data-colour='peach'],
+  .colour-swatch[data-colour='peach'] {
+    --dragon-skin: #ee9a5f;
+    --dragon-belly: #fde0bd;
+    --dragon-wing: #f2b77f;
+    --dragon-horn: #fbe9d0;
+    --dragon-outline: #b9652f;
+    --dragon-plate: #e9b783;
+    --egg-spot: #e8a173;
+    --egg-glow: #a8693a;
+  }
+  .dragon-svg[data-colour='mint'],
+  .colour-swatch[data-colour='mint'] {
+    --dragon-skin: #74c198;
+    --dragon-belly: #dff2e4;
+    --dragon-wing: #a1d6b6;
+    --dragon-horn: #fbeed3;
+    --dragon-outline: #357b5a;
+    --dragon-plate: #b2dfc4;
+    --egg-spot: #86c8a2;
+    --egg-glow: #3f7a5c;
+  }
+  .dragon-svg[data-colour='sky'],
+  .colour-swatch[data-colour='sky'] {
+    --dragon-skin: #80ade3;
+    --dragon-belly: #e3edfb;
+    --dragon-wing: #a9c8ee;
+    --dragon-horn: #fbeed6;
+    --dragon-outline: #4067a2;
+    --dragon-plate: #bcd3f1;
+    --egg-spot: #8fb4e5;
+    --egg-glow: #3d5f8f;
+  }
+  .dragon-svg[data-colour='lilac'],
+  .colour-swatch[data-colour='lilac'] {
+    --dragon-skin: #ab92d9;
+    --dragon-belly: #ede6fc;
+    --dragon-wing: #c8b7ec;
+    --dragon-horn: #fbeed8;
+    --dragon-outline: #674ba1;
+    --dragon-plate: #d2c5f2;
+    --egg-spot: #b49ee0;
+    --egg-glow: #5d4a8a;
+  }
+  .dragon-svg[data-colour='rose'],
+  .colour-swatch[data-colour='rose'] {
+    --dragon-skin: #eb90a7;
+    --dragon-belly: #fde3ea;
+    --dragon-wing: #f3b5c5;
+    --dragon-horn: #fbecdf;
+    --dragon-outline: #ae4e6d;
+    --dragon-plate: #f4c4d1;
+    --egg-spot: #e59bb0;
+    --egg-glow: #8f4a62;
+  }
+  .dragon-svg[data-colour='butter'],
+  .colour-swatch[data-colour='butter'] {
+    --dragon-skin: #e9c156;
+    --dragon-belly: #fdf0cc;
+    --dragon-wing: #f0d184;
+    --dragon-horn: #fbf2e2;
+    --dragon-outline: #9e7522;
+    --dragon-plate: #eed594;
+    --egg-spot: #dbb75c;
+    --egg-glow: #8f7230;
   }
 }
 

@@ -153,7 +153,8 @@ function readTasks(v: unknown): unknown[] | undefined {
  * (see readScheduleHistory), and the task list task by task (see readTasks). A goal
  * is kept only if it's well formed (see cleanGoal); null (no goal) stays null, and
  * anything else is dropped, so it reads as no goal. The secret-wish seed is kept
- * only if it's a non-empty string.
+ * only if it's a non-empty string, and so is the dragon's colour (the art decides
+ * which ids it can draw, and draws any other as classic).
  */
 function readSettings(v: unknown): Settings {
   const defaults = defaultData().settings
@@ -162,7 +163,7 @@ function readSettings(v: unknown): Settings {
   const history = readScheduleHistory(v.wakeScheduleHistory)
   const tasks = readTasks(v.tasks)
   const goal = v.goal === null ? null : cleanGoal(v.goal, GOAL)
-  const { lastBackupAt, wakeScheduleHistory: _history, tasks: _tasks, goal: _goal, missionSeed, ...rest } = v
+  const { lastBackupAt, wakeScheduleHistory: _history, tasks: _tasks, goal: _goal, missionSeed, dragonColour, ...rest } = v
   return {
     ...rest,
     wakeSchedule: schedule,
@@ -180,6 +181,8 @@ function readSettings(v: unknown): Settings {
     ...(goal !== null || v.goal === null ? { goal } : {}),
     // Older saves have none: the app makes one. Anything but a non-empty string is dropped.
     ...(typeof missionSeed === 'string' && missionSeed !== '' ? { missionSeed } : {}),
+    // Older saves have none: classic. Kept as an opaque id; one the art doesn't know draws classic.
+    ...(typeof dragonColour === 'string' && dragonColour !== '' ? { dragonColour } : {}),
   }
 }
 

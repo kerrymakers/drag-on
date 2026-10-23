@@ -19,7 +19,7 @@ export const HATCHLING: Anchors = {
 }
 
 /** `uid` makes the drawing's gradient ids unique: use a fresh one for each drawing on screen. */
-export function hatchlingSvg(uid: string, wearing?: WearLook): string {
+export function hatchlingSvg(uid: string, wearing?: WearLook, colour?: string): string {
   return dragonSvg(
     {
       stage: 'hatchling',
@@ -28,6 +28,7 @@ export function hatchlingSvg(uid: string, wearing?: WearLook): string {
       anchors: HATCHLING,
       bodyClass: 'hatchling-body',
       wearing,
+      colour,
       uid,
     },
     `

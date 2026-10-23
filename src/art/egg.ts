@@ -6,11 +6,12 @@
 // Idle life (art.css): the whole egg wobbles now and then, and the inside of it
 // (.egg-inner) gives the odd little hop, as if something is stirring.
 
+import { colourAttr } from './colours'
 import { headBoxRect, heart, sighPuff, zzz } from './parts'
 
 export type CrackLevel = 0 | 1 | 2
 
-export function eggSvg(crack: CrackLevel, uid: string): string {
+export function eggSvg(crack: CrackLevel, uid: string, colour?: string): string {
   const shell = `egg-shell-${uid}`
   const glow = `egg-glow-${uid}`
   const shine = `egg-shine-${uid}`
@@ -25,7 +26,7 @@ export function eggSvg(crack: CrackLevel, uid: string): string {
          <path class="egg-crack" d="M330 236 l-16 22 l14 16 l-10 18" />`
       : ''
   return `
-<svg class="dragon-svg egg" data-stage="egg" data-mood="content" viewBox="0 0 512 512" role="img" aria-label="${ariaLabel(crack)}">
+<svg class="dragon-svg egg" data-stage="egg"${colourAttr(colour)} data-mood="content" viewBox="0 0 512 512" role="img" aria-label="${ariaLabel(crack)}">
   <defs>
     <radialGradient id="${glow}">
       <stop offset="0.45" stop-color="var(--egg-glow)" stop-opacity="0.9" />

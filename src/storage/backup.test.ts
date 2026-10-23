@@ -60,7 +60,7 @@ function sample(): SaveData {
       { id: 'u', type: 'undo', targetEventId: 'b', timestamp: at('2026-10-02T18:01:00+01:00') },
       gym('c', at('2026-10-03T18:00:00+01:00')),
     ],
-    settings: { ...d.settings, dragonName: 'Ember', wearing: { head: 'bow', neck: null, held: null }, soundOn: true, goal: { taskId: 'gym', daysPerWeek: 3 }, missionSeed: 'k3x9' },
+    settings: { ...d.settings, dragonName: 'Ember', wearing: { head: 'bow', neck: null, held: null }, soundOn: true, goal: { taskId: 'gym', daysPerWeek: 3 }, missionSeed: 'k3x9', dragonColour: 'mint' },
   }
 }
 

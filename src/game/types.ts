@@ -89,6 +89,13 @@ export interface Settings {
   /** null means the UI says "your dragon". */
   dragonName: string | null
   /**
+   * The dragon's chosen colour: an id the art knows (the list lives with the art, so
+   * game logic treats it as opaque). Absent means "classic", today's colours. Checked
+   * on load: anything but a non-empty string is dropped. An id the art doesn't know
+   * is kept (a later version's colour survives) and draws as classic.
+   */
+  dragonColour?: string
+  /**
    * What the dragon has chosen to wear: one item id (or null) per spot. A preference,
    * not a game event. What's actually worn is derived from it (see wornItems), so an
    * id that isn't found right now, isn't known, or is in the wrong spot shows nothing.

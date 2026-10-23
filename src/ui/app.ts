@@ -309,6 +309,7 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed }: AppOption
     nameMax: DRAGON_NAME_MAX,
     defaultWakeTime: DEFAULT_WAKE_TIME,
     onRename: rename,
+    onColour: setColour,
     onSchedule: setSchedule,
     stats: STATS,
     taskLimits: TASK_LIMITS,
@@ -551,7 +552,8 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed }: AppOption
     // Wistful about the weekly goal is a touch on top of the mood, never a mood of its own.
     const goal = goalProgress(data.events, tasks, data.settings, now, GOAL)
     const wistful = goalWistful(goal, GOAL)
-    renderDragon(el.art, { stage: progress.stage.id, progress: progress.fraction, mood, look, wearing: homeOutfitHold ?? wearing, wistful })
+    const colour = data.settings.dragonColour
+    renderDragon(el.art, { stage: progress.stage.id, progress: progress.fraction, mood, look, wearing: homeOutfitHold ?? wearing, wistful, colour })
     // The sky follows the London clock; render runs every minute and on coming back.
     renderScene(el.scene, el.sceneFloor, el.sceneFront, { sky: skyPeriod(now, SCENE), stage: progress.stage.id })
 
@@ -626,7 +628,7 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed }: AppOption
         events: data.events,
         now,
         worn,
-        dragon: { stage: progress.stage.id, progress: progress.fraction, mood, look, wearing },
+        dragon: { stage: progress.stage.id, progress: progress.fraction, mood, look, wearing, colour },
       })
     }
 
@@ -634,6 +636,8 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed }: AppOption
     if (route === 'settings') {
       settingsScreen.render({
         dragonName: data.settings.dragonName,
+        dragonColour: colour,
+        dragon: { stage: progress.stage.id, progress: progress.fraction, mood, look, wearing, colour },
         wakeSchedule: data.settings.wakeSchedule,
         tasks,
         lastBackupAt: data.settings.lastBackupAt,
@@ -682,6 +686,14 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed }: AppOption
   function rename(name: string | null) {
     if (readOnly) return
     data = { ...data, settings: { ...data.settings, dragonName: name } }
+    persist()
+    render()
+  }
+
+  /** The dragon's colour, from Settings. It shows everywhere at once. */
+  function setColour(id: string) {
+    if (readOnly) return
+    data = { ...data, settings: { ...data.settings, dragonColour: id } }
     persist()
     render()
   }
@@ -914,6 +926,7 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed }: AppOption
         toLook: lookAfter.look,
         newLook: newLook?.firstTime ? newLook.look : null,
         wearing: outfitBefore,
+        colour: data.settings.dragonColour,
         reducedMotion: prefersReducedMotion(),
         background,
         // With a find to show next, focus goes straight to its card instead.

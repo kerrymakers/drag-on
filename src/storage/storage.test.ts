@@ -333,6 +333,12 @@ describe('settings', () => {
     for (const bad of [undefined, '', 7, null, {}]) expect('missionSeed' in loadSettings({ missionSeed: bad }), String(bad)).toBe(false)
   })
 
+  it('keeps the dragon colour as an opaque non-empty string and drops anything else (older saves have none)', () => {
+    // Which ids draw is the art's call; one it doesn't know (a later version's) is kept and draws classic.
+    for (const id of ['mint', 'a-later-colour']) expect(loadSettings({ dragonColour: id }).dragonColour).toBe(id)
+    for (const bad of [undefined, '', 7, null, {}]) expect('dragonColour' in loadSettings({ dragonColour: bad }), String(bad)).toBe(false)
+  })
+
   it('ignores a non-string dragon name', () => {
     expect(loadSettings({ dragonName: 42 }).dragonName).toBeNull()
   })

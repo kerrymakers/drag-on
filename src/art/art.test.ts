@@ -5,7 +5,7 @@ import { STAGES } from '../config/stages'
 import { STATS } from '../config/stats'
 import { ADULT, ADULT_SCALE, ELDER, ELDER_SCALE, JUVENILE, JUVENILE_SCALE, WHELP, WHELP_SCALE, adultSvg, elderSvg, juvenileSvg, whelpSvg } from './grown'
 import { HATCHLING, HATCHLING_SCALE, hatchlingSvg } from './hatchling'
-import { CRACK_BIG_AT, CRACK_SMALL_AT, WISH_BURST_SPARKS, crackLevel, drawLook, hasLookArt, wishBurstHtml, wishSparkleHtml, type MoodLook } from './index'
+import { CRACK_BIG_AT, CRACK_SMALL_AT, DRAGON_COLOURS, WISH_BURST_SPARKS, crackLevel, drawLook, hasLookArt, isDragonColour, wishBurstHtml, wishSparkleHtml, type DragonLook, type MoodLook } from './index'
 import { eggSvg } from './egg'
 import { WEAR_PIN, hasItemArt, itemSvg, unknownItemSvg, wornItemBox, wornItemSvg } from './items'
 import { EVOLVED_LOOKS, knownLook, type EvolutionLook } from './looks'
@@ -174,6 +174,60 @@ describe('evolution looks', () => {
     expect(knownLook('neutral')).toBe('neutral')
     expect(knownLook('charisma')).toBe('neutral')
     expect(knownLook('wisdom')).toBe('wisdom')
+  })
+})
+
+describe('dragon colours', () => {
+  const BODY = ['--dragon-skin', '--dragon-belly', '--dragon-wing', '--dragon-horn', '--dragon-outline', '--dragon-plate', '--egg-spot', '--egg-glow']
+  const look = (stage: string, extra: Partial<DragonLook> = {}): DragonLook => ({ stage, progress: 0.9, ...extra })
+
+  it('tags every stage, egg included, with the chosen colour and redraws when it changes', () => {
+    for (const stage of ['egg', ...STAGES.map((s) => s.id)]) {
+      const classic = drawLook(look(stage, { look: 'wisdom' }))
+      expect(classic.svg, stage).not.toContain('data-colour')
+      for (const { id } of DRAGON_COLOURS) {
+        const drawn = drawLook(look(stage, { look: 'wisdom', colour: id }))
+        expect(drawn.svg.match(/<svg [^>]*>/)![0], `${stage} ${id}`).toContain(`data-colour="${id}"`)
+        expect(drawn.key, `${stage} ${id}`).not.toBe(classic.key)
+      }
+    }
+  })
+
+  it('draws an unknown colour as classic', () => {
+    const classic = drawLook(look('adult', { look: 'heart' }))
+    const unknown = drawLook(look('adult', { look: 'heart', colour: 'teal' }))
+    expect(unknown.key).toBe(classic.key)
+    expect(unknown.svg).not.toContain('data-colour')
+    expect(isDragonColour('teal')).toBe(false)
+    expect(isDragonColour('mint')).toBe(true)
+  })
+
+  it('keeps every look and its features with a colour chosen', () => {
+    for (const stage of ['juvenile', 'adult', 'elder']) {
+      for (const evolved of EVOLVED_LOOKS) {
+        const { svg } = drawLook(look(stage, { look: evolved, colour: 'sky' }))
+        expect(svg, `${stage} ${evolved}`).toContain(`data-evolution="${evolved}"`)
+        expect(svg, `${stage} ${evolved}`).toContain(`look-${evolved}`)
+      }
+    }
+  })
+
+  it('has light and dark tokens for every colour, after the looks so the colour wins the body', () => {
+    const css = artCss.replace(/\/\*[\s\S]*?\*\//g, '')
+    const lastLook = css.lastIndexOf("[data-evolution='heart'] {")
+    for (const { id } of DRAGON_COLOURS) {
+      const blocks = [...css.matchAll(new RegExp(`\\.dragon-svg\\[data-colour='${id}'\\],\\s*\\.colour-swatch\\[data-colour='${id}'\\] \\{([^}]*)\\}`, 'g'))]
+      expect(blocks.length, id).toBe(2)
+      expect(css.indexOf(`[data-colour='${id}']`, lastLook), id).toBeGreaterThan(lastLook)
+      // A look's cheek and accents still come through.
+      for (const [, body] of blocks) {
+        for (const token of BODY) expect(body, `${id} ${token}`).toContain(`${token}:`)
+        expect(body, id).not.toMatch(/--dragon-cheek|--look-/)
+      }
+    }
+    // The second block of each is the dark one.
+    const dark = css.indexOf('@media (prefers-color-scheme: dark)', css.indexOf("[data-colour='butter']"))
+    expect(dark).toBeLessThan(css.lastIndexOf("[data-colour='peach']"))
   })
 })
 

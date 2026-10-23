@@ -204,6 +204,7 @@ export function createDragonScreen(doc: Document, root: HTMLElement, config: Dra
         mood: state.mood,
         look: state.look,
         wearing: outfitOf(state.worn),
+        colour: state.settings.dragonColour,
       })
       renderWearing(state.worn, state.stage.id === 'egg')
       if (state.look === 'neutral') {

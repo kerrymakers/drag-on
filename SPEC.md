@@ -97,7 +97,7 @@ Each stage change is a big moment: a full-screen animation and a short message f
 
 ### Evolution
 
-When the dragon reaches Juvenile, its highest stat decides its look (colour, markings or features). A Strength dragon looks sturdy, a Wisdom dragon looks scholarly, and so on. The look can shift later if a different stat overtakes it by more than a small margin (`LOOK_CHANGE_MARGIN`: more than 10%), so a balanced dragon doesn't flip back and forth. Ties go to the stat order in config. The first time the dragon takes on each look gets a gentle celebration. Changing back to a look it has had before happens quietly.
+When the dragon reaches Juvenile, its highest stat decides its look (colour, markings or features). A Strength dragon looks sturdy, a Wisdom dragon looks scholarly, and so on. The look can shift later if a different stat overtakes it by more than a small margin (`LOOK_CHANGE_MARGIN`: more than 10%), so a balanced dragon doesn't flip back and forth. Ties go to the stat order in config. The first time the dragon takes on each look gets a gentle celebration. Changing back to a look it has had before happens quietly. If I've chosen a colour, the dragon keeps it and the look adds its features and accents.
 
 ### Mood
 
@@ -198,7 +198,7 @@ Store an append-only log of events. Work out everything else from it.
 ```
 Task      { id, name, stat, xp, rules, archived, effort? }
 Event     { id, taskId, timestamp, xpAwarded, reward?, mission?, note? }
-Settings  { wakeSchedule: { mon: "06:30", ..., sat: null, sun: null }, wakeScheduleHistory?: [{ from: "YYYY-MM-DD", schedule }], dragonName, lastBackupAt?, ... }
+Settings  { wakeSchedule: { mon: "06:30", ..., sat: null, sun: null }, wakeScheduleHistory?: [{ from: "YYYY-MM-DD", schedule }], dragonName, dragonColour?, lastBackupAt?, ... }
 ```
 
 Dragon state (total XP, stats, stage, mood, streaks, inventory) is calculated from the events and config by pure functions. This makes rebalancing safe: change a threshold and the dragon recalculates from history.
@@ -217,7 +217,7 @@ Decided 2026-10-09: the reminder is the dragon mentioning it in its speech bubbl
 2. Dragon: stats, stage history and equipped items.
 3. Collection: items found, with a plain "?" tile for each one not found yet (decided 2026-10-07: items stay a surprise, so no silhouettes).
 4. History: streaks (overall, best, freezes held, wake-up and this week's count for each other task) and a month calendar. Tap a day to see what I logged that day. It's a tab in the bottom bar, and a small streak chip on Home (shown from 2 days) opens it.
-5. Settings: edit tasks, wake-up schedule (per day), dragon name, export/import. Decided 2026-10-09: it's a fifth tab in the bottom bar.
+5. Settings: edit tasks, wake-up schedule (per day), dragon name, dragon colour, export/import. Decided 2026-10-09: it's a fifth tab in the bottom bar.
 
 ## Art and feel
 

@@ -49,7 +49,7 @@ test('cards in order, tap targets, labels and no overflow, in light and dark', L
   const msgs = collectConsole(page)
   await open(page, FRI('10:00'), null, '#/settings')
   const titles = await page.locator('#settings-screen h2').allTextContents()
-  expect(titles).toEqual([SETTINGS.nameTitle, TASKS_COPY.title, SETTINGS.goalTitle, SETTINGS.wakeTitle, SETTINGS.soundTitle, SETTINGS.backupTitle])
+  expect(titles).toEqual([SETTINGS.nameTitle, SETTINGS.colourTitle, TASKS_COPY.title, SETTINGS.goalTitle, SETTINGS.wakeTitle, SETTINGS.soundTitle, SETTINGS.backupTitle])
 
   // Seven days, Monday first, weekdays on at 06:30 and the weekend off.
   await expect(page.locator('.ss-day')).toHaveCount(7)
@@ -64,7 +64,7 @@ test('cards in order, tap targets, labels and no overflow, in light and dark', L
   await expect(nameInput(page)).toHaveValue('')
   await expect(nameInput(page)).toHaveAttribute('placeholder', SETTINGS.namePlaceholder)
 
-  for (const sel of ['#ss-name', '.ss-switch >> nth=0', '.ss-switch >> nth=6', '#ss-wake-mon']) {
+  for (const sel of ['#ss-name', '.ss-swatch >> nth=0', '.ss-swatch >> nth=5', '.ss-switch >> nth=0', '.ss-switch >> nth=6', '#ss-wake-mon']) {
     const b = (await page.locator(sel).boundingBox())!
     expect(b.height, sel).toBeGreaterThanOrEqual(44)
     expect(b.width, sel).toBeGreaterThanOrEqual(44)
@@ -86,7 +86,7 @@ test('cards in order, tap targets, labels and no overflow, in light and dark', L
   expect(msgs).toEqual([])
 })
 
-test('renaming shows on Home and the Dragon screen, trimmed; blank goes back to "your dragon"', async ({ page }) => {
+test('renaming and choosing a colour show on Home, trimmed; blank goes back to "your dragon"; both last', async ({ page }) => {
   const msgs = collectConsole(page)
   await open(page, FRI('10:00'))
   await expect(page.locator('#dragon-name')).toHaveText('your dragon')
@@ -132,14 +132,27 @@ test('renaming shows on Home and the Dragon screen, trimmed; blank goes back to 
   })
   expect((await stored(page)).settings.dragonName).toBe('Hidden')
 
-  // And it lasts.
+  // A colour: none chosen yet (classic), then one tap saves it and the preview takes it.
+  const mint = page.getByRole('radio', { name: 'Mint' })
+  await expect(page.getByRole('radiogroup', { name: SETTINGS.colourLabel }).getByRole('radio')).toHaveCount(6)
+  await expect(mint).toHaveAttribute('aria-checked', 'false')
+  await expect(page.locator('.ss-colour-art .dragon-svg')).not.toHaveAttribute('data-colour')
+  await mint.tap()
+  await expect(mint).toHaveAttribute('aria-checked', 'true')
+  await expect(page.locator('.ss-colour .ss-saved')).toHaveText(SETTINGS.saved)
+  await expect(page.locator('.ss-colour-art .dragon-svg')).toHaveAttribute('data-colour', 'mint')
+  expect((await stored(page)).settings.dragonColour).toBe('mint')
+
+  // And they last.
   await nameInput(page).fill('Pip')
   await nameInput(page).press('Enter')
   await page.reload()
   await expect(page.locator('#tabbar a').first()).toBeVisible()
   await expect(nameInput(page)).toHaveValue('Pip')
+  await expect(mint).toHaveAttribute('aria-checked', 'true')
   await tab(page, 'home').tap()
   await expect(page.locator('#dragon-name')).toHaveText('Pip')
+  await expect(page.locator('#dragon-art .dragon-svg')).toHaveAttribute('data-colour', 'mint')
   expect(msgs).toEqual([])
 })
 
@@ -231,5 +244,7 @@ test("read-only: the name and wake-up times can't be changed, and say why", asyn
   await expect(wakeSwitch(page, 'Monday')).toBeDisabled()
   await expect(wakeTime(page, 'Monday')).toBeDisabled()
   await expect(page.locator('.ss-name .ss-note')).toHaveText(SETTINGS.editsPaused)
+  await expect(page.getByRole('radio', { name: 'Mint' })).toBeDisabled()
+  await expect(page.locator('.ss-colour .ss-note')).toHaveText(SETTINGS.editsPaused)
   await expect(page.locator('.ss-wake .ss-note')).toHaveText(SETTINGS.editsPaused)
 })

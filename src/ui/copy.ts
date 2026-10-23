@@ -532,6 +532,10 @@ export const SETTINGS = {
   nameLabel: "Your dragon's name",
   /** Shown in the empty name field: what the app calls the dragon without a name. */
   namePlaceholder: 'your dragon',
+  colourTitle: 'Colour',
+  colourIntro: 'Pick the colour your dragon likes best. You can change it any time.',
+  /** The swatches' group label, for a screen reader. */
+  colourLabel: "Your dragon's colour",
   wakeTitle: 'Wake-up times',
   wakeIntro: 'Changes start from today. Days gone by keep the times they had.',
   /** In place of the time on a day with no wake-up target. */
@@ -553,7 +557,7 @@ export const SETTINGS = {
   soundLabel: 'Little chirps and jingles',
   /** Beside a card's title, briefly, after a change is saved. */
   saved: 'Saved',
-  /** Under the name, tasks and wake-up cards while the app can't save on this phone. */
+  /** Under the name, colour, tasks and wake-up cards while the app can't save on this phone. */
   editsPaused: "Changes are paused while your dragon can't save on this phone.",
 } as const
 

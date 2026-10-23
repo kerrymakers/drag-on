@@ -1,5 +1,6 @@
 // Evolution looks: from Juvenile on, the dragon's top stat recolours it (art.css,
-// [data-evolution]) and adds one or two features drawn here from each stage's anchors.
+// [data-evolution]; a chosen colour keeps the body, see colours.ts) and adds one or
+// two features drawn here from each stage's anchors.
 // The neutral look adds nothing.
 
 import { onHead, onWings, pair, type Anchors } from './parts'
