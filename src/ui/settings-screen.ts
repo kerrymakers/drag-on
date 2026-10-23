@@ -9,32 +9,30 @@
 // Import asks first, in a sheet that says what's in the file. That's fine here: it's
 // nowhere near the logging path, and it replaces everything on the phone.
 
-import { DRAGON_COLOURS, renderDragon, type DragonLook } from '../art'
+import { renderDragon, type DragonLook } from '../art'
 import type { GoalConfig } from '../config/goal'
 import { activeLogs } from '../game/active'
-import { dayKey, isClockTime } from '../game/day'
-import { cleanDragonName, WEEKDAYS } from '../game/settings'
+import { dayKey } from '../game/day'
+import { cleanDragonName } from '../game/settings'
 import { dragonStage } from '../game/state'
 import type { NewTask, TaskChanges, TaskLimits } from '../game/tasks'
-import type { EffortId, EffortLevel, Goal, Stage, Stat, Task, WakeSchedule, Weekday } from '../game/types'
+import type { EffortId, EffortLevel, Goal, Stage, Stat, Task, WakeSchedule } from '../game/types'
 import type { SaveData } from '../storage'
 import { readBackup, type BackupCheck } from '../storage/backup'
 import {
   IMPORT_CONFIRM,
   IMPORT_REFUSED,
   SETTINGS,
-  WEEKDAY_NAMES,
   friendlyDay,
-  goalDays,
-  goalWakeCap,
   importDropped,
   lastBackupLine,
-  wakeSwitchLabel,
-  wakeTimeLabel,
 } from './copy'
+import { createColourPicker } from './colour-picker'
+import { createGoalEditor } from './goal-editor'
 import { watchScrollFade } from './scroll-fade'
 import { createTasksCard } from './tasks-card'
 import { createToast } from './toast'
+import { createWakeEditor } from './wake-editor'
 
 export type ReadyBackup = Extract<BackupCheck, { ok: true }>
 
@@ -210,20 +208,11 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
   const colourIntro = el(doc, 'p', 'ss-text', SETTINGS.colourIntro)
   const colourArt = el(doc, 'div', 'ss-colour-art')
   colourArt.setAttribute('aria-hidden', 'true')
-  const swatchGroup = el(doc, 'div', 'ss-swatches')
-  swatchGroup.id = 'ss-colour'
-  swatchGroup.setAttribute('role', 'radiogroup')
-  swatchGroup.setAttribute('aria-label', SETTINGS.colourLabel)
-  const swatches = DRAGON_COLOURS.map(({ id, label }) => {
-    const swatch = button(doc, 'ss-swatch colour-swatch', '')
-    swatch.dataset.colour = id
-    swatch.setAttribute('role', 'radio')
-    swatch.setAttribute('aria-checked', 'false')
-    swatch.setAttribute('aria-label', label)
-    swatchGroup.append(swatch)
-    return swatch
+  const colourPicker = createColourPicker(doc, 'ss-colour', (id) => {
+    config.onColour(id)
+    colourSaved.show()
   })
-  colourCard.append(colourHead, colourIntro, colourArt, swatchGroup)
+  colourCard.append(colourHead, colourIntro, colourArt, colourPicker.el)
 
   // Wake-up times: a row per day, Monday first.
   const wakeCard = el(doc, 'section', 'ds-card ss-wake')
@@ -234,30 +223,15 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
   const wakeSaved = savedNote()
   wakeHead.append(wakeTitle, wakeSaved.el)
   const wakeIntro = el(doc, 'p', 'ss-text', SETTINGS.wakeIntro)
-  const dayList = el(doc, 'ul', 'ss-days')
-  const rows = new Map<Weekday, { time: HTMLInputElement; off: HTMLElement; toggle: HTMLButtonElement }>()
-  for (const day of WEEKDAYS) {
-    const name = WEEKDAY_NAMES[day]
-    const li = el(doc, 'li', 'ss-day')
-    li.dataset.day = day
-    const label = el(doc, 'span', 'ss-day-name', name)
-    label.setAttribute('aria-hidden', 'true')
-    const time = el(doc, 'input', 'ss-time')
-    time.type = 'time'
-    time.id = `ss-wake-${day}`
-    time.setAttribute('aria-label', wakeTimeLabel(name))
-    const off = el(doc, 'span', 'ss-day-off', SETTINGS.wakeOff)
-    off.setAttribute('aria-hidden', 'true')
-    const toggle = button(doc, 'ss-switch', '')
-    toggle.id = `ss-wake-${day}-on`
-    toggle.setAttribute('role', 'switch')
-    toggle.setAttribute('aria-label', wakeSwitchLabel(name))
-    toggle.append(el(doc, 'span', 'ss-switch-track'))
-    li.append(label, time, off, toggle)
-    dayList.append(li)
-    rows.set(day, { time, off, toggle })
-  }
-  wakeCard.append(wakeHead, wakeIntro, dayList)
+  const wakeEditor = createWakeEditor(doc, {
+    idPrefix: 'ss',
+    defaultWakeTime: config.defaultWakeTime,
+    onChange(schedule) {
+      config.onSchedule(schedule)
+      wakeSaved.show()
+    },
+  })
+  wakeCard.append(wakeHead, wakeIntro, wakeEditor.el)
 
   // Weekly goal: a task picker (active tasks, or none) and a days-a-week stepper.
   const goalCard = el(doc, 'section', 'ds-card ss-goal')
@@ -268,27 +242,16 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
   const goalSaved = savedNote()
   goalHead.append(goalTitle, goalSaved.el)
   const goalIntro = el(doc, 'p', 'ss-text', SETTINGS.goalIntro)
-  const goalTask = el(doc, 'select', 'ss-input ss-select')
-  goalTask.id = 'ss-goal-task'
-  goalTask.setAttribute('aria-label', SETTINGS.goalTaskLabel)
-  const goalArchived = el(doc, 'p', 'ss-note', SETTINGS.goalArchived)
-  goalArchived.id = 'ss-goal-archived'
-  goalArchived.hidden = true
-  const goalStepper = el(doc, 'div', 'ss-stepper')
-  const goalFewer = button(doc, 'ss-step', '−')
-  goalFewer.id = 'ss-goal-fewer'
-  goalFewer.setAttribute('aria-label', SETTINGS.goalFewer)
-  const goalCount = el(doc, 'span', 'ss-step-value')
-  goalCount.id = 'ss-goal-days'
-  goalCount.setAttribute('aria-live', 'polite')
-  const goalMore = button(doc, 'ss-step', '+')
-  goalMore.id = 'ss-goal-more'
-  goalMore.setAttribute('aria-label', SETTINGS.goalMore)
-  goalStepper.append(goalFewer, goalCount, goalMore)
-  const goalCap = el(doc, 'p', 'ss-note')
-  goalCap.id = 'ss-goal-cap'
-  goalCap.hidden = true
-  goalCard.append(goalHead, goalIntro, goalTask, goalArchived, goalStepper, goalCap)
+  const goalEditor = createGoalEditor(doc, {
+    idPrefix: 'ss',
+    goal: config.goal,
+    maxDays: (task) => config.goalMaxDays(task),
+    onChange(goal) {
+      config.onGoal(goal)
+      goalSaved.show()
+    },
+  })
+  goalCard.append(goalHead, goalIntro, ...goalEditor.els)
 
   // Sounds: one switch, off to start with.
   const soundCard = el(doc, 'section', 'ds-card ss-sound')
@@ -400,9 +363,6 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
 
   // What the screen last showed, so a change knows what it's changing.
   let shownName: string | null = null
-  let shownSchedule: WakeSchedule | null = null
-  /** The last time each day had this session, brought back when it's switched on again. */
-  const lastTimes = new Map<Weekday, string>()
 
   function saveName() {
     const name = cleanDragonName(nameInput.value, config.nameMax)
@@ -428,40 +388,6 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
     nameInput.blur()
   })
 
-  // A tap on a swatch saves it straight away. Arrow keys move along the swatches and
-  // choose as they go, like any radio group; only the chosen one (or the first, with
-  // none chosen) is in the tab order.
-  let shownColour: string | undefined
-  function showColour(colour: string | undefined, readOnly: boolean) {
-    shownColour = colour
-    const tabbable = swatches.find((s) => s.dataset.colour === colour) ?? swatches[0]
-    for (const swatch of swatches) {
-      swatch.setAttribute('aria-checked', String(swatch.dataset.colour === colour))
-      swatch.tabIndex = swatch === tabbable ? 0 : -1
-      swatch.disabled = readOnly
-    }
-  }
-  function chooseColour(swatch: HTMLButtonElement) {
-    const id = swatch.dataset.colour
-    if (!id || swatch.disabled || id === shownColour) return
-    showColour(id, false)
-    config.onColour(id)
-    colourSaved.show()
-  }
-  swatchGroup.addEventListener('click', (e) => {
-    const swatch = (e.target as Element).closest<HTMLButtonElement>('.ss-swatch')
-    if (swatch) chooseColour(swatch)
-  })
-  swatchGroup.addEventListener('keydown', (e) => {
-    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key]
-    const at = swatches.indexOf(e.target as HTMLButtonElement)
-    if (step === undefined || at < 0) return
-    e.preventDefault()
-    const next = swatches[(at + step + swatches.length) % swatches.length]!
-    next.focus()
-    chooseColour(next)
-  })
-
   // The whole row is the switch's tap area: the label taps it too.
   soundLabel.addEventListener('click', () => soundToggle.click())
   soundToggle.addEventListener('click', () => {
@@ -470,117 +396,6 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
     config.onSound(on)
     soundSaved.show()
   })
-
-  // The weekly goal: saves as soon as it changes, like the rest of Settings.
-  let shownGoal: Goal | null = null
-  let goalTasks: readonly Task[] = []
-  const NO_GOAL = ''
-  /** The picker's placeholder value while the goal's task is archived (task ids are never written like this). */
-  const ARCHIVED_GOAL_TASK = '__archived-goal-task__'
-  /** The most days a goal on `taskId` can ask for this week (at least the config's least). */
-  function topDays(taskId: string): number {
-    const task = goalTasks.find((t) => t.id === taskId)
-    const cap = task ? config.goalMaxDays(task) : config.goal.maxDays
-    return Math.max(config.goal.minDays, Math.min(config.goal.maxDays, cap))
-  }
-  function saveGoal(goal: Goal | null) {
-    shownGoal = goal
-    config.onGoal(goal)
-    goalSaved.show()
-  }
-  goalTask.addEventListener('change', () => {
-    const id = goalTask.value
-    if (id === ARCHIVED_GOAL_TASK) return
-    if (id === NO_GOAL) return saveGoal(null)
-    // Keep the days already chosen, held to what the new task allows this week.
-    const days = Math.min(shownGoal?.daysPerWeek ?? config.goal.defaultDays, topDays(id))
-    saveGoal({ taskId: id, daysPerWeek: Math.max(config.goal.minDays, days) })
-  })
-  function step(delta: number) {
-    if (!shownGoal) return
-    const days = Math.min(topDays(shownGoal.taskId), Math.max(config.goal.minDays, shownGoal.daysPerWeek + delta))
-    if (days === shownGoal.daysPerWeek) return
-    saveGoal({ ...shownGoal, daysPerWeek: days })
-  }
-  goalFewer.addEventListener('click', () => step(-1))
-  goalMore.addEventListener('click', () => step(1))
-
-  function showGoal(goal: Goal | null, tasks: readonly Task[], readOnly: boolean) {
-    shownGoal = goal
-    goalTasks = tasks
-    const active = tasks.filter((t) => !t.archived)
-    const resting = goal !== null && !active.some((t) => t.id === goal.taskId)
-    const options: HTMLOptionElement[] = []
-    const option = (value: string, text: string) => {
-      const o = el(doc, 'option', '', text)
-      o.value = value
-      options.push(o)
-      return o
-    }
-    if (resting) option(ARCHIVED_GOAL_TASK, SETTINGS.goalPick).disabled = true
-    option(NO_GOAL, SETTINGS.goalNone)
-    for (const t of active) option(t.id, t.name)
-    // Only rebuild the list when it changed, so an open picker isn't swapped out.
-    const signature = options.map((o) => `${o.value}:${o.textContent}`).join('|')
-    if (goalTask.dataset.options !== signature) {
-      goalTask.dataset.options = signature
-      goalTask.replaceChildren(...options)
-    }
-    goalTask.value = resting ? ARCHIVED_GOAL_TASK : (goal?.taskId ?? NO_GOAL)
-    goalTask.disabled = readOnly
-    goalArchived.hidden = !resting
-    const editing = goal !== null && !resting
-    goalStepper.hidden = !editing
-    goalCap.hidden = true
-    if (!editing || !goal) return
-    const top = topDays(goal.taskId)
-    const days = Math.min(goal.daysPerWeek, top)
-    goalCount.textContent = goalDays(days)
-    goalFewer.disabled = readOnly || days <= config.goal.minDays
-    goalMore.disabled = readOnly || days >= top
-    if (top < config.goal.maxDays) {
-      goalCap.textContent = goalWakeCap(top)
-      goalCap.hidden = false
-    }
-  }
-
-  function saveSchedule(schedule: WakeSchedule) {
-    shownSchedule = schedule
-    showSchedule(schedule)
-    config.onSchedule(schedule)
-    wakeSaved.show()
-  }
-  for (const [day, row] of rows) {
-    row.toggle.addEventListener('click', () => {
-      if (!shownSchedule) return
-      const now = shownSchedule[day]
-      if (now !== null) lastTimes.set(day, now)
-      saveSchedule({ ...shownSchedule, [day]: now === null ? (lastTimes.get(day) ?? config.defaultWakeTime) : null })
-    })
-    row.time.addEventListener('change', () => {
-      if (!shownSchedule) return
-      const value = row.time.value
-      // Cleared (or something odd): put back what's saved rather than guess.
-      if (!isClockTime(value)) {
-        row.time.value = shownSchedule[day] ?? ''
-        return
-      }
-      if (value === shownSchedule[day]) return
-      lastTimes.set(day, value)
-      saveSchedule({ ...shownSchedule, [day]: value })
-    })
-  }
-
-  function showSchedule(schedule: WakeSchedule) {
-    for (const [day, row] of rows) {
-      const target = schedule[day]
-      const on = target !== null
-      row.toggle.setAttribute('aria-checked', String(on))
-      row.time.hidden = !on
-      row.off.hidden = on
-      if (on && row.time.value !== target) row.time.value = target
-    }
-  }
 
   importButton.addEventListener('click', () => {
     status.hidden = true
@@ -675,21 +490,16 @@ export function createSettingsScreen(doc: Document, root: HTMLElement, config: S
       // Never rewrite the name while it's being typed.
       shownName = dragonName
       if (doc.activeElement !== nameInput) nameInput.value = dragonName ?? ''
-      shownSchedule = { ...wakeSchedule }
-      showSchedule(shownSchedule)
+      wakeEditor.render(wakeSchedule, readOnly)
       nameInput.disabled = readOnly
-      showColour(dragonColour, readOnly)
+      colourPicker.render(dragonColour, readOnly)
       renderDragon(colourArt, dragon)
-      for (const row of rows.values()) {
-        row.time.disabled = readOnly
-        row.toggle.disabled = readOnly
-      }
       soundToggle.setAttribute('aria-checked', String(soundOn))
       soundToggle.disabled = readOnly
       readOnlyNow = readOnly
       for (const note of editsPaused) note.hidden = !readOnly
       tasksCard.render(tasks, readOnly)
-      showGoal(goal, tasks, readOnly)
+      goalEditor.render(goal, tasks, readOnly)
 
       last.textContent = lastBackupLine(
         lastBackupAt === undefined ? null : friendlyDay(dayKey(lastBackupAt), dayKey(now)),

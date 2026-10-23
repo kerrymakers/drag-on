@@ -82,3 +82,25 @@ describe('update gate', () => {
     expect(reload).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('update gate hold', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('never reloads while held, not even when hidden, and waits for idle once released', () => {
+    const { doc, setVisibility } = fakeDoc()
+    const reload = vi.fn()
+    const gate = createUpdateGate(doc, reload)
+    gate.setHeld(true)
+    gate.requestReload()
+    setVisibility('hidden')
+    vi.advanceTimersByTime(60_000)
+    expect(reload).not.toHaveBeenCalled()
+    setVisibility('visible')
+    gate.setHeld(false)
+    vi.advanceTimersByTime(8_000)
+    expect(reload).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(4_000)
+    expect(reload).toHaveBeenCalledTimes(1)
+  })
+})

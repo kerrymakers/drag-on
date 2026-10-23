@@ -8,6 +8,7 @@ import { ITEMS } from '../config/items'
 import { effortChoiceLabel, effortTimesHint, effortXp, legacyTimesHint, legacyXpHint, taskRowLabel } from './copy'
 import { IMPORT_CONFIRM, IMPORT_REFUSED, SETTINGS, importDropped, lastBackupLine } from './copy'
 import { GOAL_FLOAT, GOAL_WISTFUL, GOAL_WISTFUL_LIFTED, goalWistfulLine, goalChip, goalChipCount, goalChipLabel, goalDays, goalWakeCap } from './copy'
+import { SETUP, setupHello, setupStepLabel, setupTaskLabel } from './copy'
 import { WISH_HINT, WISH_SPARKLE_LABEL, bonusFloat, wishCopy, wishGrantedLine, wishHintLine } from './copy'
 import { MISSIONS } from '../config/missions'
 import { LOGGED, LOOK_CHANGE, TREAT_FLOAT, loggedToast, LOOK_NAMES, LOOK_REVEAL, STAGE_UP, STAGE_UP_FALLBACK, celebrationCopy, lookLabel, progressLabel } from './copy'
@@ -345,5 +346,18 @@ describe('weekly goal copy', () => {
     const week = ['05', '06', '07', '08', '09', '10', '11'].map((d) => goalWistfulLine(`2026-10-${d}`))
     for (const line of week) expect(GOAL_WISTFUL).toContain(line)
     expect(new Set(week).size).toBeGreaterThan(1)
+  })
+})
+
+describe('first-run setup copy', () => {
+  it('is short and warm, greets by name, and says nothing about anything past the egg', () => {
+    const all = [...Object.values(SETUP), setupStepLabel(1, 4), setupTaskLabel('Gym'), setupHello(null), setupHello('Ember')]
+    for (const text of all) {
+      expect(text, text).not.toMatch(/\b(missed|failed|behind|lost|only|should|must|never)\b/i)
+      expect(text, text).not.toMatch(/\b(hatch\w*|stage|item|look|evolve\w*)\b/i)
+      expect(text.length, text).toBeLessThan(90)
+    }
+    expect(setupHello('Ember')).toContain('Ember')
+    expect(setupStepLabel(2, 3)).toBe('Step 2 of 3')
   })
 })

@@ -23,6 +23,7 @@ import { createLogEvent, createUndoEvent, undoableLog } from '../game/log'
 import { foundItems, itemFor, missionOf, rewardMilestone, treatBonus } from '../game/rewards'
 import { goalMaxDays, goalProgress, goalWistful, isGoalTreat, withGoal } from '../game/goal'
 import { soundIsOn, withScheduleEdit } from '../game/settings'
+import { applySetup, type SetupChoices } from '../game/setup'
 import {
   nextRefreshAt,
   dragonProgress,
@@ -68,6 +69,7 @@ import {
   NOTICES,
   noticeFor,
   progressLabel,
+  setupHello,
   streakChip,
   streakChipLabel,
   undoneToast,
@@ -85,6 +87,7 @@ import { createNav, type Route } from './nav'
 import { outfitOf } from './outfit'
 import { watchScrollFade } from './scroll-fade'
 import { createSettingsScreen, type ReadyBackup, type SettingsOutcome } from './settings-screen'
+import { openSetup } from './setup'
 import { createSoundPlayer, logSounds } from './sound'
 import { clearAbove, placeSpeech } from './speech'
 import { createToast } from './toast'
@@ -261,10 +264,20 @@ export interface AppOptions {
    * random seed (newMissionSeed).
    */
   makeSeed?: () => string | null
+  /**
+   * Whether a brand-new phone opens with first-run setup (see openSetup). On unless
+   * turned off (the e2e fixtures do, so specs that start empty go straight to Home).
+   */
+  firstRunSetup?: boolean
 }
 
-export function startApp(doc: Document, { makeSeed = newMissionSeed }: AppOptions = {}): App {
+export function startApp(doc: Document, { makeSeed = newMissionSeed, firstRunSetup = true }: AppOptions = {}): App {
   let { data, readOnly, notice } = load()
+  // First-run setup: only on a phone with nothing saved yet, and never read-only. Once
+  // anything is saved (setup saves at once, on opening), the next load isn't 'new'.
+  const isFirstRun = firstRunSetup && notice === 'new' && !readOnly && data.events.length === 0
+  /** While first-run setup is open: no bubbles over it. */
+  let settingUp = false
   void requestPersistence()
 
   const el = {
@@ -436,7 +449,7 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed }: AppOption
    * remembered then, so it would repeat on every open, and the notice says enough.
    */
   function maybeWelcome(now = Date.now()) {
-    if (doc.visibilityState !== 'visible' || route !== 'home') return
+    if (settingUp || doc.visibilityState !== 'visible' || route !== 'home') return
     const { mood, lastLogDay } = moodFor(data.events, now, MOODS)
     const today = dayKey(now)
     const frozen = latestFrozenDay(data.events, now, STREAKS)
@@ -1014,7 +1027,54 @@ export function startApp(doc: Document, { makeSeed = newMissionSeed }: AppOption
     if (next === 'home') maybeWelcome()
   })
 
+  /**
+   * First-run setup over everything, on a brand-new phone. What's stored is saved at
+   * once, so a reload mid-setup (or after it) opens the app as usual, never setup again.
+   * No update reload while it's open, not even once the page is hidden (setHeld, not
+   * just setBusy): the choices aren't saved until the end, and since the app has saved
+   * already, setup wouldn't come back after the reload to ask again.
+   */
+  function startSetup() {
+    settingUp = true
+    persist()
+    updates.setHeld(true)
+    hush()
+    openSetup(doc, {
+      tasks: tasksOf(data.settings),
+      wakeSchedule: data.settings.wakeSchedule,
+      nameMax: DRAGON_NAME_MAX,
+      defaultWakeTime: DEFAULT_WAKE_TIME,
+      goal: GOAL,
+      goalMaxDays: (task, schedule) => {
+        const now = Date.now()
+        return goalMaxDays(task, withScheduleEdit(data.settings, schedule, now), now, GOAL)
+      },
+      previewLook: (colour) => {
+        const progress = dragonProgress(data.events, STAGES)
+        return { stage: progress.stage.id, progress: progress.fraction, colour }
+      },
+      reducedMotion: prefersReducedMotion,
+      onFinish: finishSetup,
+    })
+  }
+  /** Setup done or skipped: save the choices in one go, then Home, and a hello. */
+  function finishSetup(choices: SetupChoices) {
+    if (!readOnly) {
+      const rules = { defaults: TASKS, nameMax: DRAGON_NAME_MAX, goal: GOAL }
+      data = { ...data, settings: applySetup(data.settings, choices, Date.now(), rules) }
+      persist()
+    }
+    if (route !== 'home') nav.go('home')
+    render()
+    settingUp = false
+    say(setupHello(data.settings.dragonName))
+    react(el.art, 'perk')
+    // Saved: an update waiting for setup can reload now, when it won't interrupt.
+    updates.setHeld(false)
+  }
+
   render()
-  maybeWelcome()
+  if (isFirstRun) startSetup()
+  else maybeWelcome()
   return { requestReload: () => updates.requestReload() }
 }

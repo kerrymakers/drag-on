@@ -561,6 +561,44 @@ export const SETTINGS = {
   editsPaused: "Changes are paused while your dragon can't save on this phone.",
 } as const
 
+/**
+ * First-run setup, on a new phone: a few short steps before the egg arrives. Every step
+ * can be skipped. Never shows or hints at anything past the egg.
+ */
+export const SETUP = {
+  /** The whole flow, for a screen reader. */
+  label: 'Getting ready for your egg',
+  next: 'Next',
+  /** The last step's button. */
+  finish: "Let's go!",
+  /** Under the button: leave this step as it is. */
+  skip: 'Skip',
+  /** At the top: straight to the egg. */
+  skipAll: 'Skip setup',
+  /** At the top, from the second step on: the step before. */
+  back: 'Back',
+  nameTitle: 'A new egg!',
+  nameIntro: 'Give it a name and pick its colour. You can change both any time.',
+  tasksTitle: 'What shall we do together?',
+  tasksIntro: 'Each one you log helps your dragon grow. You can add your own later in Settings.',
+  /** Under the list while just one task is on. */
+  tasksKeepOne: "Keep at least one on, so there's something to log.",
+  wakeTitle: 'When do you get up?',
+  wakeIntro: 'Switch a day off for a lie-in.',
+  goalTitle: 'A weekly goal?',
+  goalIntro: 'One thing to aim for each week, Monday to Sunday. No goal is fine too.',
+} as const
+
+/** The step dots, for a screen reader. */
+export const setupStepLabel = (step: number, of: number): string => `Step ${step} of ${of}`
+
+/** A task's switch in setup, for a screen reader. */
+export const setupTaskLabel = (name: string): string => `Log ${name}`
+
+/** The dragon's first words on Home, once setup is done or skipped. */
+export const setupHello = (name: string | null): string =>
+  name ? `Hello! I'm ${name}. I'm so happy you're here!` : "Hello! I'm so happy you're here!"
+
 /** The Tasks card in Settings and its edit sheet. */
 export const TASKS_COPY = {
   title: 'Tasks',

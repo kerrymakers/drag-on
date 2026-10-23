@@ -10,6 +10,11 @@ export interface UpdateGate {
   noteActivity(): void
   /** Call with true while an overlay is open, false when it closes. */
   setBusy(busy: boolean): void
+  /**
+   * Call with true while a reload would lose something that isn't saved yet (first-run
+   * setup's choices), false after. Unlike busy, it holds even while the page is hidden.
+   */
+  setHeld(held: boolean): void
   /** The new version is active and a reload would show it. */
   requestReload(): void
 }
@@ -23,12 +28,13 @@ export function createUpdateGate(
 ): UpdateGate {
   let lastActivity = Date.now()
   let busy = false
+  let held = false
   let pending = false
   let reloaded = false
   let timer: ReturnType<typeof setInterval> | undefined
 
   function tryReload() {
-    if (!pending) return
+    if (!pending || held) return
     const hidden = doc.visibilityState === 'hidden'
     const idle = !busy && Date.now() - lastActivity >= IDLE_MS
     if (hidden || idle) {
@@ -48,6 +54,13 @@ export function createUpdateGate(
     setBusy(value) {
       busy = value
       if (!value) lastActivity = Date.now()
+    },
+    setHeld(value) {
+      held = value
+      if (!value) {
+        lastActivity = Date.now()
+        tryReload()
+      }
     },
     requestReload() {
       if (pending || reloaded) return

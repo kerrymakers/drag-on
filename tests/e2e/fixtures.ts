@@ -9,6 +9,10 @@
 // spec can miss it. (It never needs overriding, so the undefined order of context and
 // page init scripts doesn't matter; the Math.random pin stays on the page, where a
 // spec's own pin is sure to run after it.)
+// Likewise first-run setup is skipped (__dragOnSkipSetup), so a spec that starts with
+// nothing saved lands on Home. tests/e2e/setup.spec.ts turns that off with
+// `test.use({ skipSetup: false })`: a worker option, set in the same init script, so
+// there's no order of scripts to race.
 import { test as base, expect, type BrowserContext, type Locator, type Page } from '@playwright/test'
 import { MISSION } from '../../src/config/missions'
 import { TASKS } from '../../src/config/tasks'
@@ -16,26 +20,29 @@ import { missionFor } from '../../src/game/mission'
 
 export * from '@playwright/test'
 
-const noWishSeed = (context: BrowserContext) =>
-  context.addInitScript(() => {
-    ;(window as { __dragOnNoWishSeed?: boolean }).__dragOnNoWishSeed = true
-  })
+const testFlags = (context: BrowserContext, skipSetup: boolean) =>
+  context.addInitScript((skip) => {
+    const w = window as { __dragOnNoWishSeed?: boolean; __dragOnSkipSetup?: boolean }
+    w.__dragOnNoWishSeed = true
+    w.__dragOnSkipSetup = skip
+  }, skipSetup)
 
-export const test = base.extend<{}, {}>({
+export const test = base.extend<{}, { skipSetup: boolean }>({
+  skipSetup: [true, { scope: 'worker', option: true }],
   browser: [
-    async ({ browser }, use) => {
+    async ({ browser, skipSetup }, use) => {
       const newContext = browser.newContext.bind(browser)
       browser.newContext = async (options) => {
         const context = await newContext(options)
-        await noWishSeed(context)
+        await testFlags(context, skipSetup)
         return context
       }
       await use(browser)
     },
     { scope: 'worker' },
   ],
-  context: async ({ context }, use) => {
-    await noWishSeed(context)
+  context: async ({ context, skipSetup }, use) => {
+    await testFlags(context, skipSetup)
     await use(context)
   },
   page: async ({ page }, use) => {
